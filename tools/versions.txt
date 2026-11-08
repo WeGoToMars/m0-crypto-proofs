@@ -1,0 +1,3 @@
+lean=leanprover/lean4:v4.35.0
+clang=23.1.4
+lld=23.1.4

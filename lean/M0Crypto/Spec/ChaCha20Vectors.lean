@@ -1,0 +1,40 @@
+import M0Crypto.Spec.ChaCha20
+
+/-!
+RFC 8439 test vectors for the ChaCha20 specification.
+
+The quarter-round vector is a kernel-checked theorem (`decide`). The block
+vector is a compiled `#guard` evaluation: a test of the specification, not a
+kernel proof.
+-/
+
+namespace M0Crypto.Spec.ChaCha20
+
+/-- RFC 8439 §2.1.1 quarter-round test vector, checked by the Lean kernel. -/
+theorem quarterRound_rfc8439_2_1_1 :
+    quarterRound 0x11111111#32 0x01020304#32 0x9b8d6f43#32 0x01234567#32 =
+      (0xea2a92f4#32, 0xcb1cf8ce#32, 0x4581472e#32, 0x5881c4bb#32) := by
+  decide
+
+/-- RFC 8439 §2.3.2 key 00:01:...:1f. -/
+def rfc2_3_2Key : List Byte := (List.range 32).map (BitVec.ofNat 8)
+
+/-- RFC 8439 §2.3.2 nonce 00:00:00:09:00:00:00:4a:00:00:00:00. -/
+def rfc2_3_2Nonce : List Byte :=
+  [0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x4a, 0x00, 0x00, 0x00, 0x00]
+
+/-- RFC 8439 §2.3.2 serialized block for block count 1. -/
+def rfc2_3_2Block : List Byte :=
+  [0x10, 0xf1, 0xe7, 0xe4, 0xd1, 0x3b, 0x59, 0x15, 0x50, 0x0f, 0xdd, 0x1f, 0xa3, 0x20, 0x71, 0xc4,
+   0xc7, 0xd1, 0xf4, 0xc7, 0x33, 0xc0, 0x68, 0x03, 0x04, 0x22, 0xaa, 0x9a, 0xc3, 0xd4, 0x6c, 0x4e,
+   0xd2, 0x82, 0x64, 0x46, 0x07, 0x9f, 0xaa, 0x09, 0x14, 0xc2, 0xd7, 0x05, 0xd9, 0x8b, 0x02, 0xa2,
+   0xb5, 0x12, 0x9c, 0xd1, 0xde, 0x16, 0x4e, 0xb9, 0xcb, 0xd0, 0x83, 0xe8, 0xa2, 0x50, 0x3c, 0x4e]
+
+-- RFC 8439 §2.3.2 block function test vector (compiled evaluation).
+#guard block rfc2_3_2Key 1#32 rfc2_3_2Nonce == rfc2_3_2Block
+
+-- Exercise the size-checked boundary against the same independent RFC vector.
+#guard (blockSized ⟨rfc2_3_2Key, by decide⟩ 1#32
+  ⟨rfc2_3_2Nonce, by decide⟩).val == rfc2_3_2Block
+
+end M0Crypto.Spec.ChaCha20

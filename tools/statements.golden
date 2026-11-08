@@ -1,0 +1,1755 @@
+M0Crypto.Spec.ChaCha20.quarterRound_rfc8439_2_1_1 : M0Crypto.Spec.ChaCha20.quarterRound 286331153#32 16909060#32
+    2609737539#32 19088743#32 =
+  (3928658676#32, 3407673550#32, 1166100270#32, 1484899515#32)
+M0Crypto.Proofs.ChaCha20QR.decodes : M0Crypto.Armv6M.decodesAt M0Crypto.Proofs.ChaCha20QR.code
+    M0Crypto.Proofs.ChaCha20QR.code.base M0Crypto.Proofs.ChaCha20QR.instrs =
+  Bool.true
+M0Crypto.Proofs.ChaCha20QR.run_eq : ∀ (s : M0Crypto.Armv6M.State),
+  s.pc = BitVec.ofNat 32 M0Crypto.Proofs.ChaCha20QR.code.base →
+    M0Crypto.Armv6M.run M0Crypto.Proofs.ChaCha20QR.code 16 s =
+      Except.ok
+        (M0Crypto.Armv6M.execAll M0Crypto.Proofs.ChaCha20QR.instrs s,
+          M0Crypto.Armv6M.execTrace M0Crypto.Proofs.ChaCha20QR.instrs s)
+M0Crypto.Proofs.ChaCha20QR.trace_independent : ∀ (s₁ s₂ : M0Crypto.Armv6M.State),
+  s₁.pc = BitVec.ofNat 32 M0Crypto.Proofs.ChaCha20QR.code.base →
+    s₂.pc = BitVec.ofNat 32 M0Crypto.Proofs.ChaCha20QR.code.base →
+      Except.map Prod.snd (M0Crypto.Armv6M.run M0Crypto.Proofs.ChaCha20QR.code 16 s₁) =
+        Except.map Prod.snd (M0Crypto.Armv6M.run M0Crypto.Proofs.ChaCha20QR.code 16 s₂)
+M0Crypto.Proofs.ChaCha20QR.exec_all_regs : ∀ (s : M0Crypto.Armv6M.State),
+  have s' := M0Crypto.Armv6M.execAll M0Crypto.Proofs.ChaCha20QR.instrs s;
+  (s'.regs 0, s'.regs 1, s'.regs 2, s'.regs 3) =
+    M0Crypto.Spec.ChaCha20.quarterRound (s.regs 0) (s.regs 1) (s.regs 2) (s.regs 3)
+M0Crypto.Proofs.ChaCha20QR.exec_all_frame : ∀ (s : M0Crypto.Armv6M.State),
+  have s' := M0Crypto.Armv6M.execAll M0Crypto.Proofs.ChaCha20QR.instrs s;
+  s'.pc = s.pc + 32#32 ∧ (∀ (r : M0Crypto.Armv6M.Reg), 5 ≤ ↑r → ↑r ≤ 14 → s'.regs r = s.regs r) ∧ s'.mem = s.mem
+M0Crypto.Proofs.ChaCha20QR.qr_spec : ∀ (s : M0Crypto.Armv6M.State),
+  s.pc = BitVec.ofNat 32 M0Crypto.Proofs.ChaCha20QR.code.base →
+    ∃ s',
+      M0Crypto.Armv6M.run M0Crypto.Proofs.ChaCha20QR.code 16 s =
+          Except.ok (s', M0Crypto.Armv6M.execTrace M0Crypto.Proofs.ChaCha20QR.instrs s) ∧
+        (s'.regs 0, s'.regs 1, s'.regs 2, s'.regs 3) =
+            M0Crypto.Spec.ChaCha20.quarterRound (s.regs 0) (s.regs 1) (s.regs 2) (s.regs 3) ∧
+          s'.pc = BitVec.ofNat 32 (M0Crypto.Proofs.ChaCha20QR.code.base + 32) ∧
+            (∀ (r : M0Crypto.Armv6M.Reg), 5 ≤ ↑r → ↑r ≤ 14 → s'.regs r = s.regs r) ∧ s'.mem = s.mem
+M0Crypto.Proofs.ChaCha20DRound.decodes : M0Crypto.Armv6M.decodesAt M0Crypto.Proofs.ChaCha20DRound.code
+    M0Crypto.Proofs.ChaCha20DRound.code.base M0Crypto.Proofs.ChaCha20DRound.instrs =
+  Bool.true
+M0Crypto.Proofs.ChaCha20DRound.run_eq : ∀ (s : M0Crypto.Armv6M.State),
+  s.pc = BitVec.ofNat 32 M0Crypto.Proofs.ChaCha20DRound.code.base →
+    BitVec.toNat (s.regs 13) % 4 = 0 →
+      M0Crypto.Armv6M.run M0Crypto.Proofs.ChaCha20DRound.code 160 s =
+        Except.ok
+          (M0Crypto.Armv6M.execAll M0Crypto.Proofs.ChaCha20DRound.instrs s,
+            M0Crypto.Armv6M.execTrace M0Crypto.Proofs.ChaCha20DRound.instrs s)
+M0Crypto.Proofs.ChaCha20DRound.trace_independent : ∀ (s₁ s₂ : M0Crypto.Armv6M.State),
+  s₁.pc = BitVec.ofNat 32 M0Crypto.Proofs.ChaCha20DRound.code.base →
+    s₂.pc = BitVec.ofNat 32 M0Crypto.Proofs.ChaCha20DRound.code.base →
+      s₁.regs 13 = s₂.regs 13 →
+        BitVec.toNat (s₁.regs 13) % 4 = 0 →
+          Except.map Prod.snd (M0Crypto.Armv6M.run M0Crypto.Proofs.ChaCha20DRound.code 160 s₁) =
+            Except.map Prod.snd (M0Crypto.Armv6M.run M0Crypto.Proofs.ChaCha20DRound.code 160 s₂)
+M0Crypto.Proofs.ChaCha20DRound.core_spec : ∀ (s : M0Crypto.Armv6M.State),
+  M0Crypto.Proofs.ChaCha20DRound.RotRegs s →
+    have s' := M0Crypto.Armv6M.execAll M0Crypto.Proofs.ChaCha20DRound.core s;
+    (s'.regs 0, s'.regs 1, s'.regs 2, s'.regs 3) =
+      M0Crypto.Spec.ChaCha20.quarterRound (s.regs 0) (s.regs 1) (s.regs 2) (s.regs 3)
+M0Crypto.Proofs.ChaCha20DRound.block_spec : ∀ (s : M0Crypto.Armv6M.State),
+  M0Crypto.Proofs.ChaCha20DRound.RotRegs s →
+    ∀ (a b c d : Nat),
+      a < 16 →
+        b < 16 →
+          c < 16 →
+            d < 16 →
+              ∀ (k : Nat),
+                k < 16 →
+                  M0Crypto.Proofs.ChaCha20DRound.view
+                      (M0Crypto.Armv6M.execAll (M0Crypto.Proofs.ChaCha20DRound.block a b c d) s) k =
+                    M0Crypto.Proofs.ChaCha20DRound.qroundF (M0Crypto.Proofs.ChaCha20DRound.view s) a b c d k
+M0Crypto.Proofs.ChaCha20DRound.block_mem_other : ∀ (s : M0Crypto.Armv6M.State),
+  M0Crypto.Proofs.ChaCha20DRound.RotRegs s →
+    ∀ (a b c d : Nat),
+      a < 16 →
+        b < 16 →
+          c < 16 →
+            d < 16 →
+              ∀ (y : M0Crypto.Armv6M.Word),
+                (∀ (n : Nat), n < 64 → y ≠ s.regs 13 + BitVec.ofNat 32 n) →
+                  (M0Crypto.Armv6M.execAll (M0Crypto.Proofs.ChaCha20DRound.block a b c d) s).mem y = s.mem y
+M0Crypto.Proofs.ChaCha20DRound.dround_view : ∀ (s : M0Crypto.Armv6M.State),
+  M0Crypto.Proofs.ChaCha20DRound.RotRegs s →
+    M0Crypto.Proofs.ChaCha20DRound.Agree
+      (M0Crypto.Proofs.ChaCha20DRound.view (M0Crypto.Armv6M.execAll M0Crypto.Proofs.ChaCha20DRound.instrs s))
+      (M0Crypto.Proofs.ChaCha20DRound.innerBlockF (M0Crypto.Proofs.ChaCha20DRound.view s))
+M0Crypto.Proofs.ChaCha20DRound.innerBlock_toArr : ∀ (f : Nat → M0Crypto.Armv6M.Word),
+  M0Crypto.Spec.ChaCha20.innerBlock (M0Crypto.Proofs.ChaCha20DRound.toArr f) =
+    M0Crypto.Proofs.ChaCha20DRound.toArr (M0Crypto.Proofs.ChaCha20DRound.innerBlockF f)
+M0Crypto.Proofs.ChaCha20DRound.dround_spec : ∀ (s : M0Crypto.Armv6M.State),
+  s.pc = BitVec.ofNat 32 M0Crypto.Proofs.ChaCha20DRound.code.base →
+    BitVec.toNat (s.regs 13) % 4 = 0 →
+      M0Crypto.Proofs.ChaCha20DRound.RotRegs s →
+        ∃ s',
+          M0Crypto.Armv6M.run M0Crypto.Proofs.ChaCha20DRound.code 160 s =
+              Except.ok (s', M0Crypto.Armv6M.execTrace M0Crypto.Proofs.ChaCha20DRound.instrs s) ∧
+            M0Crypto.Proofs.ChaCha20DRound.toArr (M0Crypto.Proofs.ChaCha20DRound.view s') =
+                M0Crypto.Spec.ChaCha20.innerBlock
+                  (M0Crypto.Proofs.ChaCha20DRound.toArr (M0Crypto.Proofs.ChaCha20DRound.view s)) ∧
+              s'.pc = BitVec.ofNat 32 (M0Crypto.Proofs.ChaCha20DRound.code.base + 320) ∧
+                (∀ (r : M0Crypto.Armv6M.Reg), 4 ≤ ↑r → ↑r ≤ 14 → s'.regs r = s.regs r) ∧
+                  ∀ (y : M0Crypto.Armv6M.Word),
+                    (∀ (n : Nat), n < 64 → y ≠ s.regs 13 + BitVec.ofNat 32 n) → s'.mem y = s.mem y
+M0Crypto.Proofs.ChaCha20DRoundV2.decodes : M0Crypto.Armv6M.decodesAt M0Crypto.Proofs.ChaCha20DRoundV2.code
+    M0Crypto.Proofs.ChaCha20DRoundV2.code.base M0Crypto.Proofs.ChaCha20DRoundV2.instrs =
+  Bool.true
+M0Crypto.Proofs.ChaCha20DRoundV2.run_eq : ∀ (s : M0Crypto.Armv6M.State),
+  s.pc = BitVec.ofNat 32 M0Crypto.Proofs.ChaCha20DRoundV2.code.base →
+    BitVec.toNat (s.regs 13) % 4 = 0 →
+      M0Crypto.Armv6M.run M0Crypto.Proofs.ChaCha20DRoundV2.code 158 s =
+        Except.ok
+          (M0Crypto.Armv6M.execAll M0Crypto.Proofs.ChaCha20DRoundV2.instrs s,
+            M0Crypto.Armv6M.execTrace M0Crypto.Proofs.ChaCha20DRoundV2.instrs s)
+M0Crypto.Proofs.ChaCha20DRoundV2.trace_independent : ∀ (s₁ s₂ : M0Crypto.Armv6M.State),
+  s₁.pc = BitVec.ofNat 32 M0Crypto.Proofs.ChaCha20DRoundV2.code.base →
+    s₂.pc = BitVec.ofNat 32 M0Crypto.Proofs.ChaCha20DRoundV2.code.base →
+      s₁.regs 13 = s₂.regs 13 →
+        BitVec.toNat (s₁.regs 13) % 4 = 0 →
+          Except.map Prod.snd (M0Crypto.Armv6M.run M0Crypto.Proofs.ChaCha20DRoundV2.code 158 s₁) =
+            Except.map Prod.snd (M0Crypto.Armv6M.run M0Crypto.Proofs.ChaCha20DRoundV2.code 158 s₂)
+M0Crypto.Proofs.ChaCha20DRoundV2.keep_spec : ∀ (s : M0Crypto.Armv6M.State),
+  M0Crypto.Proofs.ChaCha20DRound.RotRegs s →
+    ∀ (f : Nat → M0Crypto.Armv6M.Word),
+      M0Crypto.Proofs.ChaCha20DRound.Agree (M0Crypto.Proofs.ChaCha20DRound.view s) f →
+        ∀ (a b c d : Nat),
+          a < 16 →
+            b < 16 →
+              c < 16 →
+                d < 16 →
+                  (∀ (k : Nat),
+                      k < 16 →
+                        k ≠ d →
+                          M0Crypto.Proofs.ChaCha20DRound.view
+                              (M0Crypto.Armv6M.execAll (M0Crypto.Proofs.ChaCha20DRoundV2.keepBlock a b c d) s) k =
+                            M0Crypto.Proofs.ChaCha20DRound.qroundF f a b c d k) ∧
+                    (M0Crypto.Armv6M.execAll (M0Crypto.Proofs.ChaCha20DRoundV2.keepBlock a b c d) s).regs 3 =
+                      M0Crypto.Proofs.ChaCha20DRound.qroundF f a b c d d
+M0Crypto.Proofs.ChaCha20DRoundV2.have_spec : ∀ (s : M0Crypto.Armv6M.State),
+  M0Crypto.Proofs.ChaCha20DRound.RotRegs s →
+    ∀ (g : Nat → M0Crypto.Armv6M.Word) (a b c d : Nat),
+      a < 16 →
+        b < 16 →
+          c < 16 →
+            d < 16 →
+              a ≠ d →
+                b ≠ d →
+                  c ≠ d →
+                    (∀ (k : Nat), k < 16 → k ≠ d → M0Crypto.Proofs.ChaCha20DRound.view s k = g k) →
+                      s.regs 3 = g d →
+                        M0Crypto.Proofs.ChaCha20DRound.Agree
+                          (M0Crypto.Proofs.ChaCha20DRound.view
+                            (M0Crypto.Armv6M.execAll (M0Crypto.Proofs.ChaCha20DRoundV2.haveBlock a b c d) s))
+                          (M0Crypto.Proofs.ChaCha20DRound.qroundF g a b c d)
+M0Crypto.Proofs.ChaCha20DRoundV2.dround_view : ∀ (s : M0Crypto.Armv6M.State),
+  M0Crypto.Proofs.ChaCha20DRound.RotRegs s →
+    M0Crypto.Proofs.ChaCha20DRound.Agree
+      (M0Crypto.Proofs.ChaCha20DRound.view (M0Crypto.Armv6M.execAll M0Crypto.Proofs.ChaCha20DRoundV2.instrs s))
+      (M0Crypto.Proofs.ChaCha20DRound.innerBlockF (M0Crypto.Proofs.ChaCha20DRound.view s))
+M0Crypto.Proofs.ChaCha20DRoundV2.dround_spec : ∀ (s : M0Crypto.Armv6M.State),
+  s.pc = BitVec.ofNat 32 M0Crypto.Proofs.ChaCha20DRoundV2.code.base →
+    BitVec.toNat (s.regs 13) % 4 = 0 →
+      M0Crypto.Proofs.ChaCha20DRound.RotRegs s →
+        ∃ s',
+          M0Crypto.Armv6M.run M0Crypto.Proofs.ChaCha20DRoundV2.code 158 s =
+              Except.ok (s', M0Crypto.Armv6M.execTrace M0Crypto.Proofs.ChaCha20DRoundV2.instrs s) ∧
+            M0Crypto.Proofs.ChaCha20DRound.toArr (M0Crypto.Proofs.ChaCha20DRound.view s') =
+                M0Crypto.Spec.ChaCha20.innerBlock
+                  (M0Crypto.Proofs.ChaCha20DRound.toArr (M0Crypto.Proofs.ChaCha20DRound.view s)) ∧
+              s'.pc = BitVec.ofNat 32 (M0Crypto.Proofs.ChaCha20DRoundV2.code.base + 316) ∧
+                (∀ (r : M0Crypto.Armv6M.Reg), 4 ≤ ↑r → ↑r ≤ 14 → s'.regs r = s.regs r) ∧
+                  ∀ (y : M0Crypto.Armv6M.Word),
+                    (∀ (n : Nat), n < 64 → y ≠ s.regs 13 + BitVec.ofNat 32 n) → s'.mem y = s.mem y
+M0Crypto.Spec.ChaCha20.qround_size : ∀ (s : M0Crypto.Spec.ChaCha20.State) (a b c d : Nat),
+  Array.size (M0Crypto.Spec.ChaCha20.qround s a b c d) = Array.size s
+M0Crypto.Spec.ChaCha20.innerBlock_size : ∀ (s : M0Crypto.Spec.ChaCha20.State),
+  Array.size (M0Crypto.Spec.ChaCha20.innerBlock s) = Array.size s
+M0Crypto.Spec.ChaCha20.innerBlocks_size : ∀ (n : Nat) (s : M0Crypto.Spec.ChaCha20.State),
+  Array.size (M0Crypto.Spec.ChaCha20.innerBlocks n s) = Array.size s
+M0Crypto.Spec.ChaCha20.wordsOfBytes_length : ∀ (bs : List M0Crypto.Spec.ChaCha20.Byte),
+  (M0Crypto.Spec.ChaCha20.wordsOfBytes bs).length = bs.length / 4
+M0Crypto.Spec.ChaCha20.initState_size : ∀ (key nonce : List M0Crypto.Spec.ChaCha20.Byte)
+  (counter : M0Crypto.Spec.ChaCha20.Word),
+  key.length = 32 → nonce.length = 12 → Array.size (M0Crypto.Spec.ChaCha20.initState key counter nonce) = 16
+M0Crypto.Spec.ChaCha20.block_length : ∀ (key nonce : List M0Crypto.Spec.ChaCha20.Byte)
+  (counter : M0Crypto.Spec.ChaCha20.Word), (M0Crypto.Spec.ChaCha20.block key counter nonce).length = 64
+@M0Crypto.Thumb.decode_at : ∀ {m : M0Crypto.Armv6M.Mem} {base : M0Crypto.Armv6M.Word} {bytes : List (BitVec 8)},
+  M0Crypto.Thumb.CodeAt m base bytes →
+    ∀ (off : Nat) (i : M0Crypto.Thumb.Instr),
+      M0Crypto.Thumb.instrAt bytes off = Option.some i →
+        off + i.size ≤ bytes.length →
+          M0Crypto.Thumb.decode (M0Crypto.Thumb.fetch16 m (base + BitVec.ofNat 32 off))
+              (M0Crypto.Thumb.fetch16 m (base + BitVec.ofNat 32 off + 2#32)) =
+            Option.some i
+@M0Crypto.Thumb.step_of_instrAt : ∀ {s s' : M0Crypto.Armv6M.State} {base : M0Crypto.Armv6M.Word}
+  {bytes : List (BitVec 8)},
+  M0Crypto.Thumb.CodeAt s.mem base bytes →
+    ∀ (off : Nat) (i : M0Crypto.Thumb.Instr),
+      s.pc = base + BitVec.ofNat 32 off →
+        BitVec.getLsbD (base + BitVec.ofNat 32 off) 0 = Bool.false →
+          M0Crypto.Thumb.instrAt bytes off = Option.some i →
+            off + i.size ≤ bytes.length →
+              (i.accesses s).all M0Crypto.Thumb.Access.aligned = Bool.true →
+                i.exec s = Except.ok s' →
+                  M0Crypto.Thumb.step s = Except.ok (s', { pc := s.pc, instr := i, accesses := i.accesses s })
+M0Crypto.Thumb.exec_mem_other : ∀ (i : M0Crypto.Thumb.Instr) (s s' : M0Crypto.Armv6M.State),
+  i.exec s = Except.ok s' → ∀ (y : M0Crypto.Armv6M.Word), ¬M0Crypto.Thumb.Writes (i.accesses s) y → s'.mem y = s.mem y
+@M0Crypto.Thumb.step_mem_other : ∀ {s s' : M0Crypto.Armv6M.State} {e : M0Crypto.Thumb.Event},
+  M0Crypto.Thumb.step s = Except.ok (s', e) →
+    ∀ (y : M0Crypto.Armv6M.Word), ¬y ∈ M0Crypto.Thumb.writtenAddrs e.accesses → s'.mem y = s.mem y
+M0Crypto.Thumb.runFast_eq : ∀ (stop : M0Crypto.Armv6M.Word) (fuel : Nat) (s : M0Crypto.Armv6M.State),
+  M0Crypto.Thumb.runFast stop fuel s = M0Crypto.Thumb.runUntil stop fuel s
+M0Crypto.Artifacts.Release.bytes_length : M0Crypto.Artifacts.Release.bytes.length = M0Crypto.Artifacts.Release.size
+@M0Crypto.Thumb.step_of_stepH : ∀ {bytes : List (BitVec 8)} {base : M0Crypto.Armv6M.Word} {s s' : M0Crypto.Armv6M.State}
+  {e : M0Crypto.Thumb.Event},
+  M0Crypto.Thumb.CodeAt s.mem base bytes →
+    M0Crypto.Thumb.stepH bytes base s = Except.ok (s', e) → M0Crypto.Thumb.step s = Except.ok (s', e)
+@M0Crypto.Thumb.runUntil_of_runH : ∀ {bytes : List (BitVec 8)} {base stop : M0Crypto.Armv6M.Word} (n fuel : Nat)
+  (s s' : M0Crypto.Armv6M.State) (tr : List M0Crypto.Thumb.Event),
+  M0Crypto.Thumb.CodeAt s.mem base bytes →
+    M0Crypto.Thumb.runH bytes base n s = Except.ok (s', tr) →
+      M0Crypto.Thumb.TraceMissesCode bytes base tr →
+        (∀ (e : M0Crypto.Thumb.Event), e ∈ tr → e.pc ≠ stop) →
+          s'.pc = stop → n ≤ fuel → M0Crypto.Thumb.runUntil stop fuel s = Except.ok (s', tr)
+@M0Crypto.Thumb.runH_add : ∀ {bytes : List (BitVec 8)} {base : M0Crypto.Armv6M.Word} (m n : Nat)
+  (s : M0Crypto.Armv6M.State),
+  M0Crypto.Thumb.runH bytes base (m + n) s =
+    match M0Crypto.Thumb.runH bytes base m s with
+    | Except.error e => Except.error e
+    | Except.ok (s1, t1) =>
+      match M0Crypto.Thumb.runH bytes base n s1 with
+      | Except.error e => Except.error e
+      | Except.ok (s2, t2) => Except.ok (s2, t1 ++ t2)
+@M0Crypto.Thumb.runH_seq : ∀ {bytes : List (BitVec 8)} {base : M0Crypto.Armv6M.Word},
+  BitVec.toNat base % 2 = 0 →
+    bytes.length < 2 ^ 32 →
+      ∀ (is : List M0Crypto.Thumb.Instr) (off : Nat) (s : M0Crypto.Armv6M.State),
+        s.pc = base + BitVec.ofNat 32 off →
+          off % 2 = 0 →
+            M0Crypto.Thumb.seqAt bytes off is = Bool.true →
+              is.all M0Crypto.Thumb.Instr.falls = Bool.true →
+                M0Crypto.Thumb.runH bytes base is.length s = M0Crypto.Thumb.runSeq is s
+M0Crypto.Thumb.runSeq_eq : ∀ (is : List M0Crypto.Thumb.Instr) (s : M0Crypto.Armv6M.State),
+  is.all M0Crypto.Thumb.Instr.falls = Bool.true →
+    M0Crypto.Thumb.alignedAll is s = Bool.true →
+      M0Crypto.Thumb.runSeq is s = Except.ok (M0Crypto.Thumb.execAll is s, M0Crypto.Thumb.traceAll is s)
+M0Crypto.Thumb.execAll_mem : ∀ (is : List M0Crypto.Thumb.Instr) (s : M0Crypto.Armv6M.State),
+  (is.all fun x => !x.writesMem) = Bool.true → (M0Crypto.Thumb.execAll is s).mem = s.mem
+M0Crypto.Thumb.execAll_regs_other : ∀ (is : List M0Crypto.Thumb.Instr) (s : M0Crypto.Armv6M.State)
+  (r : M0Crypto.Armv6M.Reg),
+  ↑r ≠ 15 → (is.all fun i => !i.dsts.contains ↑r) = Bool.true → (M0Crypto.Thumb.execAll is s).regs r = s.regs r
+M0Crypto.Release.ChaChaRound.dround_at : M0Crypto.Thumb.seqAt M0Crypto.Artifacts.Release.bytes
+    M0Crypto.Release.ChaChaLayout.droundOff M0Crypto.Release.ChaChaRound.dround =
+  Bool.true
+M0Crypto.Release.ChaChaRound.core_regs : ∀ (s : M0Crypto.Armv6M.State),
+  M0Crypto.Release.ChaChaRound.RotRegs s →
+    have s' := M0Crypto.Thumb.execAll M0Crypto.Release.ChaChaRound.core s;
+    (s'.regs 0, s'.regs 1, s'.regs 2, s'.regs 3) =
+      M0Crypto.Spec.ChaCha20.quarterRound (s.regs 0) (s.regs 1) (s.regs 2) (s.regs 3)
+M0Crypto.Release.ChaChaRound.qr_effect : ∀ (s : M0Crypto.Armv6M.State) (a b c : Nat) (dreg : M0Crypto.Armv6M.Reg)
+  (haveA keepA : Bool),
+  a < 64 →
+    b < 64 →
+      c < 64 →
+        M0Crypto.Release.ChaChaRound.DReg dreg →
+          M0Crypto.Release.ChaChaRound.RotRegs s →
+            have s' := M0Crypto.Thumb.execAll (M0Crypto.Release.ChaChaRound.qr a b c dreg haveA keepA) s;
+            have A :=
+              if haveA = Bool.true then s.regs 0 else M0Crypto.Armv6M.read32 s.mem (M0Crypto.Armv6M.slot (s.regs 13) a);
+            have q :=
+              M0Crypto.Spec.ChaCha20.quarterRound A (M0Crypto.Armv6M.read32 s.mem (M0Crypto.Armv6M.slot (s.regs 13) b))
+                (M0Crypto.Armv6M.read32 s.mem (M0Crypto.Armv6M.slot (s.regs 13) c)) (s.regs dreg);
+            s'.regs 0 = q.fst ∧
+              s'.regs dreg = q.snd.snd.snd ∧
+                s'.mem =
+                    M0Crypto.Armv6M.write32
+                      (M0Crypto.Armv6M.write32
+                        (if keepA = Bool.true then s.mem
+                        else M0Crypto.Armv6M.write32 s.mem (M0Crypto.Armv6M.slot (s.regs 13) a) q.fst)
+                        (M0Crypto.Armv6M.slot (s.regs 13) b) q.snd.fst)
+                      (M0Crypto.Armv6M.slot (s.regs 13) c) q.snd.snd.fst ∧
+                  ∀ (r : M0Crypto.Armv6M.Reg), 4 ≤ ↑r → ↑r ≤ 14 → r ≠ dreg → s'.regs r = s.regs r
+M0Crypto.Thumb.alignedAll_sp : ∀ (is : List M0Crypto.Thumb.Instr) (s : M0Crypto.Armv6M.State),
+  (M0Crypto.Thumb.SpBlock is fun p => p.snd % 4 = 0) →
+    BitVec.toNat (s.regs 13) % 4 = 0 → M0Crypto.Thumb.alignedAll is s = Bool.true
+M0Crypto.Thumb.execAll_mem_sp : ∀ (is : List M0Crypto.Thumb.Instr) (s : M0Crypto.Armv6M.State)
+  (y : M0Crypto.Armv6M.Word),
+  (M0Crypto.Thumb.SpBlock is fun p =>
+      p.fst = M0Crypto.Thumb.Kind.read ∨
+        ∀ (j : Nat), j < 4 → y ≠ s.regs 13 + BitVec.ofNat 32 p.snd + BitVec.ofNat 32 j) →
+    (M0Crypto.Thumb.execAll is s).mem y = s.mem y
+M0Crypto.Thumb.traceAll_sp_congr : ∀ (is : List M0Crypto.Thumb.Instr) (s t : M0Crypto.Armv6M.State),
+  (M0Crypto.Thumb.SpBlock is fun x => True) →
+    is.all M0Crypto.Thumb.Instr.falls = Bool.true →
+      s.pc = t.pc → s.regs 13 = t.regs 13 → M0Crypto.Thumb.traceAll is s = M0Crypto.Thumb.traceAll is t
+M0Crypto.Release.ChaChaRound.qr_view : ∀ (s : M0Crypto.Armv6M.State) (a b c d : Nat) (haveA keepA : Bool),
+  a < 12 →
+    b < 12 →
+      c < 12 →
+        12 ≤ d →
+          d < 16 →
+            a ≠ b →
+              a ≠ c →
+                b ≠ c →
+                  M0Crypto.Release.ChaChaRound.RotRegs s →
+                    M0Crypto.Release.ChaChaRound.view (if keepA = Bool.true then Option.some a else Option.none)
+                        (M0Crypto.Thumb.execAll
+                          (M0Crypto.Release.ChaChaRound.qr a b c (M0Crypto.Release.ChaChaRound.dregOf d) haveA keepA)
+                          s) =
+                      M0Crypto.Proofs.ChaCha20DRound.qroundF
+                        (M0Crypto.Release.ChaChaRound.view (if haveA = Bool.true then Option.some a else Option.none) s)
+                        a b c d
+M0Crypto.Release.ChaChaRound.dround_view : ∀ (s : M0Crypto.Armv6M.State),
+  M0Crypto.Release.ChaChaRound.RotRegs s →
+    M0Crypto.Release.ChaChaRound.view (Option.some 2) (M0Crypto.Thumb.execAll M0Crypto.Release.ChaChaRound.dround s) =
+      M0Crypto.Proofs.ChaCha20DRound.innerBlockF (M0Crypto.Release.ChaChaRound.view (Option.some 2) s)
+M0Crypto.Release.ChaChaRound.dround_aligned : ∀ (s : M0Crypto.Armv6M.State),
+  BitVec.toNat (s.regs 13) % 4 = 0 → M0Crypto.Thumb.alignedAll M0Crypto.Release.ChaChaRound.dround s = Bool.true
+M0Crypto.Release.ChaChaRound.dround_mem : ∀ (s : M0Crypto.Armv6M.State) (y : M0Crypto.Armv6M.Word),
+  (∀ (o : Nat), o < M0Crypto.Release.ChaChaRound.droundBytes → y ≠ s.regs 13 + BitVec.ofNat 32 o) →
+    (M0Crypto.Thumb.execAll M0Crypto.Release.ChaChaRound.dround s).mem y = s.mem y
+M0Crypto.Release.ChaChaRound.dround_regs : ∀ (s : M0Crypto.Armv6M.State) (r : M0Crypto.Armv6M.Reg),
+  ↑r ≠ 15 →
+    3 < ↑r ∧ (↑r < 8 ∨ 11 < ↑r) → (M0Crypto.Thumb.execAll M0Crypto.Release.ChaChaRound.dround s).regs r = s.regs r
+M0Crypto.Release.ChaChaRound.dround_trace_congr : ∀ (s t : M0Crypto.Armv6M.State),
+  s.pc = t.pc →
+    s.regs 13 = t.regs 13 →
+      M0Crypto.Thumb.traceAll M0Crypto.Release.ChaChaRound.dround s =
+        M0Crypto.Thumb.traceAll M0Crypto.Release.ChaChaRound.dround t
+@M0Crypto.Thumb.runH_block : ∀ {bytes : List (BitVec 8)} {base : M0Crypto.Armv6M.Word},
+  BitVec.toNat base % 2 = 0 →
+    bytes.length < 2 ^ 32 →
+      ∀ (is : List M0Crypto.Thumb.Instr) (off : Nat) (s : M0Crypto.Armv6M.State),
+        s.pc = base + BitVec.ofNat 32 off →
+          off % 2 = 0 →
+            M0Crypto.Thumb.seqAt bytes off is = Bool.true →
+              is.all M0Crypto.Thumb.Instr.falls = Bool.true →
+                M0Crypto.Thumb.alignedAll is s = Bool.true →
+                  ∀ (n : Nat),
+                    M0Crypto.Thumb.runH bytes base (is.length + n) s =
+                      match M0Crypto.Thumb.runH bytes base n (M0Crypto.Thumb.execAll is s) with
+                      | Except.error e => Except.error e
+                      | Except.ok (s2, t2) => Except.ok (s2, M0Crypto.Thumb.traceAll is s ++ t2)
+@M0Crypto.Thumb.stepH_of_instr : ∀ {bytes : List (BitVec 8)} {base : M0Crypto.Armv6M.Word},
+  BitVec.toNat base % 2 = 0 →
+    bytes.length < 2 ^ 32 →
+      ∀ {s s' : M0Crypto.Armv6M.State} {off : Nat} {i : M0Crypto.Thumb.Instr},
+        s.pc = base + BitVec.ofNat 32 off →
+          off % 2 = 0 →
+            M0Crypto.Thumb.instrAt bytes off = Option.some i →
+              off + i.size ≤ bytes.length →
+                (i.accesses s).all M0Crypto.Thumb.Access.aligned = Bool.true →
+                  i.exec s = Except.ok s' →
+                    M0Crypto.Thumb.stepH bytes base s =
+                      Except.ok (s', { pc := s.pc, instr := i, accesses := i.accesses s })
+M0Crypto.Thumb.traceAll_writes_sp : ∀ (is : List M0Crypto.Thumb.Instr) (s : M0Crypto.Armv6M.State) (n : Nat),
+  (M0Crypto.Thumb.SpBlock is fun p => p.fst = M0Crypto.Thumb.Kind.read ∨ p.snd + 4 ≤ n) →
+    M0Crypto.Thumb.WritesIn (M0Crypto.Thumb.traceAll is s) (s.regs 13) n
+@M0Crypto.Release.ChaChaLoop.loop : ∀ {base : M0Crypto.Armv6M.Word},
+  BitVec.toNat base % 4 = 0 →
+    ∀ (n : Nat),
+      1 ≤ n →
+        n < 2 ^ 32 →
+          ∀ (s : M0Crypto.Armv6M.State),
+            s.pc = base + BitVec.ofNat 32 M0Crypto.Release.ChaChaLayout.droundOff →
+              M0Crypto.Release.ChaChaRound.RotRegs s →
+                BitVec.toNat (s.regs 13) % 4 = 0 →
+                  s.regs 12 = BitVec.ofNat 32 n →
+                    ∃ s' tr,
+                      M0Crypto.Thumb.runH M0Crypto.Release.ChaChaLoop.B base (161 * n - 1) s = Except.ok (s', tr) ∧
+                        s'.pc = base + BitVec.ofNat 32 M0Crypto.Release.ChaChaLayout.postOff ∧
+                          M0Crypto.Release.ChaChaRound.view (Option.some 2) s' =
+                              M0Crypto.Release.ChaChaLoop.iter M0Crypto.Proofs.ChaCha20DRound.innerBlockF n
+                                (M0Crypto.Release.ChaChaRound.view (Option.some 2) s) ∧
+                            M0Crypto.Release.ChaChaRound.RotRegs s' ∧
+                              s'.regs 13 = s.regs 13 ∧
+                                s'.regs 14 = s.regs 14 ∧
+                                  s'.regs 12 = 0 ∧
+                                    (∀ (y : M0Crypto.Armv6M.Word),
+                                        (∀ (o : Nat),
+                                            o < M0Crypto.Release.ChaChaRound.droundBytes →
+                                              y ≠ s.regs 13 + BitVec.ofNat 32 o) →
+                                          s'.mem y = s.mem y) ∧
+                                      M0Crypto.Thumb.WritesIn tr (s.regs 13) M0Crypto.Release.ChaChaRound.droundBytes
+M0Crypto.Release.ChaChaLoop.iter_toArr : ∀ (n : Nat) (f : Nat → M0Crypto.Armv6M.Word),
+  M0Crypto.Proofs.ChaCha20DRound.toArr
+      (M0Crypto.Release.ChaChaLoop.iter M0Crypto.Proofs.ChaCha20DRound.innerBlockF n f) =
+    M0Crypto.Spec.ChaCha20.innerBlocks n (M0Crypto.Proofs.ChaCha20DRound.toArr f)
+@M0Crypto.Release.Reach.runUntil : ∀ {base : M0Crypto.Armv6M.Word} {Wr : M0Crypto.Armv6M.Word → Prop}
+  {s : M0Crypto.Armv6M.State} {stop : M0Crypto.Armv6M.Word} {P : M0Crypto.Armv6M.State → Prop},
+  M0Crypto.Thumb.CodeAt s.mem base M0Crypto.Release.B →
+    (∀ (y : M0Crypto.Armv6M.Word), Wr y → ∀ (i : Nat), i < M0Crypto.Release.B.length → y ≠ base + BitVec.ofNat 32 i) →
+      (∀ (i : Nat), i < M0Crypto.Release.B.length → stop ≠ base + BitVec.ofNat 32 i) →
+        (M0Crypto.Release.Reach base Wr s fun s' => s'.pc = stop ∧ P s') →
+          ∃ n,
+            ∀ (fuel : Nat),
+              n ≤ fuel →
+                ∃ s' tr,
+                  M0Crypto.Thumb.runUntil stop fuel s = Except.ok (s', tr) ∧ P s' ∧ M0Crypto.Release.WritesTo Wr tr
+M0Crypto.Release.ChaChaSpec.chacha20_get : ∀ (key nonce msg : List M0Crypto.Spec.ChaCha20.Byte) (c i : Nat)
+  (hi : i < msg.length),
+  (M0Crypto.Spec.AEAD.chacha20 key c nonce msg)[i]? =
+    Option.some (msg[i] ^^^ (M0Crypto.Spec.ChaCha20.block key (BitVec.ofNat 32 (c + i / 64)) nonce)[i % 64])
+M0Crypto.Release.ChaChaSpec.block_get : ∀ (key nonce : List M0Crypto.Spec.ChaCha20.Byte)
+  (c : M0Crypto.Spec.ChaCha20.Word) (j : Nat),
+  j < 64 →
+    (M0Crypto.Spec.ChaCha20.block key c nonce)[j]? =
+      (M0Crypto.Spec.ChaCha20.bytesOfWord
+          ((M0Crypto.Spec.ChaCha20.initState key c nonce)[j / 4]! +
+            (M0Crypto.Spec.ChaCha20.innerBlocks 10 (M0Crypto.Spec.ChaCha20.initState key c nonce))[j / 4]!))[j % 4]?
+M0Crypto.Release.ChaChaRet.ret : ∀ (c : M0Crypto.Release.Frame.Ctx),
+  M0Crypto.Release.Frame.Valid c →
+    ∀ (Wr : M0Crypto.Armv6M.Word → Prop) (s : M0Crypto.Armv6M.State),
+      s.pc = c.base + BitVec.ofNat 32 M0Crypto.Release.ChaChaLayout.epiOff →
+        s.regs 13 = c.fp →
+          (∀ (i : Nat),
+              i < 9 →
+                M0Crypto.Armv6M.read32 s.mem (M0Crypto.Armv6M.slot c.fp (M0Crypto.Release.ChaChaLayout.slotSaved + i)) =
+                  M0Crypto.Release.ChaChaRet.saved c.regs0 i) →
+            BitVec.getLsbD (c.regs0 14) 0 = Bool.true →
+              M0Crypto.Release.Reach c.base Wr s fun t =>
+                t.pc = c.regs0 14 &&& ~~~1#32 ∧
+                  t.regs 13 = c.sp0 ∧
+                    (∀ (r : M0Crypto.Armv6M.Reg), 4 ≤ ↑r → ↑r < 12 → t.regs r = c.regs0 r) ∧
+                      (∀ (r : M0Crypto.Armv6M.Reg), ↑r < 4 ∨ ↑r = 12 → t.regs r = s.regs r) ∧ t.mem = s.mem
+M0Crypto.Release.ChaChaSetup.checks : ∀ (c : M0Crypto.Release.Frame.Ctx),
+  M0Crypto.Release.Frame.Valid c →
+    ∀ (Wr : M0Crypto.Armv6M.Word → Prop),
+      (∀ (o : Nat), o < M0Crypto.Release.ChaChaLayout.chStackBytes → Wr (c.fp + BitVec.ofNat 32 o)) →
+        ∀ (s : M0Crypto.Armv6M.State),
+          M0Crypto.Release.ChaChaSetup.Entry c s →
+            ∀ (Q : M0Crypto.Armv6M.State → Prop),
+              (∀ (t : M0Crypto.Armv6M.State),
+                  t.pc = c.base + BitVec.ofNat 32 M0Crypto.Release.ChaChaLayout.zOff →
+                    t.regs 13 = c.fp → t.mem = c.mP → c.len = 0 → M0Crypto.Release.Reach c.base Wr t Q) →
+                (∀ (t : M0Crypto.Armv6M.State),
+                    t.pc = c.base + BitVec.ofNat 32 M0Crypto.Release.ChaChaLayout.errOff →
+                      t.regs 13 = c.fp →
+                        t.mem = c.mP →
+                          c.len ≠ 0 →
+                            M0Crypto.Spec.AEAD.counterOk (BitVec.toNat c.ctr) (BitVec.toNat c.len) = Bool.false →
+                              M0Crypto.Release.Reach c.base Wr t Q) →
+                  (∀ (t : M0Crypto.Armv6M.State),
+                      M0Crypto.Release.ChaChaSetup.Acc c t → M0Crypto.Release.Reach c.base Wr t Q) →
+                    M0Crypto.Release.Reach c.base Wr s Q
+M0Crypto.Release.ChaChaInit.init : ∀ (c : M0Crypto.Release.Frame.Ctx),
+  M0Crypto.Release.Frame.Valid c →
+    ∀ (t : M0Crypto.Armv6M.State),
+      M0Crypto.Release.ChaChaSetup.Acc c t →
+        ∀ (Q : M0Crypto.Armv6M.State → Prop),
+          (∀ (t' : M0Crypto.Armv6M.State),
+              M0Crypto.Release.Frame.BlockInv c 0 t' → M0Crypto.Release.Reach c.base c.Wr t' Q) →
+            M0Crypto.Release.Reach c.base c.Wr t Q
+M0Crypto.Release.ChaChaBlock.bsetup : ∀ (c : M0Crypto.Release.Frame.Ctx),
+  M0Crypto.Release.Frame.Valid c →
+    ∀ (k : Nat) (t : M0Crypto.Armv6M.State),
+      M0Crypto.Release.Frame.BlockInv c k t →
+        ∀ (Q : M0Crypto.Armv6M.State → Prop),
+          (∀ (u : M0Crypto.Armv6M.State),
+              u.pc = c.base + BitVec.ofNat 32 M0Crypto.Release.ChaChaLayout.droundOff →
+                M0Crypto.Release.ChaChaRound.RotRegs u →
+                  u.regs 13 = c.fp →
+                    u.regs 12 = 10#32 →
+                      M0Crypto.Release.ChaChaRound.view (Option.some 2) u = c.J k →
+                        (∀ (j : Nat), 12 ≤ j → j < 64 → c.fw u j = c.fw t j) →
+                          c.MemOk (64 * k) u.mem → M0Crypto.Release.Reach c.base c.Wr u Q) →
+            M0Crypto.Release.Reach c.base c.Wr t Q
+M0Crypto.Release.ChaChaBlock.block_ks : ∀ (c : M0Crypto.Release.Frame.Ctx) (k j : Nat),
+  j < 64 →
+    (M0Crypto.Spec.ChaCha20.block c.keyB (c.ctr + BitVec.ofNat 32 k) c.nonceB)[j]? =
+      (M0Crypto.Spec.ChaCha20.bytesOfWord (M0Crypto.Release.ChaChaBlock.ks c k (j / 4)))[j % 4]?
+M0Crypto.Release.ChaChaBlock.bround : ∀ (c : M0Crypto.Release.Frame.Ctx),
+  M0Crypto.Release.Frame.Valid c →
+    ∀ (k : Nat) (t : M0Crypto.Armv6M.State),
+      M0Crypto.Release.Frame.BlockInv c k t →
+        ∀ (Q : M0Crypto.Armv6M.State → Prop),
+          (∀ (v : M0Crypto.Armv6M.State),
+              v.pc = c.base + BitVec.ofNat 32 M0Crypto.Release.ChaChaLayout.postOff →
+                v.regs 13 = c.fp →
+                  M0Crypto.Release.ChaChaRound.view (Option.some 2) v =
+                      M0Crypto.Release.ChaChaLoop.iter M0Crypto.Proofs.ChaCha20DRound.innerBlockF 10 (c.J k) →
+                    (∀ (j : Nat), 12 ≤ j → j < 64 → c.fw v j = c.fw t j) →
+                      c.MemOk (64 * k) v.mem → M0Crypto.Release.Reach c.base c.Wr v Q) →
+            M0Crypto.Release.Reach c.base c.Wr t Q
+M0Crypto.Release.ChaChaOut.outB_eq : ∀ (c : M0Crypto.Release.Frame.Ctx) (n : Nat),
+  n < BitVec.toNat c.len →
+    c.outB n = c.m0 (c.inp + BitVec.ofNat 32 n) ^^^ M0Crypto.Release.ChaChaOut.kb c (n / 64) (n % 64)
+M0Crypto.Release.ChaChaOut.bpost : ∀ (c : M0Crypto.Release.Frame.Ctx),
+  M0Crypto.Release.Frame.Valid c →
+    ∀ (k : Nat) (t : M0Crypto.Armv6M.State),
+      M0Crypto.Release.Frame.BlockInv c k t →
+        ∀ (Q : M0Crypto.Armv6M.State → Prop),
+          (∀ (u : M0Crypto.Armv6M.State),
+              M0Crypto.Release.ChaChaOut.Post c k u → M0Crypto.Release.Reach c.base c.Wr u Q) →
+            M0Crypto.Release.Reach c.base c.Wr t Q
+M0Crypto.Release.ChaChaOut.bout : ∀ (c : M0Crypto.Release.Frame.Ctx),
+  M0Crypto.Release.Frame.Valid c →
+    ∀ (k : Nat) (t : M0Crypto.Armv6M.State),
+      M0Crypto.Release.ChaChaOut.Post c k t →
+        ∀ (Q : M0Crypto.Armv6M.State → Prop),
+          (∀ (u : M0Crypto.Armv6M.State),
+              M0Crypto.Release.ChaChaOut.Out c k u → M0Crypto.Release.Reach c.base c.Wr u Q) →
+            M0Crypto.Release.Reach c.base c.Wr t Q
+M0Crypto.Release.ChaChaXor.lnext : ∀ (c : M0Crypto.Release.Frame.Ctx),
+  M0Crypto.Release.Frame.Valid c →
+    ∀ (k : Nat) (t : M0Crypto.Armv6M.State),
+      M0Crypto.Release.ChaChaOut.Out c k t →
+        ∀ (Q : M0Crypto.Armv6M.State → Prop),
+          (∀ (u : M0Crypto.Armv6M.State),
+              u.pc = c.base + BitVec.ofNat 32 M0Crypto.Release.ChaChaLayout.clrOff →
+                u.regs 13 = c.fp → c.MemOk (BitVec.toNat c.len) u.mem → M0Crypto.Release.Reach c.base c.Wr u Q) →
+            (∀ (u : M0Crypto.Armv6M.State),
+                M0Crypto.Release.Frame.BlockInv c (k + 1) u → M0Crypto.Release.Reach c.base c.Wr u Q) →
+              M0Crypto.Release.Reach c.base c.Wr t Q
+M0Crypto.Release.ChaChaXor.blocks : ∀ (c : M0Crypto.Release.Frame.Ctx),
+  M0Crypto.Release.Frame.Valid c →
+    ∀ (Q : M0Crypto.Armv6M.State → Prop),
+      (∀ (u : M0Crypto.Armv6M.State),
+          u.pc = c.base + BitVec.ofNat 32 M0Crypto.Release.ChaChaLayout.clrOff →
+            u.regs 13 = c.fp → c.MemOk (BitVec.toNat c.len) u.mem → M0Crypto.Release.Reach c.base c.Wr u Q) →
+        ∀ (m k : Nat) (t : M0Crypto.Armv6M.State),
+          BitVec.toNat c.len ≤ 64 * (k + m) →
+            M0Crypto.Release.Frame.BlockInv c k t → M0Crypto.Release.Reach c.base c.Wr t Q
+M0Crypto.Release.ChaChaXor.xor_reach : ∀ (c : M0Crypto.Release.Frame.Ctx),
+  M0Crypto.Release.Frame.Valid c →
+    ∀ (s : M0Crypto.Armv6M.State),
+      M0Crypto.Release.ChaChaSetup.Entry c s →
+        BitVec.getLsbD (c.regs0 14) 0 = Bool.true →
+          M0Crypto.Release.Reach c.base (M0Crypto.Release.ChaChaXor.WrOk c) s fun u =>
+            u.pc = c.regs0 14 &&& ~~~1#32 ∧ M0Crypto.Release.ChaChaXor.Result c u
+M0Crypto.Release.ChaChaXor.chacha20_xor_correct : ∀ (c : M0Crypto.Release.Frame.Ctx),
+  M0Crypto.Release.Frame.Valid c →
+    ∀ (s : M0Crypto.Armv6M.State),
+      M0Crypto.Release.ChaChaSetup.Entry c s →
+        BitVec.getLsbD (c.regs0 14) 0 = Bool.true →
+          (∀ (i : Nat), i < M0Crypto.Artifacts.Release.size → c.regs0 14 &&& ~~~1#32 ≠ c.base + BitVec.ofNat 32 i) →
+            ∃ n,
+              ∀ (fuel : Nat),
+                n ≤ fuel →
+                  ∃ s' tr,
+                    M0Crypto.Thumb.runUntil (c.regs0 14 &&& ~~~1#32) fuel s = Except.ok (s', tr) ∧
+                      M0Crypto.Release.ChaChaXor.Result c s' ∧
+                        M0Crypto.Release.WritesTo (M0Crypto.Release.ChaChaXor.WrOk c) tr
+M0Crypto.Release.ChaChaXor.result_output : ∀ (c : M0Crypto.Release.Frame.Ctx),
+  M0Crypto.Release.Frame.Valid c →
+    ∀ {t : M0Crypto.Armv6M.State},
+      M0Crypto.Release.ChaChaXor.Result c t →
+        M0Crypto.Spec.AEAD.counterOk (BitVec.toNat c.ctr) (BitVec.toNat c.len) = Bool.true →
+          M0Crypto.Release.Frame.Ctx.bytesAt t.mem c.out (BitVec.toNat c.len) =
+            M0Crypto.Spec.AEAD.chacha20 c.keyB (BitVec.toNat c.ctr) c.nonceB c.msg
+M0Crypto.Release.PolyArith.mul_fold : ∀ (h0 h1 h2 h3 h4 r0 q1 q2 q3 : Nat),
+  M0Crypto.Release.PolyArith.val5 h0 h1 h2 h3 h4 * M0Crypto.Release.PolyArith.val4 r0 (4 * q1) (4 * q2) (4 * q3) +
+      5 *
+        (h1 * q3 + h2 * q2 + h3 * q1 + (h2 * q3 + h3 * q2 + h4 * q1) * 2 ^ 32 + (h3 * q3 + h4 * q2) * 2 ^ 64 +
+          h4 * q3 * 2 ^ 96) =
+    h0 * r0 + h1 * (5 * q3) + h2 * (5 * q2) + h3 * (5 * q1) +
+              2 ^ 32 * (h0 * (4 * q1) + h1 * r0 + h2 * (5 * q3) + h3 * (5 * q2) + h4 * (5 * q1)) +
+            2 ^ 64 * (h0 * (4 * q2) + h1 * (4 * q1) + h2 * r0 + h3 * (5 * q3) + h4 * (5 * q2)) +
+          2 ^ 96 * (h0 * (4 * q3) + h1 * (4 * q2) + h2 * (4 * q1) + h3 * r0 + h4 * (5 * q3)) +
+        2 ^ 128 * (h4 * r0) +
+      2 ^ 130 *
+        (h1 * q3 + h2 * q2 + h3 * q1 + (h2 * q3 + h3 * q2 + h4 * q1) * 2 ^ 32 + (h3 * q3 + h4 * q2) * 2 ^ 64 +
+          h4 * q3 * 2 ^ 96)
+M0Crypto.Release.PolyArith.carry_fold : ∀
+  (P00 P10 P20 P30 P40 P01 P02 P03 P11 P12 P21 S13 S22 S31 S23 S32 S33 S41 S42 S43 e0 e1 e2 e3 g c o K HR : Nat),
+  P00 ≤ (2 ^ 32 - 1) * (2 ^ 28 - 1) →
+    P10 ≤ (2 ^ 32 - 1) * (2 ^ 28 - 1) →
+      P20 ≤ (2 ^ 32 - 1) * (2 ^ 28 - 1) →
+        P30 ≤ (2 ^ 32 - 1) * (2 ^ 28 - 1) →
+          P40 ≤ 6 * (2 ^ 28 - 1) →
+            P01 ≤ (2 ^ 32 - 1) * (2 ^ 28 - 1) →
+              P02 ≤ (2 ^ 32 - 1) * (2 ^ 28 - 1) →
+                P03 ≤ (2 ^ 32 - 1) * (2 ^ 28 - 1) →
+                  P11 ≤ (2 ^ 32 - 1) * (2 ^ 28 - 1) →
+                    P12 ≤ (2 ^ 32 - 1) * (2 ^ 28 - 1) →
+                      P21 ≤ (2 ^ 32 - 1) * (2 ^ 28 - 1) →
+                        S13 ≤ (2 ^ 32 - 1) * (5 * 2 ^ 26) →
+                          S22 ≤ (2 ^ 32 - 1) * (5 * 2 ^ 26) →
+                            S31 ≤ (2 ^ 32 - 1) * (5 * 2 ^ 26) →
+                              S23 ≤ (2 ^ 32 - 1) * (5 * 2 ^ 26) →
+                                S32 ≤ (2 ^ 32 - 1) * (5 * 2 ^ 26) →
+                                  S33 ≤ (2 ^ 32 - 1) * (5 * 2 ^ 26) →
+                                    S41 ≤ 6 * (5 * 2 ^ 26) →
+                                      S42 ≤ 6 * (5 * 2 ^ 26) →
+                                        S43 ≤ 6 * (5 * 2 ^ 26) →
+                                          e0 = ((((0 + P00) % 2 ^ 64 + S13) % 2 ^ 64 + S22) % 2 ^ 64 + S31) % 2 ^ 64 →
+                                            e1 =
+                                                (((((e0 / 2 ^ 32 + P01) % 2 ^ 64 + P10) % 2 ^ 64 + S23) % 2 ^ 64 +
+                                                        S32) %
+                                                      2 ^ 64 +
+                                                    S41 % 2 ^ 32) %
+                                                  2 ^ 64 →
+                                              e2 =
+                                                  (((((e1 / 2 ^ 32 + P02) % 2 ^ 64 + P11) % 2 ^ 64 + P20) % 2 ^ 64 +
+                                                          S33) %
+                                                        2 ^ 64 +
+                                                      S42 % 2 ^ 32) %
+                                                    2 ^ 64 →
+                                                e3 =
+                                                    (((((e2 / 2 ^ 32 + P03) % 2 ^ 64 + P12) % 2 ^ 64 + P21) % 2 ^ 64 +
+                                                            P30) %
+                                                          2 ^ 64 +
+                                                        S43 % 2 ^ 32) %
+                                                      2 ^ 64 →
+                                                  g = (e3 / 2 ^ 32 + P40 % 2 ^ 32) % 2 ^ 32 →
+                                                    c = (g / 4 + (g - g % 4)) % 2 ^ 32 →
+                                                      o =
+                                                          (e0 % 2 ^ 32 + 2 ^ 32 * (e1 % 2 ^ 32) +
+                                                                    2 ^ 64 * (e2 % 2 ^ 32) +
+                                                                  2 ^ 96 * (e3 % 2 ^ 32) +
+                                                                2 ^ 128 * (g % 4) +
+                                                              c) %
+                                                            2 ^ 160 →
+                                                        HR + 5 * K =
+                                                            P00 + S13 + S22 + S31 +
+                                                                      2 ^ 32 * (P01 + P10 + S23 + S32 + S41) +
+                                                                    2 ^ 64 * (P02 + P11 + P20 + S33 + S42) +
+                                                                  2 ^ 96 * (P03 + P12 + P21 + P30 + S43) +
+                                                                2 ^ 128 * P40 +
+                                                              2 ^ 130 * K →
+                                                          HR = o + M0Crypto.Spec.AEAD.p * (K + g / 4) ∧ o < 5 * 2 ^ 128
+M0Crypto.Release.PolyArith.block_arith : ∀
+  (h0 h1 h2 h3 h4 m0 m1 m2 m3 pad r0 r1 r2 r3 s1 s2 s3 H0 H1 H2 H3 H4 e0 e1 e2 e3 g c o : Nat),
+  h0 < 2 ^ 32 ∧ h1 < 2 ^ 32 ∧ h2 < 2 ^ 32 ∧ h3 < 2 ^ 32 ∧ h4 ≤ 4 →
+    m0 < 2 ^ 32 ∧ m1 < 2 ^ 32 ∧ m2 < 2 ^ 32 ∧ m3 < 2 ^ 32 →
+      pad ≤ 1 →
+        r0 < 2 ^ 28 ∧ r1 < 2 ^ 28 ∧ r2 < 2 ^ 28 ∧ r3 < 2 ^ 28 →
+          r1 % 4 = 0 ∧ r2 % 4 = 0 ∧ r3 % 4 = 0 →
+            s1 = r1 + r1 / 4 ∧ s2 = r2 + r2 / 4 ∧ s3 = r3 + r3 / 4 →
+              H0 < 2 ^ 32 ∧ H1 < 2 ^ 32 ∧ H2 < 2 ^ 32 ∧ H3 < 2 ^ 32 ∧ H4 < 2 ^ 32 →
+                M0Crypto.Release.PolyArith.val5 H0 H1 H2 H3 H4 =
+                    (M0Crypto.Release.PolyArith.val5 h0 h1 h2 h3 h4 + M0Crypto.Release.PolyArith.val4 m0 m1 m2 m3 +
+                        2 ^ 128 * pad) %
+                      2 ^ 160 →
+                  e0 = ((((0 + H0 * r0) % 2 ^ 64 + H1 * s3) % 2 ^ 64 + H2 * s2) % 2 ^ 64 + H3 * s1) % 2 ^ 64 →
+                    e1 =
+                        (((((e0 / 2 ^ 32 + H0 * r1) % 2 ^ 64 + H1 * r0) % 2 ^ 64 + H2 * s3) % 2 ^ 64 + H3 * s2) %
+                              2 ^ 64 +
+                            H4 * s1 % 2 ^ 32) %
+                          2 ^ 64 →
+                      e2 =
+                          (((((e1 / 2 ^ 32 + H0 * r2) % 2 ^ 64 + H1 * r1) % 2 ^ 64 + H2 * r0) % 2 ^ 64 + H3 * s3) %
+                                2 ^ 64 +
+                              H4 * s2 % 2 ^ 32) %
+                            2 ^ 64 →
+                        e3 =
+                            (((((e2 / 2 ^ 32 + H0 * r3) % 2 ^ 64 + H1 * r2) % 2 ^ 64 + H2 * r1) % 2 ^ 64 + H3 * r0) %
+                                  2 ^ 64 +
+                                H4 * s3 % 2 ^ 32) %
+                              2 ^ 64 →
+                          g = (e3 / 2 ^ 32 + H4 * r0 % 2 ^ 32) % 2 ^ 32 →
+                            c = (g / 4 + (g - g % 4)) % 2 ^ 32 →
+                              o =
+                                  (M0Crypto.Release.PolyArith.val4 (e0 % 2 ^ 32) (e1 % 2 ^ 32) (e2 % 2 ^ 32)
+                                          (e3 % 2 ^ 32) +
+                                        2 ^ 128 * (g % 4) +
+                                      c) %
+                                    2 ^ 160 →
+                                o % M0Crypto.Spec.AEAD.p =
+                                    (M0Crypto.Release.PolyArith.val5 h0 h1 h2 h3 h4 +
+                                            M0Crypto.Release.PolyArith.val4 m0 m1 m2 m3 +
+                                          2 ^ 128 * pad) *
+                                        M0Crypto.Release.PolyArith.val4 r0 r1 r2 r3 %
+                                      M0Crypto.Spec.AEAD.p ∧
+                                  o < 5 * 2 ^ 128
+M0Crypto.Release.PolySpec.polyBlocks_append : ∀ (r pad acc n : Nat) (a b : List M0Crypto.Spec.ChaCha20.Byte),
+  a.length = 16 * n →
+    M0Crypto.Release.PolySpec.polyBlocks r pad acc (a ++ b) =
+      M0Crypto.Release.PolySpec.polyBlocks r pad (M0Crypto.Release.PolySpec.polyBlocks r pad acc a) b
+M0Crypto.Release.PolySpec.polyAcc_eq : ∀ (r : Nat) (msg : List M0Crypto.Spec.ChaCha20.Byte),
+  msg.length % 16 = 0 → M0Crypto.Spec.AEAD.polyAcc r msg = M0Crypto.Release.PolySpec.polyBlocks r 1 0 msg
+M0Crypto.Release.PolySpec.step_mod : ∀ (r pad acc : Nat) (blk : List M0Crypto.Spec.ChaCha20.Byte),
+  M0Crypto.Release.PolySpec.step r pad (acc % M0Crypto.Spec.AEAD.p) blk = M0Crypto.Release.PolySpec.step r pad acc blk
+M0Crypto.Release.PolySpec.leNat_bytesAt16 : ∀ (m : M0Crypto.Armv6M.Mem) (a : M0Crypto.Armv6M.Word),
+  M0Crypto.Spec.AEAD.leNat (M0Crypto.Release.Frame.Ctx.bytesAt m a 16) =
+    M0Crypto.Release.PolyArith.val4 (BitVec.toNat (M0Crypto.Armv6M.read32 m a))
+      (BitVec.toNat (M0Crypto.Armv6M.read32 m (a + 4#32))) (BitVec.toNat (M0Crypto.Armv6M.read32 m (a + 8#32)))
+      (BitVec.toNat (M0Crypto.Armv6M.read32 m (a + 12#32)))
+M0Crypto.Release.PolySpec.clamp_words : ∀ (k0 k1 k2 k3 : Nat),
+  k0 < 2 ^ 32 →
+    k1 < 2 ^ 32 →
+      k2 < 2 ^ 32 →
+        M0Crypto.Spec.AEAD.clamp (M0Crypto.Release.PolyArith.val4 k0 k1 k2 k3) =
+          M0Crypto.Release.PolyArith.val4 (k0 &&& 268435455) (k1 &&& 268435452) (k2 &&& 268435452) (k3 &&& 268435452)
+M0Crypto.Release.PolySpec.tag_byte : ∀ (w0 w1 w2 w3 t j k : Nat),
+  w0 < 2 ^ 32 →
+    w1 < 2 ^ 32 →
+      w2 < 2 ^ 32 →
+        j < 4 →
+          k < 4 →
+            BitVec.ofNat 8 ((M0Crypto.Release.PolyArith.val4 w0 w1 w2 w3 + 2 ^ 128 * t) / 256 ^ (4 * j + k)) =
+              BitVec.ofNat 8 ((if j = 0 then w0 else if j = 1 then w1 else if j = 2 then w2 else w3) / 256 ^ k)
+M0Crypto.Release.PolySpec.tag_reduce : ∀ (h s : Nat),
+  h < 2 * M0Crypto.Spec.AEAD.p → (h % M0Crypto.Spec.AEAD.p + s) % 2 ^ 128 = (h + 5 * ((h + 5) / 2 ^ 130) + s) % 2 ^ 128
+M0Crypto.Release.PolyInit.init_reach : ∀ (c : M0Crypto.Release.PolyInit.ICtx),
+  M0Crypto.Release.PolyInit.IValid c →
+    ∀ {Wr : M0Crypto.Armv6M.Word → Prop},
+      (∀ (y : M0Crypto.Armv6M.Word), M0Crypto.Release.PolyInit.IWr c y → Wr y) →
+        ∀ (s : M0Crypto.Armv6M.State),
+          M0Crypto.Release.PolyInit.IEntry c s →
+            BitVec.getLsbD (c.regs0 14) 0 = Bool.true →
+              M0Crypto.Release.Reach c.base Wr s (M0Crypto.Release.PolyInit.IResult c)
+M0Crypto.Release.PolyInit.init_correct : ∀ (c : M0Crypto.Release.PolyInit.ICtx),
+  M0Crypto.Release.PolyInit.IValid c →
+    ∀ (s : M0Crypto.Armv6M.State),
+      M0Crypto.Release.PolyInit.IEntry c s →
+        BitVec.getLsbD (c.regs0 14) 0 = Bool.true →
+          (∀ (i : Nat), i < M0Crypto.Artifacts.Release.size → c.regs0 14 &&& ~~~1#32 ≠ c.base + BitVec.ofNat 32 i) →
+            ∃ n,
+              ∀ (fuel : Nat),
+                n ≤ fuel →
+                  ∃ s' tr,
+                    M0Crypto.Thumb.runUntil (c.regs0 14 &&& ~~~1#32) fuel s = Except.ok (s', tr) ∧
+                      M0Crypto.Release.PolyInit.IResult c s' ∧
+                        M0Crypto.Release.WritesTo (M0Crypto.Release.PolyInit.IWr c) tr
+@M0Crypto.Release.PolyMac.mac_run : ∀ {base ctx : M0Crypto.Armv6M.Word},
+  BitVec.toNat base % 4 = 0 →
+    BitVec.toNat ctx % 4 = 0 →
+      ∀ {Wr : M0Crypto.Armv6M.Word → Prop} {t : M0Crypto.Armv6M.State} {off : Nat} {h : M0Crypto.Armv6M.Reg} {w : Nat},
+        w < 15 →
+          M0Crypto.Thumb.seqAt M0Crypto.Release.B off (M0Crypto.Release.PolyMac.mac h (2 * w)) = Bool.true →
+            off % 2 = 0 →
+              t.pc = base + BitVec.ofNat 32 off →
+                t.regs 7 = ctx →
+                  ∀ {Q : M0Crypto.Armv6M.State → Prop},
+                    (∀ (t' : M0Crypto.Armv6M.State),
+                        t'.pc = base + BitVec.ofNat 32 (off + 40) →
+                          t'.mem = t.mem →
+                            (∀ (r : M0Crypto.Armv6M.Reg), 7 ≤ ↑r → ↑r ≠ 15 → t'.regs r = t.regs r) →
+                              M0Crypto.Release.PolyMac.v64 t' =
+                                  (M0Crypto.Release.PolyMac.v64 t +
+                                      BitVec.toNat (t.regs h) *
+                                        BitVec.toNat (M0Crypto.Armv6M.read32 t.mem (ctx + BitVec.ofNat 32 (4 * w)))) %
+                                    2 ^ 64 →
+                                M0Crypto.Release.Reach base Wr t' Q) →
+                      M0Crypto.Release.Reach base Wr t Q
+@M0Crypto.Release.PolyMac.narrow_run : ∀ {base ctx : M0Crypto.Armv6M.Word},
+  BitVec.toNat base % 4 = 0 →
+    BitVec.toNat ctx % 4 = 0 →
+      ∀ {Wr : M0Crypto.Armv6M.Word → Prop} {t : M0Crypto.Armv6M.State} {off j : Nat},
+        j < 16 →
+          M0Crypto.Thumb.seqAt M0Crypto.Release.B off (M0Crypto.Release.PolyMac.narrow j) = Bool.true →
+            off % 2 = 0 →
+              t.pc = base + BitVec.ofNat 32 off →
+                t.regs 7 = ctx →
+                  ∀ {Q : M0Crypto.Armv6M.State → Prop},
+                    (∀ (t' : M0Crypto.Armv6M.State),
+                        t'.pc = base + BitVec.ofNat 32 (off + 12) →
+                          t'.mem = t.mem →
+                            (∀ (r : M0Crypto.Armv6M.Reg), 7 ≤ ↑r → ↑r ≠ 15 → t'.regs r = t.regs r) →
+                              M0Crypto.Release.PolyMac.v64 t' =
+                                  (M0Crypto.Release.PolyMac.v64 t +
+                                      BitVec.toNat (t.regs 14) *
+                                          BitVec.toNat (M0Crypto.Armv6M.read32 t.mem (ctx + BitVec.ofNat 32 (4 * j))) %
+                                        2 ^ 32) %
+                                    2 ^ 64 →
+                                M0Crypto.Release.Reach base Wr t' Q) →
+                      M0Crypto.Release.Reach base Wr t Q
+@M0Crypto.Release.PolyMac.colend_run : ∀ {base : M0Crypto.Armv6M.Word},
+  BitVec.toNat base % 4 = 0 →
+    ∀ {Wr : M0Crypto.Armv6M.Word → Prop} {t : M0Crypto.Armv6M.State} {off j : Nat},
+      j < M0Crypto.Release.PolyBlocks.frameWords →
+        M0Crypto.Thumb.seqAt M0Crypto.Release.B off (M0Crypto.Release.PolyMac.colend j) = Bool.true →
+          off % 2 = 0 →
+            t.pc = base + BitVec.ofNat 32 off →
+              BitVec.toNat (t.regs 13) % 4 = 0 →
+                (∀ (o : Nat), o < M0Crypto.Release.PolyBlocks.frameBytes → Wr (t.regs 13 + BitVec.ofNat 32 o)) →
+                  ∀ {Q : M0Crypto.Armv6M.State → Prop},
+                    (∀ (t' : M0Crypto.Armv6M.State),
+                        t'.pc = base + BitVec.ofNat 32 (off + 6) →
+                          t'.mem = M0Crypto.Armv6M.write32 t.mem (M0Crypto.Armv6M.slot (t.regs 13) j) (t.regs 0) →
+                            (∀ (r : M0Crypto.Armv6M.Reg), 2 ≤ ↑r → ↑r ≠ 15 → t'.regs r = t.regs r) →
+                              M0Crypto.Release.PolyMac.v64 t' = M0Crypto.Release.PolyMac.v64 t / 2 ^ 32 →
+                                M0Crypto.Release.Reach base Wr t' Q) →
+                      M0Crypto.Release.Reach base Wr t Q
+M0Crypto.Release.PolyBlocks.segments_at : M0Crypto.Thumb.seqAt M0Crypto.Release.B M0Crypto.Release.PolyBlocks.testAt
+      M0Crypto.Release.PolyBlocks.testAlign =
+    Bool.true ∧
+  M0Crypto.Thumb.seqAt M0Crypto.Release.B M0Crypto.Release.PolyBlocks.loadAAt M0Crypto.Release.PolyBlocks.loadA =
+      Bool.true ∧
+    M0Crypto.Thumb.seqAt M0Crypto.Release.B M0Crypto.Release.PolyBlocks.loadUAt M0Crypto.Release.PolyBlocks.loadU =
+        Bool.true ∧
+      M0Crypto.Thumb.seqAt M0Crypto.Release.B M0Crypto.Release.PolyBlocks.bodyAt M0Crypto.Release.PolyBlocks.body =
+          Bool.true ∧
+        M0Crypto.Thumb.seqAt M0Crypto.Release.B M0Crypto.Release.PolyBlocks.decAt M0Crypto.Release.PolyBlocks.dec =
+            Bool.true ∧
+          M0Crypto.Thumb.seqAt M0Crypto.Release.B M0Crypto.Release.PolyBlocks.publishAt
+              M0Crypto.Release.PolyBlocks.publish =
+            Bool.true
+M0Crypto.Release.PolyBlocks.prologue_at : M0Crypto.Thumb.seqAt M0Crypto.Release.B M0Crypto.Release.PolyBlocks.entryAt
+    M0Crypto.Release.PolyBlocks.prologue =
+  Bool.true
+M0Crypto.Release.PolyBlocks.setup_at : M0Crypto.Thumb.seqAt M0Crypto.Release.B M0Crypto.Release.PolyBlocks.setupAt
+    M0Crypto.Release.PolyBlocks.setup =
+  Bool.true
+M0Crypto.Release.PolyBlocks.epilogue_at : M0Crypto.Thumb.seqAt M0Crypto.Release.B M0Crypto.Release.PolyBlocks.epilogueAt
+    M0Crypto.Release.PolyBlocks.epilogue =
+  Bool.true
+M0Crypto.Release.PolyBlocks.load_words : ∀ (s : M0Crypto.Armv6M.State) (j : Nat) (hj : j < 4),
+  (M0Crypto.Release.PolyBlocks.loadState s).regs
+      ⟨j, Decidable.byContradiction fun a => M0Crypto.Release.PolyBlocks.loadU_words._proof_1 j hj a⟩ =
+    M0Crypto.Armv6M.read32 s.mem
+      (M0Crypto.Armv6M.slot
+        (M0Crypto.Armv6M.read32 s.mem (M0Crypto.Armv6M.slot (s.regs 13) M0Crypto.Release.PolyBlocks.slotMsg)) j)
+M0Crypto.Release.PolyBlocks.mac4_v : ∀ (s : M0Crypto.Armv6M.State) (a b c d : Nat),
+  a < 15 →
+    b < 15 →
+      c < 15 →
+        d < 15 →
+          M0Crypto.Release.PolyMac.v64 (M0Crypto.Thumb.execAll (M0Crypto.Release.PolyBlocks.mac4 a b c d) s) =
+            ((((M0Crypto.Release.PolyMac.v64 s + BitVec.toNat (s.regs 8) * M0Crypto.Release.PolyBlocks.cw s a) %
+                          2 ^ 64 +
+                        BitVec.toNat (s.regs 9) * M0Crypto.Release.PolyBlocks.cw s b) %
+                      2 ^ 64 +
+                    BitVec.toNat (s.regs 10) * M0Crypto.Release.PolyBlocks.cw s c) %
+                  2 ^ 64 +
+                BitVec.toNat (s.regs 11) * M0Crypto.Release.PolyBlocks.cw s d) %
+              2 ^ 64
+@M0Crypto.Release.PolyBlocks.body_run : ∀ {base : M0Crypto.Armv6M.Word},
+  BitVec.toNat base % 4 = 0 →
+    ∀ {Wr : M0Crypto.Armv6M.Word → Prop} (s : M0Crypto.Armv6M.State),
+      s.pc = base + BitVec.ofNat 32 M0Crypto.Release.PolyBlocks.bodyAt →
+        BitVec.toNat (s.regs 13) % 4 = 0 →
+          BitVec.toNat (s.regs 7) % 4 = 0 →
+            (∀ (o : Nat), o < M0Crypto.Release.PolyBlocks.bodyBytes → Wr (s.regs 13 + BitVec.ofNat 32 o)) →
+              M0Crypto.Release.Reach base Wr s fun t => t = M0Crypto.Thumb.execAll M0Crypto.Release.PolyBlocks.body s
+@M0Crypto.Release.PolyBlocks.one_run : ∀ {base : M0Crypto.Armv6M.Word},
+  BitVec.toNat base % 4 = 0 →
+    ∀ {Wr : M0Crypto.Armv6M.Word → Prop} (s : M0Crypto.Armv6M.State),
+      s.pc = base + BitVec.ofNat 32 M0Crypto.Release.PolyBlocks.testAt →
+        BitVec.toNat (s.regs 13) % 4 = 0 →
+          BitVec.toNat (s.regs 7) % 4 = 0 →
+            (∀ (o : Nat), o < M0Crypto.Release.PolyBlocks.belowPadBytes → Wr (s.regs 13 + BitVec.ofNat 32 o)) →
+              M0Crypto.Release.Reach base Wr s fun t => t = M0Crypto.Release.PolyBlocks.oneBlock s
+@M0Crypto.Release.PolyBlocks.loop_run : ∀ {base : M0Crypto.Armv6M.Word},
+  BitVec.toNat base % 4 = 0 →
+    ∀ {Wr : M0Crypto.Armv6M.Word → Prop} (n : Nat),
+      0 < n →
+        n < 2 ^ 32 →
+          ∀ (s : M0Crypto.Armv6M.State),
+            s.pc = base + BitVec.ofNat 32 M0Crypto.Release.PolyBlocks.testAt →
+              BitVec.toNat (s.regs 13) % 4 = 0 →
+                BitVec.toNat (s.regs 7) % 4 = 0 →
+                  M0Crypto.Armv6M.read32 s.mem
+                        (M0Crypto.Armv6M.slot (s.regs 13) M0Crypto.Release.PolyBlocks.slotCount) =
+                      BitVec.ofNat 32 n →
+                    (∀ (o : Nat), o < M0Crypto.Release.PolyBlocks.belowPadBytes → Wr (s.regs 13 + BitVec.ofNat 32 o)) →
+                      M0Crypto.Release.Reach base Wr s fun t =>
+                        t = M0Crypto.Release.PolyBlocks.loopState base n s ∧
+                          t.pc = base + BitVec.ofNat 32 M0Crypto.Release.PolyBlocks.publishAt ∧
+                            t.regs 7 = s.regs 7 ∧
+                              t.regs 12 = s.regs 12 ∧
+                                t.regs 13 = s.regs 13 ∧
+                                  M0Crypto.Armv6M.read32 t.mem
+                                      (M0Crypto.Armv6M.slot (s.regs 13) M0Crypto.Release.PolyBlocks.slotCount) =
+                                    0#32
+M0Crypto.Release.PolyBlocks.loop_mem : ∀ (base : M0Crypto.Armv6M.Word) (n : Nat) (s : M0Crypto.Armv6M.State)
+  (y : M0Crypto.Armv6M.Word),
+  ¬M0Crypto.Release.Frame.InFrame (s.regs 13) M0Crypto.Release.PolyBlocks.slotPad y →
+    (M0Crypto.Release.PolyBlocks.loopState base n s).mem y = s.mem y
+M0Crypto.Release.PolyBlocks.blocks_ret : ∀ (c : M0Crypto.Release.PolyBlocks.BCtx),
+  M0Crypto.Release.PolyBlocks.BValid c →
+    ∀ (Wr : M0Crypto.Armv6M.Word → Prop) (s : M0Crypto.Armv6M.State),
+      s.pc = c.base + BitVec.ofNat 32 M0Crypto.Release.PolyBlocks.epilogueAt →
+        s.regs 13 = c.fp →
+          (∀ (i : Nat),
+              i < 9 →
+                M0Crypto.Armv6M.read32 s.mem (M0Crypto.Armv6M.slot c.fp (7 + i)) =
+                  M0Crypto.Release.ChaChaRet.saved c.regs0 i) →
+            BitVec.getLsbD (c.regs0 14) 0 = Bool.true →
+              M0Crypto.Release.Reach c.base Wr s fun t =>
+                t.pc = c.regs0 14 &&& ~~~1#32 ∧
+                  t.regs 13 = c.sp0 ∧
+                    (∀ (r : M0Crypto.Armv6M.Reg), 4 ≤ ↑r → ↑r < 12 → t.regs r = c.regs0 r) ∧
+                      (∀ (r : M0Crypto.Armv6M.Reg), ↑r < 4 ∨ ↑r = 12 ∨ ↑r = 14 → t.regs r = s.regs r) ∧ t.mem = s.mem
+M0Crypto.Release.PolyBlocks.publish_effect : ∀ (s : M0Crypto.Armv6M.State),
+  (M0Crypto.Thumb.execAll M0Crypto.Release.PolyBlocks.publish s).mem = M0Crypto.Release.PolyBlocks.publishMem s ∧
+    (∀ (r : M0Crypto.Armv6M.Reg),
+        ↑r < 4 ∨ ↑r = 12 ∨ ↑r = 14 → (M0Crypto.Thumb.execAll M0Crypto.Release.PolyBlocks.publish s).regs r = 0#32) ∧
+      (M0Crypto.Thumb.execAll M0Crypto.Release.PolyBlocks.publish s).regs 13 = s.regs 13
+M0Crypto.Release.PolyBlocks.blocks_reach : ∀ (c : M0Crypto.Release.PolyBlocks.BCtx),
+  M0Crypto.Release.PolyBlocks.BValid c →
+    ∀ (s : M0Crypto.Armv6M.State),
+      M0Crypto.Release.PolyBlocks.BEntry c s →
+        BitVec.getLsbD (c.regs0 14) 0 = Bool.true →
+          M0Crypto.Release.Reach c.base c.Wr s (M0Crypto.Release.PolyBlocks.BResult c s)
+M0Crypto.Release.PolyBlocks.blocks_execution : ∀ (c : M0Crypto.Release.PolyBlocks.BCtx),
+  M0Crypto.Release.PolyBlocks.BValid c →
+    ∀ (s : M0Crypto.Armv6M.State),
+      M0Crypto.Release.PolyBlocks.BEntry c s →
+        BitVec.getLsbD (c.regs0 14) 0 = Bool.true →
+          (∀ (i : Nat), i < M0Crypto.Artifacts.Release.size → c.regs0 14 &&& ~~~1#32 ≠ c.base + BitVec.ofNat 32 i) →
+            ∃ n,
+              ∀ (fuel : Nat),
+                n ≤ fuel →
+                  ∃ t tr,
+                    M0Crypto.Thumb.runUntil (c.regs0 14 &&& ~~~1#32) fuel s = Except.ok (t, tr) ∧
+                      M0Crypto.Release.PolyBlocks.BResult c s t ∧ M0Crypto.Release.WritesTo c.Wr tr
+M0Crypto.Release.PolyBlocks.result_frame : ∀ (c : M0Crypto.Release.PolyBlocks.BCtx),
+  M0Crypto.Release.PolyBlocks.BValid c →
+    ∀ (s t : M0Crypto.Armv6M.State),
+      M0Crypto.Release.PolyBlocks.BEntry c s →
+        BitVec.getLsbD (c.regs0 14) 0 = Bool.true →
+          M0Crypto.Release.PolyBlocks.BResult c s t → ∀ (y : M0Crypto.Armv6M.Word), ¬c.Wr y → t.mem y = c.m0 y
+M0Crypto.Release.PolyBlocks.result_cleared : ∀ (c : M0Crypto.Release.PolyBlocks.BCtx) (s t : M0Crypto.Armv6M.State),
+  M0Crypto.Release.PolyBlocks.BEntry c s →
+    M0Crypto.Release.PolyBlocks.BResult c s t →
+      c.count ≠ 0#32 →
+        (∀ (r : M0Crypto.Armv6M.Reg), ↑r < 4 ∨ ↑r = 12 ∨ ↑r = 14 → t.regs r = 0#32) ∧
+          ∀ (o : Nat), o < M0Crypto.Release.PolyBlocks.frameBytes → t.mem (c.fp + BitVec.ofNat 32 o) = 0#8
+M0Crypto.Release.PolyBlocks.result_h : ∀ (c : M0Crypto.Release.PolyBlocks.BCtx),
+  M0Crypto.Release.PolyBlocks.BValid c →
+    ∀ (s t : M0Crypto.Armv6M.State),
+      M0Crypto.Release.PolyBlocks.BEntry c s →
+        M0Crypto.Release.PolyBlocks.BResult c s t →
+          c.count ≠ 0#32 →
+            ∀ (j : Nat) (hj : j < 5),
+              M0Crypto.Armv6M.read32 t.mem (M0Crypto.Armv6M.slot c.ctx j) =
+                if j < 4 then
+                  (M0Crypto.Release.PolyBlocks.finalLoop c s).regs
+                    ⟨8 + j, Decidable.byContradiction fun a => M0Crypto.Release.PolyBlocks.result_h._proof_1 j hj a⟩
+                else (M0Crypto.Release.PolyBlocks.finalLoop c s).regs 14
+M0Crypto.Release.PolyBlocks.result_zero : ∀ (c : M0Crypto.Release.PolyBlocks.BCtx) (s t : M0Crypto.Armv6M.State),
+  M0Crypto.Release.PolyBlocks.BEntry c s →
+    M0Crypto.Release.PolyBlocks.BResult c s t →
+      c.count = 0#32 → t.mem = c.mP ∧ ∀ (r : M0Crypto.Armv6M.Reg), ↑r < 4 ∨ ↑r = 12 ∨ ↑r = 14 → t.regs r = c.regs0 r
+M0Crypto.Release.PolyBlocks.result_key_preserved : ∀ (c : M0Crypto.Release.PolyBlocks.BCtx),
+  M0Crypto.Release.PolyBlocks.BValid c →
+    ∀ (s t : M0Crypto.Armv6M.State),
+      M0Crypto.Release.PolyBlocks.BEntry c s →
+        BitVec.getLsbD (c.regs0 14) 0 = Bool.true →
+          M0Crypto.Release.PolyBlocks.BResult c s t →
+            ∀ (o : Nat), 20 ≤ o → o < 64 → t.mem (c.ctx + BitVec.ofNat 32 o) = c.m0 (c.ctx + BitVec.ofNat 32 o)
+M0Crypto.Release.PolyBlocks.blocks_execution_safe : ∀ (c : M0Crypto.Release.PolyBlocks.BCtx),
+  M0Crypto.Release.PolyBlocks.BValid c →
+    ∀ (s : M0Crypto.Armv6M.State),
+      M0Crypto.Release.PolyBlocks.BEntry c s →
+        BitVec.getLsbD (c.regs0 14) 0 = Bool.true →
+          (∀ (i : Nat), i < M0Crypto.Artifacts.Release.size → c.regs0 14 &&& ~~~1#32 ≠ c.base + BitVec.ofNat 32 i) →
+            ∃ n,
+              ∀ (fuel : Nat),
+                n ≤ fuel →
+                  ∃ t tr,
+                    M0Crypto.Thumb.runUntil (c.regs0 14 &&& ~~~1#32) fuel s = Except.ok (t, tr) ∧
+                      M0Crypto.Release.PolyBlocks.BResult c s t ∧
+                        M0Crypto.Release.WritesTo c.Wr tr ∧
+                          (∀ (y : M0Crypto.Armv6M.Word), ¬c.Wr y → t.mem y = c.m0 y) ∧
+                            (c.count ≠ 0#32 →
+                              (∀ (r : M0Crypto.Armv6M.Reg), ↑r < 4 ∨ ↑r = 12 ∨ ↑r = 14 → t.regs r = 0#32) ∧
+                                ∀ (o : Nat),
+                                  o < M0Crypto.Release.PolyBlocks.frameBytes → t.mem (c.fp + BitVec.ofNat 32 o) = 0#8)
+M0Crypto.Release.PolyCarry.adc5 : ∀ (x0 x1 x2 x3 x4 y0 y1 y2 y3 y4 : M0Crypto.Armv6M.Word),
+  have a0 := M0Crypto.Armv6M.addWithCarry x0 y0 Bool.false;
+  have a1 := M0Crypto.Armv6M.addWithCarry x1 y1 a0.snd.fst;
+  have a2 := M0Crypto.Armv6M.addWithCarry x2 y2 a1.snd.fst;
+  have a3 := M0Crypto.Armv6M.addWithCarry x3 y3 a2.snd.fst;
+  have a4 := M0Crypto.Armv6M.addWithCarry x4 y4 a3.snd.fst;
+  M0Crypto.Release.PolyArith.val5 (BitVec.toNat a0.fst) (BitVec.toNat a1.fst) (BitVec.toNat a2.fst)
+        (BitVec.toNat a3.fst) (BitVec.toNat a4.fst) +
+      2 ^ 160 * a4.snd.fst.toNat =
+    M0Crypto.Release.PolyArith.val5 (BitVec.toNat x0) (BitVec.toNat x1) (BitVec.toNat x2) (BitVec.toNat x3)
+        (BitVec.toNat x4) +
+      M0Crypto.Release.PolyArith.val5 (BitVec.toNat y0) (BitVec.toNat y1) (BitVec.toNat y2) (BitVec.toNat y3)
+        (BitVec.toNat y4)
+M0Crypto.Release.PolyCarry.adc5_mod : ∀ (x0 x1 x2 x3 x4 y0 y1 y2 y3 y4 : M0Crypto.Armv6M.Word),
+  have a0 := M0Crypto.Armv6M.addWithCarry x0 y0 Bool.false;
+  have a1 := M0Crypto.Armv6M.addWithCarry x1 y1 a0.snd.fst;
+  have a2 := M0Crypto.Armv6M.addWithCarry x2 y2 a1.snd.fst;
+  have a3 := M0Crypto.Armv6M.addWithCarry x3 y3 a2.snd.fst;
+  have a4 := M0Crypto.Armv6M.addWithCarry x4 y4 a3.snd.fst;
+  M0Crypto.Release.PolyArith.val5 (BitVec.toNat a0.fst) (BitVec.toNat a1.fst) (BitVec.toNat a2.fst)
+      (BitVec.toNat a3.fst) (BitVec.toNat a4.fst) =
+    (M0Crypto.Release.PolyArith.val5 (BitVec.toNat x0) (BitVec.toNat x1) (BitVec.toNat x2) (BitVec.toNat x3)
+          (BitVec.toNat x4) +
+        M0Crypto.Release.PolyArith.val5 (BitVec.toNat y0) (BitVec.toNat y1) (BitVec.toNat y2) (BitVec.toNat y3)
+          (BitVec.toNat y4)) %
+      2 ^ 160
+M0Crypto.Release.PolyBlocks.addMsg_h : ∀ (s : M0Crypto.Armv6M.State),
+  M0Crypto.Release.PolyBlocks.hval (M0Crypto.Thumb.execAll M0Crypto.Release.PolyBlocks.addMsg s) =
+    (M0Crypto.Release.PolyBlocks.hval s +
+          M0Crypto.Release.PolyArith.val4 (BitVec.toNat (s.regs 0)) (BitVec.toNat (s.regs 1)) (BitVec.toNat (s.regs 2))
+            (BitVec.toNat (s.regs 3)) +
+        2 ^ 128 * BitVec.toNat (s.regs 12)) %
+      2 ^ 160
+M0Crypto.Release.PolyBlocks.fold_h : ∀ (s : M0Crypto.Armv6M.State),
+  M0Crypto.Release.PolyBlocks.Sep s →
+    M0Crypto.Release.PolyBlocks.hval (M0Crypto.Thumb.execAll M0Crypto.Release.PolyBlocks.fold s) =
+      (M0Crypto.Release.PolyArith.val4
+              (BitVec.toNat (M0Crypto.Armv6M.read32 s.mem (M0Crypto.Armv6M.slot (s.regs 13) 0)))
+              (BitVec.toNat (M0Crypto.Armv6M.read32 s.mem (M0Crypto.Armv6M.slot (s.regs 13) 1)))
+              (BitVec.toNat (M0Crypto.Armv6M.read32 s.mem (M0Crypto.Armv6M.slot (s.regs 13) 2)))
+              (M0Crypto.Release.PolyMac.v64 s % 2 ^ 32) +
+            2 ^ 128 * (BitVec.toNat (M0Crypto.Release.PolyBlocks.gw s) % 4) +
+          BitVec.toNat (M0Crypto.Release.PolyBlocks.fw s)) %
+        2 ^ 160
+M0Crypto.Release.PolyBlocks.body_correct : ∀ (s : M0Crypto.Armv6M.State),
+  M0Crypto.Release.PolyBlocks.Sep s →
+    M0Crypto.Release.PolyBlocks.KeyOK s →
+      BitVec.toNat (s.regs 14) ≤ 4 →
+        BitVec.toNat (s.regs 12) ≤ 1 →
+          M0Crypto.Release.PolyBlocks.hval (M0Crypto.Thumb.execAll M0Crypto.Release.PolyBlocks.body s) %
+                M0Crypto.Spec.AEAD.p =
+              (M0Crypto.Release.PolyBlocks.hval s +
+                      M0Crypto.Release.PolyArith.val4 (BitVec.toNat (s.regs 0)) (BitVec.toNat (s.regs 1))
+                        (BitVec.toNat (s.regs 2)) (BitVec.toNat (s.regs 3)) +
+                    2 ^ 128 * BitVec.toNat (s.regs 12)) *
+                  M0Crypto.Release.PolyBlocks.rval s %
+                M0Crypto.Spec.AEAD.p ∧
+            M0Crypto.Release.PolyBlocks.hval (M0Crypto.Thumb.execAll M0Crypto.Release.PolyBlocks.body s) < 5 * 2 ^ 128
+M0Crypto.Release.PolyBlocks.one_correct : ∀ (s : M0Crypto.Armv6M.State),
+  M0Crypto.Release.PolyBlocks.Sep s →
+    M0Crypto.Release.PolyBlocks.KeyOK s →
+      BitVec.toNat (s.regs 14) ≤ 4 →
+        BitVec.toNat (s.regs 12) ≤ 1 →
+          M0Crypto.Release.PolyBlocks.hval (M0Crypto.Release.PolyBlocks.oneBlock s) % M0Crypto.Spec.AEAD.p =
+              M0Crypto.Release.PolySpec.step (M0Crypto.Release.PolyBlocks.rval s) (BitVec.toNat (s.regs 12))
+                (M0Crypto.Release.PolyBlocks.hval s)
+                (M0Crypto.Release.Frame.Ctx.bytesAt s.mem (M0Crypto.Release.PolyBlocks.mp s) 16) ∧
+            M0Crypto.Release.PolyBlocks.hval (M0Crypto.Release.PolyBlocks.oneBlock s) < 5 * 2 ^ 128
+M0Crypto.Release.PolyBlocks.loop_correct : ∀ (base : M0Crypto.Armv6M.Word) (n : Nat),
+  0 < n →
+    ∀ (s : M0Crypto.Armv6M.State),
+      M0Crypto.Release.PolyBlocks.Sep s →
+        M0Crypto.Release.PolyBlocks.KeyOK s →
+          BitVec.toNat (s.regs 14) ≤ 4 →
+            BitVec.toNat (s.regs 12) ≤ 1 →
+              M0Crypto.Release.Frame.Disj (M0Crypto.Release.PolyBlocks.mp s) (16 * n) (s.regs 13)
+                  M0Crypto.Release.PolyBlocks.frameBytes →
+                M0Crypto.Release.PolyBlocks.hval (M0Crypto.Release.PolyBlocks.loopState base n s) %
+                      M0Crypto.Spec.AEAD.p =
+                    M0Crypto.Release.PolySpec.polyBlocks (M0Crypto.Release.PolyBlocks.rval s) (BitVec.toNat (s.regs 12))
+                      (M0Crypto.Release.PolyBlocks.hval s % M0Crypto.Spec.AEAD.p)
+                      (M0Crypto.Release.Frame.Ctx.bytesAt s.mem (M0Crypto.Release.PolyBlocks.mp s) (16 * n)) ∧
+                  M0Crypto.Release.PolyBlocks.hval (M0Crypto.Release.PolyBlocks.loopState base n s) < 5 * 2 ^ 128
+M0Crypto.Release.PolyBlocks.result_blocks_correct : ∀ (c : M0Crypto.Release.PolyBlocks.BCtx),
+  M0Crypto.Release.PolyBlocks.BValid c →
+    ∀ (s t : M0Crypto.Armv6M.State),
+      M0Crypto.Release.PolyBlocks.BEntry c s →
+        M0Crypto.Release.PolyBlocks.BResult c s t →
+          M0Crypto.Release.PolyBlocks.keyAtOK c.m0 c.ctx →
+            M0Crypto.Release.PolyBlocks.accAt c.m0 c.ctx < 5 * 2 ^ 128 →
+              BitVec.toNat c.pad ≤ 1 →
+                M0Crypto.Release.PolyBlocks.accAt t.mem c.ctx % M0Crypto.Spec.AEAD.p =
+                    M0Crypto.Release.PolySpec.polyBlocks (M0Crypto.Release.PolyBlocks.keyAt c.m0 c.ctx)
+                      (BitVec.toNat c.pad) (M0Crypto.Release.PolyBlocks.accAt c.m0 c.ctx % M0Crypto.Spec.AEAD.p)
+                      (M0Crypto.Release.Frame.Ctx.bytesAt c.m0 c.msg (16 * BitVec.toNat c.count)) ∧
+                  M0Crypto.Release.PolyBlocks.accAt t.mem c.ctx < 5 * 2 ^ 128
+M0Crypto.Release.PolyBlocks.blocks_correct : ∀ (c : M0Crypto.Release.PolyBlocks.BCtx),
+  M0Crypto.Release.PolyBlocks.BValid c →
+    ∀ (s : M0Crypto.Armv6M.State),
+      M0Crypto.Release.PolyBlocks.BEntry c s →
+        M0Crypto.Release.PolyBlocks.keyAtOK c.m0 c.ctx →
+          M0Crypto.Release.PolyBlocks.accAt c.m0 c.ctx < 5 * 2 ^ 128 →
+            BitVec.toNat c.pad ≤ 1 →
+              BitVec.getLsbD (c.regs0 14) 0 = Bool.true →
+                (∀ (i : Nat),
+                    i < M0Crypto.Artifacts.Release.size → c.regs0 14 &&& ~~~1#32 ≠ c.base + BitVec.ofNat 32 i) →
+                  ∃ n,
+                    ∀ (fuel : Nat),
+                      n ≤ fuel →
+                        ∃ t tr,
+                          M0Crypto.Thumb.runUntil (c.regs0 14 &&& ~~~1#32) fuel s = Except.ok (t, tr) ∧
+                            M0Crypto.Release.PolyBlocks.BResult c s t ∧
+                              M0Crypto.Release.WritesTo c.Wr tr ∧
+                                M0Crypto.Release.PolyBlocks.accAt t.mem c.ctx % M0Crypto.Spec.AEAD.p =
+                                    M0Crypto.Release.PolySpec.polyBlocks (M0Crypto.Release.PolyBlocks.keyAt c.m0 c.ctx)
+                                      (BitVec.toNat c.pad)
+                                      (M0Crypto.Release.PolyBlocks.accAt c.m0 c.ctx % M0Crypto.Spec.AEAD.p)
+                                      (M0Crypto.Release.Frame.Ctx.bytesAt c.m0 c.msg (16 * BitVec.toNat c.count)) ∧
+                                  M0Crypto.Release.PolyBlocks.accAt t.mem c.ctx < 5 * 2 ^ 128
+M0Crypto.Release.PolyFinish.segments_at : M0Crypto.Thumb.seqAt M0Crypto.Release.B M0Crypto.Release.PolyFinish.entryAt
+      M0Crypto.Release.PolyFinish.header =
+    Bool.true ∧
+  M0Crypto.Thumb.seqAt M0Crypto.Release.B M0Crypto.Release.PolyFinish.arithAt M0Crypto.Release.PolyFinish.arithmetic =
+      Bool.true ∧
+    M0Crypto.Thumb.seqAt M0Crypto.Release.B M0Crypto.Release.PolyFinish.emitAt M0Crypto.Release.PolyFinish.emit =
+        Bool.true ∧
+      M0Crypto.Thumb.seqAt M0Crypto.Release.B M0Crypto.Release.PolyFinish.clearAt M0Crypto.Release.PolyFinish.clear =
+          Bool.true ∧
+        M0Crypto.Thumb.instrAt M0Crypto.Release.B M0Crypto.Release.PolyFinish.popAt =
+          Option.some (M0Crypto.Thumb.Instr.pop 240 Bool.true)
+M0Crypto.Release.PolyFinish.carry_correct : ∀ (s : M0Crypto.Armv6M.State),
+  s.regs 6 = 0#32 →
+    M0Crypto.Release.PolyFinish.hv s < 2 * M0Crypto.Spec.AEAD.p →
+      BitVec.toNat ((M0Crypto.Thumb.execAll M0Crypto.Release.PolyFinish.carry s).regs 1) =
+        5 * ((M0Crypto.Release.PolyFinish.hv s + 5) / 2 ^ 130)
+M0Crypto.Release.PolyFinish.arithmetic_correct : ∀ (s : M0Crypto.Armv6M.State),
+  s.regs 6 = 0#32 →
+    M0Crypto.Release.PolyFinish.hv s < 2 * M0Crypto.Spec.AEAD.p →
+      M0Crypto.Release.PolyFinish.low (M0Crypto.Thumb.execAll M0Crypto.Release.PolyFinish.arithmetic s) =
+        (M0Crypto.Release.PolyFinish.hv s % M0Crypto.Spec.AEAD.p + M0Crypto.Release.PolyFinish.pv s) % 2 ^ 128
+M0Crypto.Release.PolyFinish.tagMem_bytes : ∀ (s : M0Crypto.Armv6M.State),
+  M0Crypto.Release.Frame.Ctx.bytesAt (M0Crypto.Release.PolyFinish.tagMem s) (s.regs 12) 16 =
+    M0Crypto.Spec.AEAD.leBytes 16 (M0Crypto.Release.PolyFinish.low s)
+M0Crypto.Release.PolyFinish.pop_ret : ∀ (c : M0Crypto.Release.PolyFinish.FCtx),
+  M0Crypto.Release.PolyFinish.FValid c →
+    ∀ (s : M0Crypto.Armv6M.State),
+      s.pc = c.base + BitVec.ofNat 32 M0Crypto.Release.PolyFinish.popAt →
+        s.regs 13 = c.fp →
+          (∀ (j : Nat),
+              j < 5 →
+                M0Crypto.Armv6M.read32 s.mem (M0Crypto.Armv6M.slot c.fp j) =
+                  [c.regs0 4, c.regs0 5, c.regs0 6, c.regs0 7, c.regs0 14].getD j 0#32) →
+            BitVec.getLsbD (c.regs0 14) 0 = Bool.true →
+              M0Crypto.Release.Reach c.base c.Wr s fun t =>
+                t.pc = c.regs0 14 &&& ~~~1#32 ∧
+                  t.regs 13 = c.sp0 ∧
+                    (∀ (r : M0Crypto.Armv6M.Reg), 4 ≤ ↑r → ↑r < 8 → t.regs r = c.regs0 r) ∧
+                      (∀ (r : M0Crypto.Armv6M.Reg), ↑r < 4 ∨ 8 ≤ ↑r → ↑r ≠ 13 → ↑r ≠ 15 → t.regs r = s.regs r) ∧
+                        t.mem = s.mem
+M0Crypto.Release.PolyFinish.emit_writes : ∀ (s : M0Crypto.Armv6M.State),
+  M0Crypto.Thumb.WritesIn (M0Crypto.Thumb.traceAll M0Crypto.Release.PolyFinish.emit s) (s.regs 12) 16
+M0Crypto.Release.PolyFinish.finish_reach : ∀ (c : M0Crypto.Release.PolyFinish.FCtx),
+  M0Crypto.Release.PolyFinish.FValid c →
+    ∀ (s : M0Crypto.Armv6M.State),
+      M0Crypto.Release.PolyFinish.FEntry c s →
+        BitVec.getLsbD (c.regs0 14) 0 = Bool.true →
+          M0Crypto.Release.Reach c.base c.Wr s fun t => M0Crypto.Release.PolyFinish.FResult c s t
+M0Crypto.Release.PolyFinish.result_tag : ∀ (c : M0Crypto.Release.PolyFinish.FCtx),
+  M0Crypto.Release.PolyFinish.FValid c →
+    ∀ (s t : M0Crypto.Armv6M.State),
+      M0Crypto.Release.PolyFinish.FEntry c s →
+        M0Crypto.Release.PolyFinish.FResult c s t →
+          c.acc < 2 * M0Crypto.Spec.AEAD.p →
+            M0Crypto.Release.Frame.Ctx.bytesAt t.mem c.tag 16 =
+              M0Crypto.Spec.AEAD.leBytes 16 (c.acc % M0Crypto.Spec.AEAD.p + c.padVal)
+M0Crypto.Release.PolyFinish.result_frame : ∀ (c : M0Crypto.Release.PolyFinish.FCtx) (s t : M0Crypto.Armv6M.State),
+  M0Crypto.Release.PolyFinish.FEntry c s →
+    M0Crypto.Release.PolyFinish.FResult c s t → ∀ (y : M0Crypto.Armv6M.Word), ¬c.Wr y → t.mem y = c.m0 y
+M0Crypto.Release.PolyFinish.finish_correct : ∀ (c : M0Crypto.Release.PolyFinish.FCtx),
+  M0Crypto.Release.PolyFinish.FValid c →
+    ∀ (s : M0Crypto.Armv6M.State),
+      M0Crypto.Release.PolyFinish.FEntry c s →
+        c.acc < 2 * M0Crypto.Spec.AEAD.p →
+          BitVec.getLsbD (c.regs0 14) 0 = Bool.true →
+            (∀ (i : Nat), i < M0Crypto.Artifacts.Release.size → c.regs0 14 &&& ~~~1#32 ≠ c.base + BitVec.ofNat 32 i) →
+              ∃ n,
+                ∀ (fuel : Nat),
+                  n ≤ fuel →
+                    ∃ t tr,
+                      M0Crypto.Thumb.runUntil (c.regs0 14 &&& ~~~1#32) fuel s = Except.ok (t, tr) ∧
+                        M0Crypto.Release.PolyFinish.FResult c s t ∧
+                          M0Crypto.Release.WritesTo c.Wr tr ∧
+                            M0Crypto.Release.Frame.Ctx.bytesAt t.mem c.tag 16 =
+                                M0Crypto.Spec.AEAD.leBytes 16 (c.acc % M0Crypto.Spec.AEAD.p + c.padVal) ∧
+                              ∀ (y : M0Crypto.Armv6M.Word), ¬c.Wr y → t.mem y = c.m0 y
+M0Crypto.Release.PolyContext.init_keyOK : ∀ (c : M0Crypto.Release.PolyInit.ICtx) (t : M0Crypto.Armv6M.State),
+  M0Crypto.Release.PolyInit.IResult c t → M0Crypto.Release.PolyBlocks.keyAtOK t.mem c.ctx
+M0Crypto.Release.PolyContext.init_acc : ∀ (c : M0Crypto.Release.PolyInit.ICtx) (t : M0Crypto.Armv6M.State),
+  M0Crypto.Release.PolyInit.IResult c t → M0Crypto.Release.PolyBlocks.accAt t.mem c.ctx = 0
+M0Crypto.Release.PolyContext.init_key : ∀ (c : M0Crypto.Release.PolyInit.ICtx) (t : M0Crypto.Armv6M.State),
+  M0Crypto.Release.PolyInit.IResult c t →
+    M0Crypto.Release.PolyBlocks.keyAt t.mem c.ctx =
+      M0Crypto.Spec.AEAD.clamp (M0Crypto.Spec.AEAD.leNat (M0Crypto.Release.Frame.Ctx.bytesAt c.m0 c.key 16))
+M0Crypto.Release.PolyContext.init_pad : ∀ (c : M0Crypto.Release.PolyInit.ICtx) (t : M0Crypto.Armv6M.State),
+  M0Crypto.Release.PolyInit.IResult c t →
+    M0Crypto.Release.PolyContext.padAt t.mem c.ctx =
+      M0Crypto.Spec.AEAD.leNat (M0Crypto.Release.Frame.Ctx.bytesAt c.m0 (c.key + 16#32) 16)
+M0Crypto.Release.PolyContext.blocks_words : ∀ (c : M0Crypto.Release.PolyBlocks.BCtx),
+  M0Crypto.Release.PolyBlocks.BValid c →
+    ∀ (s t : M0Crypto.Armv6M.State),
+      M0Crypto.Release.PolyBlocks.BEntry c s →
+        BitVec.getLsbD (c.regs0 14) 0 = Bool.true →
+          M0Crypto.Release.PolyBlocks.BResult c s t →
+            ∀ (j : Nat),
+              5 ≤ j →
+                j < 16 →
+                  M0Crypto.Release.PolyBlocks.wordAt t.mem c.ctx j = M0Crypto.Release.PolyBlocks.wordAt c.m0 c.ctx j
+M0Crypto.Release.PolyContext.blocks_keyOK : ∀ (c : M0Crypto.Release.PolyBlocks.BCtx),
+  M0Crypto.Release.PolyBlocks.BValid c →
+    ∀ (s t : M0Crypto.Armv6M.State),
+      M0Crypto.Release.PolyBlocks.BEntry c s →
+        BitVec.getLsbD (c.regs0 14) 0 = Bool.true →
+          M0Crypto.Release.PolyBlocks.BResult c s t →
+            M0Crypto.Release.PolyBlocks.keyAtOK c.m0 c.ctx → M0Crypto.Release.PolyBlocks.keyAtOK t.mem c.ctx
+M0Crypto.Release.PolyContext.blocks_pad : ∀ (c : M0Crypto.Release.PolyBlocks.BCtx),
+  M0Crypto.Release.PolyBlocks.BValid c →
+    ∀ (s t : M0Crypto.Armv6M.State),
+      M0Crypto.Release.PolyBlocks.BEntry c s →
+        BitVec.getLsbD (c.regs0 14) 0 = Bool.true →
+          M0Crypto.Release.PolyBlocks.BResult c s t →
+            M0Crypto.Release.PolyContext.padAt t.mem c.ctx = M0Crypto.Release.PolyContext.padAt c.m0 c.ctx
+M0Crypto.Release.PolyContext.finish_bound : ∀ (h : Nat), h < 5 * 2 ^ 128 → h < 2 * M0Crypto.Spec.AEAD.p
+M0Crypto.Release.PolyContext.finish_acc : ∀ (c : M0Crypto.Release.PolyFinish.FCtx),
+  c.acc = M0Crypto.Release.PolyBlocks.accAt c.m0 c.ctx
+M0Crypto.Release.PolyContext.finish_pad : ∀ (c : M0Crypto.Release.PolyFinish.FCtx),
+  c.padVal = M0Crypto.Release.PolyContext.padAt c.m0 c.ctx
+M0Crypto.Release.PolyContext.key_split : ∀ (m : M0Crypto.Armv6M.Mem) (k : M0Crypto.Armv6M.Word),
+  List.take 16 (M0Crypto.Release.Frame.Ctx.bytesAt m k 32) = M0Crypto.Release.Frame.Ctx.bytesAt m k 16 ∧
+    List.take 16 (List.drop 16 (M0Crypto.Release.Frame.Ctx.bytesAt m k 32)) =
+      M0Crypto.Release.Frame.Ctx.bytesAt m (k + 16#32) 16
+M0Crypto.Release.PolyContext.poly1305_chain : ∀ (c : M0Crypto.Release.PolyInit.ICtx) (ti : M0Crypto.Armv6M.State),
+  M0Crypto.Release.PolyInit.IResult c ti →
+    ∀ (mf : M0Crypto.Armv6M.Mem) (msg : List M0Crypto.Spec.ChaCha20.Byte),
+      msg.length % 16 = 0 →
+        M0Crypto.Release.PolyContext.padAt mf c.ctx = M0Crypto.Release.PolyContext.padAt ti.mem c.ctx →
+          M0Crypto.Release.PolyBlocks.accAt mf c.ctx % M0Crypto.Spec.AEAD.p =
+              M0Crypto.Release.PolySpec.polyBlocks (M0Crypto.Release.PolyBlocks.keyAt ti.mem c.ctx) 1
+                (M0Crypto.Release.PolyBlocks.accAt ti.mem c.ctx % M0Crypto.Spec.AEAD.p) msg →
+            M0Crypto.Spec.AEAD.leBytes 16
+                (M0Crypto.Release.PolyBlocks.accAt mf c.ctx % M0Crypto.Spec.AEAD.p +
+                  M0Crypto.Release.PolyContext.padAt mf c.ctx) =
+              M0Crypto.Spec.AEAD.poly1305 (M0Crypto.Release.Frame.Ctx.bytesAt c.m0 c.key 32) msg
+M0Crypto.Release.Aead.mac_padded : ∀ (base A d n : M0Crypto.Armv6M.Word) (M : M0Crypto.Armv6M.Mem) (m : Nat)
+  (i1 i2 : BitVec 25),
+  M0Crypto.Release.Aead.MacAt m i1 i2 →
+    m % 2 = 0 →
+      m + M0Crypto.Release.Aead.macSize ≤ M0Crypto.Artifacts.Release.size →
+        M0Crypto.Release.Aead.MacEnv base A d n M →
+          ∀ (s : M0Crypto.Armv6M.State),
+            s.pc = base + BitVec.ofNat 32 m →
+              s.regs 13 = A →
+                s.regs 4 = d →
+                  s.regs 5 = n →
+                    s.mem = M →
+                      M0Crypto.Release.PolyBlocks.keyAtOK M (A + 8#32) →
+                        M0Crypto.Release.PolyBlocks.accAt M (A + 8#32) < 5 * 2 ^ 128 →
+                          M0Crypto.Release.Reach base (M0Crypto.Release.Aead.MacWr A) s
+                            (M0Crypto.Release.Aead.MacPost base A d n M m s)
+M0Crypto.Release.Aead.aead_setup : ∀ (c : M0Crypto.Release.Aead.ACall),
+  M0Crypto.Release.Aead.AValid c →
+    ∀ (e : Nat) (i0 i1 : BitVec 25),
+      M0Crypto.Thumb.seqAt M0Crypto.Release.B e M0Crypto.Release.Aead.pro = Bool.true →
+        M0Crypto.Thumb.instrAt M0Crypto.Release.B (e + M0Crypto.Release.Aead.proXorOff) =
+            Option.some (M0Crypto.Thumb.Instr.bl i0) →
+          M0Crypto.Release.Aead.blTarget (e + M0Crypto.Release.Aead.proXorOff) i0 =
+              BitVec.ofNat 32 M0Crypto.Release.Aead.xorOff →
+            M0Crypto.Thumb.seqAt M0Crypto.Release.B (e + M0Crypto.Release.Aead.copyOff) M0Crypto.Release.Aead.copy =
+                Bool.true →
+              M0Crypto.Thumb.instrAt M0Crypto.Release.B (e + M0Crypto.Release.Aead.initCallOff) =
+                  Option.some (M0Crypto.Thumb.Instr.bl i1) →
+                M0Crypto.Release.Aead.blTarget (e + M0Crypto.Release.Aead.initCallOff) i1 =
+                    BitVec.ofNat 32 M0Crypto.Release.Aead.initOff →
+                  e % 2 = 0 →
+                    e + M0Crypto.Release.Aead.setupEnd ≤ M0Crypto.Artifacts.Release.size →
+                      ∀ (s : M0Crypto.Armv6M.State),
+                        M0Crypto.Release.Aead.AEntry c e s →
+                          M0Crypto.Release.Reach c.base (M0Crypto.Release.Aead.SWr c.A) s fun t =>
+                            ∃ ic, M0Crypto.Release.Aead.SetupPost c e ic t
+M0Crypto.Release.Aead.crypt_reach : ∀ (c : M0Crypto.Release.Aead.ACall),
+  M0Crypto.Release.Aead.AValid c →
+    M0Crypto.Release.Aead.ABuf c →
+      ∀ (off : Nat) (i : BitVec 25),
+        M0Crypto.Thumb.seqAt M0Crypto.Release.B off M0Crypto.Release.Aead.crypt = Bool.true →
+          M0Crypto.Thumb.instrAt M0Crypto.Release.B (off + M0Crypto.Release.Aead.cryptXorOff) =
+              Option.some (M0Crypto.Thumb.Instr.bl i) →
+            M0Crypto.Release.Aead.blTarget (off + M0Crypto.Release.Aead.cryptXorOff) i =
+                BitVec.ofNat 32 M0Crypto.Release.Aead.xorOff →
+              off % 2 = 0 →
+                off + M0Crypto.Release.Aead.cryptEnd ≤ M0Crypto.Artifacts.Release.size →
+                  ∀ (t : M0Crypto.Armv6M.State),
+                    t.pc = c.base + BitVec.ofNat 32 off →
+                      t.regs 13 = c.A →
+                        M0Crypto.Release.Aead.Hi c t.mem →
+                          M0Crypto.Armv6M.read32 t.mem c.A = c.nonce →
+                            (∀ (y : M0Crypto.Armv6M.Word), ¬M0Crypto.Release.Aead.SWr c.A y → t.mem y = c.m0 y) →
+                              M0Crypto.Release.Reach c.base (M0Crypto.Release.Aead.AWr c) t
+                                (M0Crypto.Release.Aead.CryptPost c off t)
+M0Crypto.Release.Aead.bytesAt_le64 : ∀ (m : M0Crypto.Armv6M.Mem) (a w : M0Crypto.Armv6M.Word),
+  M0Crypto.Armv6M.read32 m a = w →
+    M0Crypto.Armv6M.read32 m (a + 4#32) = 0#32 →
+      M0Crypto.Release.Frame.Ctx.bytesAt m a 8 = M0Crypto.Spec.AEAD.leBytes 8 (BitVec.toNat w)
+M0Crypto.Release.Aead.lengthMem_bytes : ∀ (m : M0Crypto.Armv6M.Mem) (A alen len : M0Crypto.Armv6M.Word),
+  M0Crypto.Release.Frame.Ctx.bytesAt (M0Crypto.Release.Aead.lengthMem m A alen len) (A + 72#32) 16 =
+    M0Crypto.Spec.AEAD.leBytes 8 (BitVec.toNat alen) ++ M0Crypto.Spec.AEAD.leBytes 8 (BitVec.toNat len)
+M0Crypto.Release.Aead.lengths_reach : ∀ (c : M0Crypto.Release.Aead.ACall),
+  M0Crypto.Release.Aead.AValid c →
+    ∀ (off : Nat) (i : BitVec 25),
+      M0Crypto.Thumb.seqAt M0Crypto.Release.B off M0Crypto.Release.Aead.lengths = Bool.true →
+        M0Crypto.Thumb.instrAt M0Crypto.Release.B (off + M0Crypto.Thumb.seqSize M0Crypto.Release.Aead.lengths) =
+            Option.some (M0Crypto.Thumb.Instr.bl i) →
+          M0Crypto.Release.Aead.blTarget (off + M0Crypto.Thumb.seqSize M0Crypto.Release.Aead.lengths) i =
+              BitVec.ofNat 32 M0Crypto.Release.Aead.blocksOff →
+            off % 2 = 0 →
+              off + M0Crypto.Thumb.seqSize M0Crypto.Release.Aead.lengths + M0Crypto.Release.blSize ≤
+                  M0Crypto.Artifacts.Release.size →
+                ∀ (s : M0Crypto.Armv6M.State),
+                  s.pc = c.base + BitVec.ofNat 32 off →
+                    s.regs 13 = c.A →
+                      M0Crypto.Release.Aead.Hi c s.mem →
+                        M0Crypto.Thumb.CodeAt s.mem c.base M0Crypto.Release.B →
+                          ∀ (ti : M0Crypto.Armv6M.Mem) (msg : List M0Crypto.Spec.ChaCha20.Byte),
+                            M0Crypto.Release.Aead.PInv c.A ti msg s.mem →
+                              M0Crypto.Release.Reach c.base (M0Crypto.Release.Aead.MacWr c.A) s
+                                (M0Crypto.Release.Aead.LengthPost c off ti msg s)
+M0Crypto.Release.Aead.finish_call : ∀ (c : M0Crypto.Release.Aead.ACall),
+  M0Crypto.Release.Aead.AValid c →
+    ∀ (tag : M0Crypto.Armv6M.Word) (off : Nat) (i : BitVec 25),
+      M0Crypto.Thumb.instrAt M0Crypto.Release.B off = Option.some (M0Crypto.Thumb.Instr.bl i) →
+        M0Crypto.Release.Aead.blTarget off i = BitVec.ofNat 32 M0Crypto.Release.Aead.finishOff →
+          off % 2 = 0 →
+            off + M0Crypto.Release.blSize ≤ M0Crypto.Artifacts.Release.size →
+              ∀ (s : M0Crypto.Armv6M.State),
+                s.pc = c.base + BitVec.ofNat 32 off →
+                  s.regs 13 = c.A →
+                    s.regs 0 = c.A + 8#32 →
+                      s.regs 1 = tag →
+                        M0Crypto.Thumb.CodeAt s.mem c.base M0Crypto.Release.B →
+                          M0Crypto.Release.Frame.Disj c.base M0Crypto.Artifacts.Release.size tag 16 →
+                            M0Crypto.Release.Frame.Disj tag 16 (c.A - 20#32) 20 →
+                              ∀ (ic : M0Crypto.Release.PolyInit.ICtx) (ti : M0Crypto.Armv6M.State),
+                                M0Crypto.Release.PolyInit.IResult ic ti →
+                                  ic.ctx = c.A + 8#32 →
+                                    M0Crypto.Release.Frame.Ctx.bytesAt ic.m0 ic.key 32 =
+                                        M0Crypto.Spec.AEAD.polyKey c.keyB c.nonceB →
+                                      ∀ (msg : List M0Crypto.Spec.ChaCha20.Byte),
+                                        M0Crypto.Release.Aead.PInv c.A ti.mem msg s.mem →
+                                          M0Crypto.Release.Reach c.base (M0Crypto.Release.Aead.FinishWr c.A tag) s
+                                            (M0Crypto.Release.Aead.FinishPost c tag off msg s)
+M0Crypto.Release.Aead.clear_reach : ∀ (base A : M0Crypto.Armv6M.Word) (off : Nat),
+  M0Crypto.Thumb.seqAt M0Crypto.Release.B off M0Crypto.Release.Aead.clrA = Bool.true →
+    M0Crypto.Thumb.seqAt M0Crypto.Release.B (off + M0Crypto.Thumb.seqSize M0Crypto.Release.Aead.clrA)
+          M0Crypto.Release.Aead.clrL =
+        Bool.true →
+      M0Crypto.Thumb.instrAt M0Crypto.Release.B
+            (off + M0Crypto.Thumb.seqSize M0Crypto.Release.Aead.clrA +
+              M0Crypto.Thumb.seqSize M0Crypto.Release.Aead.clrL) =
+          Option.some
+            (M0Crypto.Thumb.Instr.bcond 1
+              (M0Crypto.Release.brImm8
+                (off + M0Crypto.Thumb.seqSize M0Crypto.Release.Aead.clrA +
+                  M0Crypto.Thumb.seqSize M0Crypto.Release.Aead.clrL)
+                (off + M0Crypto.Thumb.seqSize M0Crypto.Release.Aead.clrA))) →
+        BitVec.toNat base % 4 = 0 →
+          BitVec.toNat A % 4 = 0 →
+            off % 2 = 0 →
+              off + M0Crypto.Thumb.seqSize M0Crypto.Release.Aead.clrA +
+                      M0Crypto.Thumb.seqSize M0Crypto.Release.Aead.clrL +
+                    M0Crypto.Release.brSize ≤
+                  M0Crypto.Artifacts.Release.size →
+                ∀ (s : M0Crypto.Armv6M.State),
+                  s.pc = base + BitVec.ofNat 32 off →
+                    s.regs 13 = A →
+                      M0Crypto.Release.Reach base (M0Crypto.Release.Aead.ClearWr A) s
+                        (M0Crypto.Release.Aead.ClearPost base A off s)
+M0Crypto.Release.Aead.epilogue_reach : ∀ (c : M0Crypto.Release.Aead.ACall),
+  M0Crypto.Release.Aead.AValid c →
+    ∀ (Wr : M0Crypto.Armv6M.Word → Prop) (dec : Bool) (off : Nat),
+      M0Crypto.Thumb.seqAt M0Crypto.Release.B off (M0Crypto.Release.Aead.epilogue dec) = Bool.true →
+        M0Crypto.Thumb.instrAt M0Crypto.Release.B (off + M0Crypto.Thumb.seqSize (M0Crypto.Release.Aead.epilogue dec)) =
+            Option.some (M0Crypto.Thumb.Instr.pop 240 Bool.true) →
+          off % 2 = 0 →
+            off + M0Crypto.Thumb.seqSize (M0Crypto.Release.Aead.epilogue dec) +
+                  M0Crypto.Thumb.seqSize [M0Crypto.Thumb.Instr.pop 240 Bool.true] ≤
+                M0Crypto.Artifacts.Release.size →
+              ∀ (s : M0Crypto.Armv6M.State),
+                s.pc = c.base + BitVec.ofNat 32 off →
+                  s.regs 13 = c.A →
+                    M0Crypto.Release.Aead.Hi c s.mem →
+                      (∀ (r : M0Crypto.Armv6M.Reg), 8 ≤ ↑r → ↑r < 12 → s.regs r = c.regs0 r) →
+                        BitVec.getLsbD (c.regs0 14) 0 = Bool.true →
+                          M0Crypto.Release.Reach c.base Wr s fun t =>
+                            M0Crypto.Release.Aead.RetPost c (if dec = Bool.true then s.regs 4 else 0#32) t ∧
+                              t.mem = s.mem
+M0Crypto.Release.Aead.mac_phase : ∀ (c : M0Crypto.Release.Aead.ACall),
+  M0Crypto.Release.Aead.AValid c →
+    ∀ (Wr : M0Crypto.Armv6M.Word → Prop) (off : Nat) (is : List M0Crypto.Thumb.Instr) (u v : BitVec 8),
+      is = [M0Crypto.Thumb.Instr.ldrSp 4 u, M0Crypto.Thumb.Instr.ldrSp 5 v] →
+        M0Crypto.Thumb.seqAt M0Crypto.Release.B off is = Bool.true →
+          ∀ (i1 i2 : BitVec 25),
+            M0Crypto.Release.Aead.MacAt (off + M0Crypto.Thumb.seqSize is) i1 i2 →
+              off % 2 = 0 →
+                off + M0Crypto.Thumb.seqSize is + M0Crypto.Release.Aead.macSize ≤ M0Crypto.Artifacts.Release.size →
+                  ∀ (s : M0Crypto.Armv6M.State),
+                    s.pc = c.base + BitVec.ofNat 32 off →
+                      ∀ (d n : M0Crypto.Armv6M.Word),
+                        M0Crypto.Release.Frame.Disj d (BitVec.toNat n) (c.sp0 - 320#32) 320 →
+                          M0Crypto.Armv6M.read32 s.mem (c.A + BitVec.ofNat 32 (4 * u.toNat)) = d →
+                            M0Crypto.Armv6M.read32 s.mem (c.A + BitVec.ofNat 32 (4 * v.toNat)) = n →
+                              M0Crypto.Release.Aead.Body c Wr s →
+                                ∀ (ti : M0Crypto.Armv6M.Mem) (msg : List M0Crypto.Spec.ChaCha20.Byte),
+                                  M0Crypto.Release.Aead.PInv c.A ti msg s.mem →
+                                    (∀ (y : M0Crypto.Armv6M.Word), M0Crypto.Release.Aead.MacWr c.A y → Wr y) →
+                                      M0Crypto.Release.Reach c.base Wr s
+                                        (M0Crypto.Release.Aead.PhasePost c Wr
+                                          (off + M0Crypto.Thumb.seqSize is + M0Crypto.Release.Aead.macSize) ti
+                                          (msg ++
+                                            (M0Crypto.Release.Frame.Ctx.bytesAt s.mem d (BitVec.toNat n) ++
+                                              M0Crypto.Spec.AEAD.pad16
+                                                (M0Crypto.Release.Frame.Ctx.bytesAt s.mem d (BitVec.toNat n))))
+                                          s)
+M0Crypto.Release.Aead.finish_phase : ∀ (c : M0Crypto.Release.Aead.ACall),
+  M0Crypto.Release.Aead.AValid c →
+    M0Crypto.Release.Aead.ABuf c →
+      ∀ (dec : Bool) (off : Nat),
+        M0Crypto.Thumb.seqAt M0Crypto.Release.B off (M0Crypto.Release.Aead.finArgs dec) = Bool.true →
+          ∀ (i : BitVec 25),
+            M0Crypto.Thumb.instrAt M0Crypto.Release.B
+                  (off + M0Crypto.Thumb.seqSize (M0Crypto.Release.Aead.finArgs dec)) =
+                Option.some (M0Crypto.Thumb.Instr.bl i) →
+              M0Crypto.Release.Aead.blTarget (off + M0Crypto.Thumb.seqSize (M0Crypto.Release.Aead.finArgs dec)) i =
+                  BitVec.ofNat 32 M0Crypto.Release.Aead.finishOff →
+                off % 2 = 0 →
+                  off + M0Crypto.Thumb.seqSize (M0Crypto.Release.Aead.finArgs dec) + M0Crypto.Release.blSize ≤
+                      M0Crypto.Artifacts.Release.size →
+                    ∀ (s : M0Crypto.Armv6M.State),
+                      s.pc = c.base + BitVec.ofNat 32 off →
+                        s.regs 13 = c.A →
+                          M0Crypto.Release.Aead.Hi c s.mem →
+                            M0Crypto.Thumb.CodeAt s.mem c.base M0Crypto.Release.B →
+                              ∀ (ic : M0Crypto.Release.PolyInit.ICtx) (ti : M0Crypto.Armv6M.State),
+                                M0Crypto.Release.PolyInit.IResult ic ti →
+                                  ic.ctx = c.A + 8#32 →
+                                    M0Crypto.Release.Frame.Ctx.bytesAt ic.m0 ic.key 32 =
+                                        M0Crypto.Spec.AEAD.polyKey c.keyB c.nonceB →
+                                      ∀ (msg : List M0Crypto.Spec.ChaCha20.Byte),
+                                        M0Crypto.Release.Aead.PInv c.A ti.mem msg s.mem →
+                                          M0Crypto.Release.Reach c.base
+                                            (M0Crypto.Release.Aead.FinishWr c.A
+                                              (if dec = Bool.true then c.A + 72#32 else c.tag))
+                                            s
+                                            (M0Crypto.Release.Aead.FinishPost c
+                                              (if dec = Bool.true then c.A + 72#32 else c.tag)
+                                              (off + M0Crypto.Thumb.seqSize (M0Crypto.Release.Aead.finArgs dec)) msg s)
+M0Crypto.Release.Aead.encrypt_reach : ∀ (c : M0Crypto.Release.Aead.ACall),
+  M0Crypto.Release.Aead.AValid c →
+    M0Crypto.Release.Aead.ABuf c →
+      ∀ (s : M0Crypto.Armv6M.State),
+        M0Crypto.Release.Aead.AEntry c M0Crypto.Release.Aead.encOff s →
+          BitVec.getLsbD (c.regs0 14) 0 = Bool.true →
+            M0Crypto.Release.Reach c.base (M0Crypto.Release.Aead.AWr c) s (M0Crypto.Release.Aead.EncryptResult c)
+M0Crypto.Release.Aead.encrypt_correct : ∀ (c : M0Crypto.Release.Aead.ACall),
+  M0Crypto.Release.Aead.AValid c →
+    M0Crypto.Release.Aead.ABuf c →
+      ∀ (s : M0Crypto.Armv6M.State),
+        M0Crypto.Release.Aead.AEntry c M0Crypto.Release.Aead.encOff s →
+          BitVec.getLsbD (c.regs0 14) 0 = Bool.true →
+            (∀ (i : Nat), i < M0Crypto.Artifacts.Release.size → c.regs0 14 &&& ~~~1#32 ≠ c.base + BitVec.ofNat 32 i) →
+              ∃ n,
+                ∀ (fuel : Nat),
+                  n ≤ fuel →
+                    ∃ t tr,
+                      M0Crypto.Thumb.runUntil (c.regs0 14 &&& ~~~1#32) fuel s = Except.ok (t, tr) ∧
+                        M0Crypto.Release.Aead.EncryptResult c t ∧
+                          M0Crypto.Release.WritesTo (M0Crypto.Release.Aead.AWr c) tr
+M0Crypto.Release.Aead.crypt_reach_narrow : ∀ (c : M0Crypto.Release.Aead.ACall),
+  M0Crypto.Release.Aead.AValid c →
+    M0Crypto.Release.Aead.ABuf c →
+      ∀ (off : Nat) (i : BitVec 25),
+        M0Crypto.Thumb.seqAt M0Crypto.Release.B off M0Crypto.Release.Aead.crypt = Bool.true →
+          M0Crypto.Thumb.instrAt M0Crypto.Release.B (off + M0Crypto.Release.Aead.cryptXorOff) =
+              Option.some (M0Crypto.Thumb.Instr.bl i) →
+            M0Crypto.Release.Aead.blTarget (off + M0Crypto.Release.Aead.cryptXorOff) i =
+                BitVec.ofNat 32 M0Crypto.Release.Aead.xorOff →
+              off % 2 = 0 →
+                off + M0Crypto.Release.Aead.cryptEnd ≤ M0Crypto.Artifacts.Release.size →
+                  ∀ (t : M0Crypto.Armv6M.State),
+                    t.pc = c.base + BitVec.ofNat 32 off →
+                      t.regs 13 = c.A →
+                        M0Crypto.Release.Aead.Hi c t.mem →
+                          M0Crypto.Armv6M.read32 t.mem c.A = c.nonce →
+                            (∀ (y : M0Crypto.Armv6M.Word), ¬M0Crypto.Release.Aead.SWr c.A y → t.mem y = c.m0 y) →
+                              M0Crypto.Release.Reach c.base (M0Crypto.Release.Aead.CryptWr c) t
+                                (M0Crypto.Release.Aead.CryptPost c off t)
+M0Crypto.Release.Aead.clear_return : ∀ (c : M0Crypto.Release.Aead.ACall),
+  M0Crypto.Release.Aead.AValid c →
+    ∀ (dec : Bool) (off : Nat),
+      M0Crypto.Thumb.seqAt M0Crypto.Release.B off M0Crypto.Release.Aead.clrA = Bool.true →
+        M0Crypto.Thumb.seqAt M0Crypto.Release.B (off + M0Crypto.Thumb.seqSize M0Crypto.Release.Aead.clrA)
+              M0Crypto.Release.Aead.clrL =
+            Bool.true →
+          M0Crypto.Thumb.instrAt M0Crypto.Release.B
+                (off + M0Crypto.Thumb.seqSize M0Crypto.Release.Aead.clrA +
+                  M0Crypto.Thumb.seqSize M0Crypto.Release.Aead.clrL) =
+              Option.some
+                (M0Crypto.Thumb.Instr.bcond 1
+                  (M0Crypto.Release.brImm8
+                    (off + M0Crypto.Thumb.seqSize M0Crypto.Release.Aead.clrA +
+                      M0Crypto.Thumb.seqSize M0Crypto.Release.Aead.clrL)
+                    (off + M0Crypto.Thumb.seqSize M0Crypto.Release.Aead.clrA))) →
+            M0Crypto.Thumb.seqAt M0Crypto.Release.B
+                  (off + M0Crypto.Thumb.seqSize M0Crypto.Release.Aead.clrA +
+                      M0Crypto.Thumb.seqSize M0Crypto.Release.Aead.clrL +
+                    M0Crypto.Release.brSize)
+                  (M0Crypto.Release.Aead.epilogue dec) =
+                Bool.true →
+              M0Crypto.Thumb.instrAt M0Crypto.Release.B
+                    (off + M0Crypto.Thumb.seqSize M0Crypto.Release.Aead.clrA +
+                          M0Crypto.Thumb.seqSize M0Crypto.Release.Aead.clrL +
+                        M0Crypto.Release.brSize +
+                      M0Crypto.Thumb.seqSize (M0Crypto.Release.Aead.epilogue dec)) =
+                  Option.some (M0Crypto.Thumb.Instr.pop 240 Bool.true) →
+                off % 2 = 0 →
+                  off + M0Crypto.Thumb.seqSize M0Crypto.Release.Aead.clrA +
+                              M0Crypto.Thumb.seqSize M0Crypto.Release.Aead.clrL +
+                            M0Crypto.Release.brSize +
+                          M0Crypto.Thumb.seqSize (M0Crypto.Release.Aead.epilogue dec) +
+                        M0Crypto.Thumb.seqSize [M0Crypto.Thumb.Instr.pop 240 Bool.true] ≤
+                      M0Crypto.Artifacts.Release.size →
+                    ∀ (s : M0Crypto.Armv6M.State),
+                      s.pc = c.base + BitVec.ofNat 32 off →
+                        s.regs 13 = c.A →
+                          M0Crypto.Release.Aead.Hi c s.mem →
+                            (∀ (r : M0Crypto.Armv6M.Reg), 8 ≤ ↑r → ↑r < 12 → s.regs r = c.regs0 r) →
+                              BitVec.getLsbD (c.regs0 14) 0 = Bool.true →
+                                M0Crypto.Release.Reach c.base (M0Crypto.Release.Aead.SWr c.A) s fun t =>
+                                  M0Crypto.Release.Aead.RetPost c (if dec = Bool.true then s.regs 4 else 0#32) t ∧
+                                    (∀ (o : Nat), o < 96 → t.mem (c.A + BitVec.ofNat 32 (8 + o)) = 0#8) ∧
+                                      ∀ (y : M0Crypto.Armv6M.Word),
+                                        ¬M0Crypto.Release.Aead.ClearWr c.A y → t.mem y = s.mem y
+M0Crypto.Release.Aead.compare_loop : ∀ (base tag expected : M0Crypto.Armv6M.Word) (M : M0Crypto.Armv6M.Mem)
+  (R : M0Crypto.Armv6M.Reg → M0Crypto.Armv6M.Word),
+  BitVec.toNat base % 4 = 0 →
+    ∀ (rem k : Nat),
+      k + rem = 16 →
+        k < 16 →
+          ∀ (s : M0Crypto.Armv6M.State),
+            s.pc = base + BitVec.ofNat 32 M0Crypto.Release.Aead.decCmpLAt →
+              s.regs 1 = tag →
+                s.regs 2 = expected →
+                  s.regs 4 = BitVec.ofNat 32 k →
+                    s.mem = M →
+                      (∀ (r : M0Crypto.Armv6M.Reg), 6 ≤ ↑r → ↑r ≠ 15 → s.regs r = R r) →
+                        (s.regs 3 = 0#32 ↔
+                            ∀ (j : Nat), j < k → M (tag + BitVec.ofNat 32 j) = M (expected + BitVec.ofNat 32 j)) →
+                          M0Crypto.Release.Reach base (fun x => False) s fun t =>
+                            t.pc = base + BitVec.ofNat 32 M0Crypto.Release.Aead.decVerdictAt ∧
+                              t.mem = M ∧
+                                (∀ (r : M0Crypto.Armv6M.Reg), 6 ≤ ↑r → ↑r ≠ 15 → t.regs r = R r) ∧
+                                  (t.regs 3 = 0#32 ↔
+                                    M0Crypto.Release.Frame.Ctx.bytesAt M tag 16 =
+                                      M0Crypto.Release.Frame.Ctx.bytesAt M expected 16)
+M0Crypto.Release.Aead.compare_reach : ∀ (c : M0Crypto.Release.Aead.ACall),
+  M0Crypto.Release.Aead.AValid c →
+    ∀ (s : M0Crypto.Armv6M.State),
+      s.pc = c.base + BitVec.ofNat 32 M0Crypto.Release.Aead.decCmpAAt →
+        s.regs 13 = c.A →
+          M0Crypto.Release.Aead.Hi c s.mem →
+            M0Crypto.Release.Reach c.base (fun x => False) s fun t =>
+              t.pc = c.base + BitVec.ofNat 32 M0Crypto.Release.Aead.decVerdictAt ∧
+                t.mem = s.mem ∧
+                  (∀ (r : M0Crypto.Armv6M.Reg), 6 ≤ ↑r → ↑r ≠ 15 → t.regs r = s.regs r) ∧
+                    (t.regs 3 = 0#32 ↔
+                      M0Crypto.Release.Frame.Ctx.bytesAt s.mem c.tag 16 =
+                        M0Crypto.Release.Frame.Ctx.bytesAt s.mem (c.A + 72#32) 16)
+M0Crypto.Release.Aead.decrypt_reach : ∀ (c : M0Crypto.Release.Aead.ACall),
+  M0Crypto.Release.Aead.AValid c →
+    M0Crypto.Release.Aead.ABuf c →
+      ∀ (s : M0Crypto.Armv6M.State),
+        M0Crypto.Release.Aead.AEntry c M0Crypto.Release.Aead.decOff s →
+          BitVec.getLsbD (c.regs0 14) 0 = Bool.true →
+            M0Crypto.Release.Reach c.base (M0Crypto.Release.Aead.DAllowed c) s (M0Crypto.Release.Aead.DecryptResult c)
+M0Crypto.Release.Aead.decrypt_correct : ∀ (c : M0Crypto.Release.Aead.ACall),
+  M0Crypto.Release.Aead.AValid c →
+    M0Crypto.Release.Aead.ABuf c →
+      ∀ (s : M0Crypto.Armv6M.State),
+        M0Crypto.Release.Aead.AEntry c M0Crypto.Release.Aead.decOff s →
+          BitVec.getLsbD (c.regs0 14) 0 = Bool.true →
+            (∀ (i : Nat), i < M0Crypto.Artifacts.Release.size → c.regs0 14 &&& ~~~1#32 ≠ c.base + BitVec.ofNat 32 i) →
+              ∃ n,
+                ∀ (fuel : Nat),
+                  n ≤ fuel →
+                    ∃ t tr,
+                      M0Crypto.Thumb.runUntil (c.regs0 14 &&& ~~~1#32) fuel s = Except.ok (t, tr) ∧
+                        M0Crypto.Release.Aead.DecryptResult c t ∧
+                          M0Crypto.Release.WritesTo (M0Crypto.Release.Aead.DAllowed c) tr
+M0Crypto.Release.Aead.rejected_writes : ∀ (c : M0Crypto.Release.Aead.ACall) (tr : List M0Crypto.Thumb.Event),
+  M0Crypto.Spec.AEAD.decrypt c.keyB c.nonceB c.aadB c.ptB c.tagB = Option.none →
+    M0Crypto.Release.WritesTo (M0Crypto.Release.Aead.DAllowed c) tr →
+      M0Crypto.Release.WritesTo (M0Crypto.Release.Aead.SWr c.A) tr
+M0Crypto.Sym.symExec_sound : ∀ (is : List M0Crypto.Thumb.Instr),
+  (∀ (i : M0Crypto.Thumb.Instr), i ∈ is → M0Crypto.Sym.Sound i) →
+    ∀ (s0 : M0Crypto.Armv6M.State) (ss : M0Crypto.Sym.SState),
+      M0Crypto.Sym.SState.denote s0 (M0Crypto.Sym.symExec is ss) =
+        M0Crypto.Thumb.execAll is (M0Crypto.Sym.SState.denote s0 ss)
+M0Crypto.Sym.sound_basic : ∀ (i : M0Crypto.Thumb.Instr), M0Crypto.Sym.symBasic i = Bool.true → M0Crypto.Sym.Sound i
+M0Crypto.Sym.sound_dp : ∀ (op : M0Crypto.Thumb.DpOp) (dn m : M0Crypto.Armv6M.LowReg),
+  M0Crypto.Sym.Sound (M0Crypto.Thumb.Instr.dp op dn m)
+M0Crypto.Sym.sound_lslImm : ∀ (d m : M0Crypto.Armv6M.LowReg) (imm5 : BitVec 5),
+  M0Crypto.Sym.Sound (M0Crypto.Thumb.Instr.lslImm d m imm5)
+M0Crypto.Sym.sound_lsrImm : ∀ (d m : M0Crypto.Armv6M.LowReg) (imm5 : BitVec 5),
+  M0Crypto.Sym.Sound (M0Crypto.Thumb.Instr.lsrImm d m imm5)
+M0Crypto.Sym.sound_ldrLit : ∀ (t : M0Crypto.Armv6M.LowReg) (imm8 : BitVec 8),
+  M0Crypto.Sym.Sound (M0Crypto.Thumb.Instr.ldrLit t imm8)
+M0Crypto.Sym.sound_ldrSp : ∀ (t : M0Crypto.Armv6M.LowReg) (imm8 : BitVec 8),
+  M0Crypto.Sym.Sound (M0Crypto.Thumb.Instr.ldrSp t imm8)
+M0Crypto.Sym.sound_strSp : ∀ (t : M0Crypto.Armv6M.LowReg) (imm8 : BitVec 8),
+  M0Crypto.Sym.Sound (M0Crypto.Thumb.Instr.strSp t imm8)
+M0Crypto.Sym.sound_memImm : ∀ (op : M0Crypto.Thumb.MemOp) (t n : M0Crypto.Armv6M.LowReg) (imm5 : BitVec 5),
+  M0Crypto.Sym.Sound (M0Crypto.Thumb.Instr.memImm op t n imm5)
+M0Crypto.Sym.sound_memReg : ∀ (op : M0Crypto.Thumb.MemOp) (t n m : M0Crypto.Armv6M.LowReg),
+  M0Crypto.Sym.Sound (M0Crypto.Thumb.Instr.memReg op t n m)
+M0Crypto.Sym.sound_push : ∀ (l : BitVec 8) (lr : Bool), M0Crypto.Sym.Sound (M0Crypto.Thumb.Instr.push l lr)
+M0Crypto.Sym.sound_pop : ∀ (l : BitVec 8), M0Crypto.Sym.Sound (M0Crypto.Thumb.Instr.pop l Bool.false)
+M0Crypto.Sym.sound_stm : ∀ (n : M0Crypto.Armv6M.LowReg) (l : BitVec 8),
+  M0Crypto.Sym.Sound (M0Crypto.Thumb.Instr.stm n l)
+M0Crypto.Sym.sound_ldm : ∀ (n : M0Crypto.Armv6M.LowReg) (l : BitVec 8),
+  M0Crypto.Sym.Sound (M0Crypto.Thumb.Instr.ldm n l)
+M0Crypto.Sym.sound_of_falls : ∀ (i : M0Crypto.Thumb.Instr), i.falls = Bool.true → M0Crypto.Sym.Sound i
+M0Crypto.Sym.symAccesses_sound : ∀ (i : M0Crypto.Thumb.Instr) (s0 : M0Crypto.Armv6M.State) (ss : M0Crypto.Sym.SState),
+  List.map (M0Crypto.Sym.SAccess.denote s0) (M0Crypto.Sym.symAccesses i ss) =
+    i.accesses (M0Crypto.Sym.SState.denote s0 ss)
+M0Crypto.Sym.symTrace_sound : ∀ (is : List M0Crypto.Thumb.Instr),
+  (∀ (i : M0Crypto.Thumb.Instr), i ∈ is → M0Crypto.Sym.Sound i) →
+    ∀ (s0 : M0Crypto.Armv6M.State) (ss : M0Crypto.Sym.SState),
+      List.map (M0Crypto.Sym.SEvent.denote s0) (M0Crypto.Sym.symTrace is ss) =
+        M0Crypto.Thumb.traceAll is (M0Crypto.Sym.SState.denote s0 ss)
+M0Crypto.Sym.alignedAll_sym : ∀ (is : List M0Crypto.Thumb.Instr),
+  (∀ (i : M0Crypto.Thumb.Instr), i ∈ is → M0Crypto.Sym.Sound i) →
+    ∀ (s0 : M0Crypto.Armv6M.State) (ss : M0Crypto.Sym.SState),
+      M0Crypto.Thumb.alignedAll is (M0Crypto.Sym.SState.denote s0 ss) =
+        (M0Crypto.Sym.symTrace is ss).all fun e => e.snd.snd.all fun a => (M0Crypto.Sym.SAccess.denote s0 a).aligned
+M0Crypto.Sym.norm_sound : ∀ (s0 : M0Crypto.Armv6M.State) (e : M0Crypto.Sym.SExpr),
+  M0Crypto.Sym.SExpr.denote s0 (M0Crypto.Sym.norm e) = M0Crypto.Sym.SExpr.denote s0 e
+M0Crypto.Sym.read32_write32_far : ∀ (m : M0Crypto.Armv6M.Mem) (a b v : M0Crypto.Armv6M.Word),
+  4 ≤ BitVec.toNat (a - b) ∧ BitVec.toNat (a - b) ≤ 2 ^ 32 - 4 →
+    M0Crypto.Armv6M.read32 (M0Crypto.Armv6M.write32 m b v) a = M0Crypto.Armv6M.read32 m a
+M0Crypto.Sym.execAll_regs_norm : ∀ (is : List M0Crypto.Thumb.Instr),
+  is.all M0Crypto.Thumb.Instr.falls = Bool.true →
+    ∀ (s : M0Crypto.Armv6M.State) (r : M0Crypto.Armv6M.Reg),
+      (M0Crypto.Thumb.execAll is s).regs r =
+        M0Crypto.Sym.SExpr.denote s (M0Crypto.Sym.norm ((M0Crypto.Sym.symExec is M0Crypto.Sym.SState.init).regs r))
+M0Crypto.Sym.demo : ∀ (s : M0Crypto.Armv6M.State), (M0Crypto.Thumb.execAll M0Crypto.Sym.demoBlock s).regs 2 = s.regs 0
+M0Crypto.Sym.awcK_sound : ∀ (s0 : M0Crypto.Armv6M.State) (a b : M0Crypto.Sym.SExpr) (c : M0Crypto.Sym.SBool),
+  M0Crypto.Sym.SExpr.denote s0 (M0Crypto.Sym.awcK a b c) =
+    (M0Crypto.Armv6M.addWithCarry (M0Crypto.Sym.SExpr.denote s0 a) (M0Crypto.Sym.SExpr.denote s0 b)
+        (M0Crypto.Sym.SBool.denote s0 c)).fst
+M0Crypto.Sym.rorK_sound : ∀ (s0 : M0Crypto.Armv6M.State) (a b : M0Crypto.Sym.SExpr) (c : M0Crypto.Sym.SBool),
+  M0Crypto.Sym.SExpr.denote s0 (M0Crypto.Sym.rorK a b c) =
+    (M0Crypto.Armv6M.rorC (M0Crypto.Sym.SExpr.denote s0 a) (BitVec.toNat (M0Crypto.Sym.SExpr.denote s0 b) % 256)
+        (M0Crypto.Sym.SBool.denote s0 c)).fst
+M0Crypto.Sym.initK_denote : ∀ (k : List (M0Crypto.Armv6M.Reg × M0Crypto.Armv6M.Word)) (s : M0Crypto.Armv6M.State),
+  (∀ (p : M0Crypto.Armv6M.Reg × M0Crypto.Armv6M.Word), p ∈ k → s.regs p.fst = p.snd) →
+    M0Crypto.Sym.SState.denote s (M0Crypto.Sym.SState.initK k) = s
+M0Crypto.Sym.execAll_regs_normK : ∀ (is : List M0Crypto.Thumb.Instr),
+  is.all M0Crypto.Thumb.Instr.falls = Bool.true →
+    ∀ (k : List (M0Crypto.Armv6M.Reg × M0Crypto.Armv6M.Word)) (s : M0Crypto.Armv6M.State),
+      (∀ (p : M0Crypto.Armv6M.Reg × M0Crypto.Armv6M.Word), p ∈ k → s.regs p.fst = p.snd) →
+        ∀ (r : M0Crypto.Armv6M.Reg),
+          (M0Crypto.Thumb.execAll is s).regs r =
+            M0Crypto.Sym.SExpr.denote s
+              (M0Crypto.Sym.norm ((M0Crypto.Sym.symExec is (M0Crypto.Sym.SState.initK k)).regs r))
+M0Crypto.Sym.core_regs_sym : ∀ (s : M0Crypto.Armv6M.State),
+  M0Crypto.Release.ChaChaRound.RotRegs s →
+    have s' := M0Crypto.Thumb.execAll M0Crypto.Release.ChaChaRound.core s;
+    (s'.regs 0, s'.regs 1, s'.regs 2, s'.regs 3) =
+      M0Crypto.Spec.ChaCha20.quarterRound (s.regs 0) (s.regs 1) (s.regs 2) (s.regs 3)
+M0Crypto.Sym.read32_execAll_normK : ∀ (is : List M0Crypto.Thumb.Instr),
+  is.all M0Crypto.Thumb.Instr.falls = Bool.true →
+    ∀ (k : List (M0Crypto.Armv6M.Reg × M0Crypto.Armv6M.Word)) (s : M0Crypto.Armv6M.State),
+      (∀ (p : M0Crypto.Armv6M.Reg × M0Crypto.Armv6M.Word), p ∈ k → s.regs p.fst = p.snd) →
+        ∀ (aS : M0Crypto.Sym.SExpr),
+          M0Crypto.Armv6M.read32 (M0Crypto.Thumb.execAll is s).mem (M0Crypto.Sym.SExpr.denote s aS) =
+            M0Crypto.Sym.SExpr.denote s
+              (M0Crypto.Sym.norm
+                (M0Crypto.Sym.SExpr.ld32 (M0Crypto.Sym.symExec is (M0Crypto.Sym.SState.initK k)).mem aS))
+M0Crypto.Sym.innerBlockF_hi : ∀ (g : Nat → M0Crypto.Armv6M.Word) (k : Nat),
+  16 ≤ k → M0Crypto.Proofs.ChaCha20DRound.innerBlockF g k = g k
+M0Crypto.Sym.inner_view : ∀ (s : M0Crypto.Armv6M.State) (k : Nat),
+  M0Crypto.Sym.SExpr.denote s (M0Crypto.Sym.innerS M0Crypto.Sym.inS k) =
+    M0Crypto.Proofs.ChaCha20DRound.innerBlockF (M0Crypto.Release.ChaChaRound.view (Option.some 2) s) k
+M0Crypto.Sym.denote_innerS : ∀ (s : M0Crypto.Armv6M.State) (f : Nat → M0Crypto.Sym.SExpr) (k : Nat),
+  M0Crypto.Sym.SExpr.denote s (M0Crypto.Sym.innerS f k) =
+    M0Crypto.Proofs.ChaCha20DRound.innerBlockF (fun i => M0Crypto.Sym.SExpr.denote s (f i)) k
+M0Crypto.Sym.view_wordS : ∀ (s : M0Crypto.Armv6M.State),
+  M0Crypto.Release.ChaChaRound.RotRegs s →
+    ∀ (k : Nat),
+      k < 16 →
+        M0Crypto.Release.ChaChaRound.view (Option.some 2) (M0Crypto.Thumb.execAll M0Crypto.Release.ChaChaRound.dround s)
+            k =
+          M0Crypto.Sym.SExpr.denote s (M0Crypto.Sym.norm (M0Crypto.Sym.wordS k))
+M0Crypto.Sym.dword_0 : M0Crypto.Sym.norm (M0Crypto.Sym.wordS 0) =
+  M0Crypto.Sym.norm (M0Crypto.Sym.innerS M0Crypto.Sym.inS 0)
+M0Crypto.Sym.dword_15 : M0Crypto.Sym.norm (M0Crypto.Sym.wordS 15) =
+  M0Crypto.Sym.norm (M0Crypto.Sym.innerS M0Crypto.Sym.inS 15)
+M0Crypto.Sym.dround_word : ∀ (k : Nat),
+  k < 16 → M0Crypto.Sym.norm (M0Crypto.Sym.wordS k) = M0Crypto.Sym.norm (M0Crypto.Sym.innerS M0Crypto.Sym.inS k)
+M0Crypto.Sym.dround_view_sym : ∀ (s : M0Crypto.Armv6M.State),
+  M0Crypto.Release.ChaChaRound.RotRegs s →
+    M0Crypto.Release.ChaChaRound.view (Option.some 2) (M0Crypto.Thumb.execAll M0Crypto.Release.ChaChaRound.dround s) =
+      M0Crypto.Proofs.ChaCha20DRound.innerBlockF (M0Crypto.Release.ChaChaRound.view (Option.some 2) s)
+M0Crypto.Release.ChaChaOut.ach_mem_sym : ∀ (i : Nat),
+  i ∈ List.range 16 →
+    (M0Crypto.Sym.symExec (M0Crypto.Release.ChaChaOut.ach i) (M0Crypto.Sym.SState.initK [])).mem =
+      M0Crypto.Release.ChaChaOut.achMemS i
+M0Crypto.Release.ChaChaOut.ach_regs_sym : ∀ (i : Nat),
+  i ∈ List.range 16 →
+    ∀ (r : M0Crypto.Armv6M.Reg),
+      ↑r ≠ 0 →
+        ↑r ≠ 1 →
+          ↑r ≠ 15 →
+            (M0Crypto.Sym.symExec (M0Crypto.Release.ChaChaOut.ach i) (M0Crypto.Sym.SState.initK [])).regs r =
+              M0Crypto.Sym.SExpr.reg0 r
+M0Crypto.Release.ChaChaOut.ach_effect : ∀ (t : M0Crypto.Armv6M.State) (i : Nat),
+  i < 16 →
+    have u := M0Crypto.Thumb.execAll (M0Crypto.Release.ChaChaOut.ach i) t;
+    u.mem =
+        M0Crypto.Armv6M.write32 t.mem (t.regs 3 + BitVec.ofNat 32 (4 * i))
+          (M0Crypto.Armv6M.read32 t.mem (M0Crypto.Armv6M.slot (t.regs 13) i) +
+              M0Crypto.Armv6M.read32 t.mem
+                (M0Crypto.Armv6M.slot (t.regs 13) (M0Crypto.Release.ChaChaLayout.slotJ + i)) ^^^
+            M0Crypto.Armv6M.read32 t.mem (t.regs 2 + BitVec.ofNat 32 (4 * i))) ∧
+      ∀ (r : M0Crypto.Armv6M.Reg), ↑r ≠ 0 → ↑r ≠ 1 → ↑r ≠ 15 → u.regs r = t.regs r
+M0Crypto.Sym.peel_sound : ∀ (s0 : M0Crypto.Armv6M.State) (e : M0Crypto.Sym.SExpr) (r : M0Crypto.Armv6M.Reg)
+  (k : M0Crypto.Armv6M.Word), M0Crypto.Sym.peel e = Option.some (r, k) → M0Crypto.Sym.SExpr.denote s0 e = s0.regs r + k
+M0Crypto.Sym.add_toNat_mod_of_dvd : ∀ (x y : M0Crypto.Armv6M.Word) (w : Nat),
+  w ∣ 2 ^ 32 → BitVec.toNat x % w = 0 → BitVec.toNat y % w = 0 → BitVec.toNat (x + y) % w = 0
+M0Crypto.Sym.accAligned_sound : ∀ (s0 : M0Crypto.Armv6M.State) (al : List (M0Crypto.Armv6M.Reg × Nat)),
+  (∀ (p : M0Crypto.Armv6M.Reg × Nat), p ∈ al → BitVec.toNat (s0.regs p.fst) % p.snd = 0) →
+    ∀ (a : M0Crypto.Sym.SAccess),
+      M0Crypto.Sym.accAligned al a = Bool.true → (M0Crypto.Sym.SAccess.denote s0 a).aligned = Bool.true
+M0Crypto.Sym.add_sub_rearr : ∀ (R q k X : M0Crypto.Armv6M.Word), R + k + X = R + q + (k - q + X)
+M0Crypto.Sym.accCovered_sound : ∀ (s0 : M0Crypto.Armv6M.State)
+  (rg : List (M0Crypto.Armv6M.Reg × M0Crypto.Armv6M.Word × Nat)) (a : M0Crypto.Sym.SAccess),
+  M0Crypto.Sym.accCovered rg a = Bool.true →
+    ∀ (y : M0Crypto.Armv6M.Word),
+      M0Crypto.Thumb.Writes [M0Crypto.Sym.SAccess.denote s0 a] y →
+        ∃ p, p ∈ rg ∧ ∃ o, o < p.snd.snd ∧ y = s0.regs p.fst + p.snd.fst + BitVec.ofNat 32 o
+M0Crypto.Sym.alignChk_sound : ∀ (al : List (M0Crypto.Armv6M.Reg × Nat)) (is : List M0Crypto.Thumb.Instr),
+  (∀ (i : M0Crypto.Thumb.Instr), i ∈ is → M0Crypto.Sym.Sound i) →
+    ∀ (s : M0Crypto.Armv6M.State),
+      (∀ (p : M0Crypto.Armv6M.Reg × Nat), p ∈ al → BitVec.toNat (s.regs p.fst) % p.snd = 0) →
+        M0Crypto.Sym.alignChk al is = Bool.true → M0Crypto.Thumb.alignedAll is s = Bool.true
+M0Crypto.Sym.writeChk_sound : ∀ (rg : List (M0Crypto.Armv6M.Reg × M0Crypto.Armv6M.Word × Nat))
+  (is : List M0Crypto.Thumb.Instr),
+  (∀ (i : M0Crypto.Thumb.Instr), i ∈ is → M0Crypto.Sym.Sound i) →
+    ∀ (s : M0Crypto.Armv6M.State),
+      M0Crypto.Sym.writeChk rg is = Bool.true →
+        ∀ (e : M0Crypto.Thumb.Event),
+          e ∈ M0Crypto.Thumb.traceAll is s →
+            ∀ (y : M0Crypto.Armv6M.Word),
+              M0Crypto.Thumb.Writes e.accesses y →
+                ∃ p, p ∈ rg ∧ ∃ o, o < p.snd.snd ∧ y = s.regs p.fst + p.snd.fst + BitVec.ofNat 32 o
+@M0Crypto.Release.Reach.symBlock : ∀ {base : M0Crypto.Armv6M.Word} {Wr : M0Crypto.Armv6M.Word → Prop}
+  {s : M0Crypto.Armv6M.State} {Q : M0Crypto.Armv6M.State → Prop},
+  BitVec.toNat base % 2 = 0 →
+    ∀ (al : List (M0Crypto.Armv6M.Reg × Nat)) (rg : List (M0Crypto.Armv6M.Reg × M0Crypto.Armv6M.Word × Nat))
+      (is : List M0Crypto.Thumb.Instr) (off : Nat),
+      s.pc = base + BitVec.ofNat 32 off →
+        off % 2 = 0 →
+          M0Crypto.Thumb.seqAt M0Crypto.Release.B off is = Bool.true →
+            is.all M0Crypto.Thumb.Instr.falls = Bool.true →
+              (∀ (p : M0Crypto.Armv6M.Reg × Nat), p ∈ al → BitVec.toNat (s.regs p.fst) % p.snd = 0) →
+                (∀ (p : M0Crypto.Armv6M.Reg × M0Crypto.Armv6M.Word × Nat),
+                    p ∈ rg → ∀ (o : Nat), o < p.snd.snd → Wr (s.regs p.fst + p.snd.fst + BitVec.ofNat 32 o)) →
+                  M0Crypto.Sym.alignChk al is = Bool.true →
+                    M0Crypto.Sym.writeChk rg is = Bool.true →
+                      M0Crypto.Release.Reach base Wr (M0Crypto.Thumb.execAll is s) Q →
+                        M0Crypto.Release.Reach base Wr s Q
+@M0Crypto.Release.Reach.alOne : ∀ {s : M0Crypto.Armv6M.State} {r : M0Crypto.Armv6M.Reg} {a : Nat},
+  BitVec.toNat (s.regs r) % a = 0 →
+    ∀ (p : M0Crypto.Armv6M.Reg × Nat), p ∈ [(r, a)] → BitVec.toNat (s.regs p.fst) % p.snd = 0
+@M0Crypto.Release.Reach.rgOne : ∀ {Wr : M0Crypto.Armv6M.Word → Prop} {s : M0Crypto.Armv6M.State}
+  {r : M0Crypto.Armv6M.Reg} {k : M0Crypto.Armv6M.Word} {n : Nat},
+  (∀ (o : Nat), o < n → Wr (s.regs r + k + BitVec.ofNat 32 o)) →
+    ∀ (p : M0Crypto.Armv6M.Reg × M0Crypto.Armv6M.Word × Nat),
+      p ∈ [(r, k, n)] → ∀ (o : Nat), o < p.snd.snd → Wr (s.regs p.fst + p.snd.fst + BitVec.ofNat 32 o)
+M0Crypto.Release.ChaChaXor.clr_mem : ∀ (t : M0Crypto.Armv6M.State),
+  (M0Crypto.Thumb.execAll M0Crypto.Release.ChaChaXor.clr t).mem =
+    (M0Crypto.Thumb.execAll (M0Crypto.Release.ChaChaXor.stores M0Crypto.Release.ChaChaLayout.chFrameWords)
+        (t.setReg 0 0)).mem
+M0Crypto.Release.ChaChaXor.clr_regs : ∀ (t : M0Crypto.Armv6M.State),
+  have u := M0Crypto.Thumb.execAll M0Crypto.Release.ChaChaXor.clr t;
+  u.regs 0 = 0 ∧ u.regs 1 = 0 ∧ u.regs 2 = 0 ∧ u.regs 3 = 0 ∧ u.regs 12 = 0 ∧ u.regs 13 = t.regs 13
+M0Crypto.Release.ChaChaXor.clr_accesses : ∀ (t : M0Crypto.Armv6M.State),
+  List.flatMap M0Crypto.Thumb.Event.accesses (M0Crypto.Thumb.traceAll M0Crypto.Release.ChaChaXor.clr t) =
+    List.map (fun i => { kind := M0Crypto.Thumb.Kind.write, addr := M0Crypto.Armv6M.slot (t.regs 13) i, width := 4 })
+      (List.range M0Crypto.Release.ChaChaLayout.chFrameWords)
+M0Crypto.Release.ChaChaXor.clr_aligned : ∀ (t : M0Crypto.Armv6M.State),
+  BitVec.toNat (t.regs 13) % 4 = 0 → M0Crypto.Thumb.alignedAll M0Crypto.Release.ChaChaXor.clr t = Bool.true
