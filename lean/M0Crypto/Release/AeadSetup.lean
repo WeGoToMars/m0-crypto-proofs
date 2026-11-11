@@ -83,7 +83,7 @@ theorem swr_sub {A : Word} (hA : 176 ≤ A.toNat) (hA' : A.toNat + 160 ≤ 2 ^ 3
   congr 1; omega
 
 /-- State after `AEAD_SETUP`, at `e + setupEnd`; `ic` is the `init` call. -/
-structure SetupPost (c : ACall) (e : Nat) (ic : PolyInit.ICtx) (t : State) : Prop where
+structure SetupPost (c : ACall) (e : Nat) (ic : Poly1305Init.ICtx) (t : State) : Prop where
   pc : t.pc = c.base + BitVec.ofNat 32 (e + setupEnd)
   sp : t.regs 13 = c.A
   hi : ∀ r : Reg, 8 ≤ r.val → r.val < 12 → t.regs r = c.regs0 r
@@ -91,8 +91,8 @@ structure SetupPost (c : ACall) (e : Nat) (ic : PolyInit.ICtx) (t : State) : Pro
   ikey : ic.key = c.A + 72#32
   isp : ic.sp0 = c.A
   ibase : ic.base = c.base
-  init : PolyInit.IResult ic t
-  pkey : Ctx.bytesAt ic.m0 ic.key 32 = M0Crypto.Spec.AEAD.polyKey c.keyB c.nonceB
+  init : Poly1305Init.IResult ic t
+  pkey : Ctx.bytesAt ic.m0 ic.key 32 = M0Crypto.Spec.Aead.polyKey c.keyB c.nonceB
   nonce : read32 t.mem c.A = c.nonce
   high : Hi c t.mem
   out : ∀ y, ¬ SWr c.A y → t.mem y = c.m0 y
@@ -151,9 +151,9 @@ theorem setup_reach (c : ACall) (hv : AValid c) (e : Nat) (i : BitVec 25)
   have s12 : (c.A - BitVec.ofNat 32 12).toNat = c.A.toNat - 12 := hv.sub_toNat 12 (by omega)
   have a8 := aoff 8 (by decide)
   have a72 := aoff 72 (by decide)
-  let ic : PolyInit.ICtx := { base := c.base, sp0 := c.A, ctx := c.A + 8#32, key := c.A + 72#32,
-                              m0 := w.mem, regs0 := w.regs }
-  have iv : PolyInit.IValid ic := {
+  let ic : Poly1305Init.ICtx := { base := c.base, sp0 := c.A, ctx := c.A + 8#32, key := c.A + 72#32,
+                                  m0 := w.mem, regs0 := w.regs }
+  have iv : Poly1305Init.IValid ic := {
     base4 := hv.base4
     sp4 := by show c.A.toNat % 4 = 0; omega
     spLo := by show 12 ≤ c.A.toNat; omega
@@ -175,21 +175,21 @@ theorem setup_reach (c : ACall) (hv : AValid c) (e : Nat) (i : BitVec 25)
       rw [wm]
       exact hv.codeAt_of (fun y hy => by
         rw [vo y (fun o h1 h2 e => hy (e ▸ swr_A _ o (by omega))), hu.out y hy]) }
-  have ie : PolyInit.IEntry ic w := {
+  have ie : Poly1305Init.IEntry ic w := {
     regs := rfl, mem := rfl
     pc := by show w.regs 15 = _; rw [w15]; rfl
     sp := by show w.regs 13 = c.A; rw [wr 13 (by decide) (by decide), vr 13 (by decide) (by decide), hu.sp]
     r0 := by show w.regs 0 = _; rw [wr 0 (by decide) (by decide), v0]
     r1 := by show w.regs 1 = _; rw [wr 1 (by decide) (by decide), v1] }
   have hlr : (ic.regs0 14).getLsbD 0 = true := by show (w.regs 14).getLsbD 0 = true; rw [w14]; exact lr_odd _
-  have iw : ∀ y, PolyInit.IWr ic y → SWr c.A y := by
+  have iw : ∀ y, Poly1305Init.IWr ic y → SWr c.A y := by
     rintro y (⟨o, ho, rfl⟩ | ⟨o, ho, rfl⟩)
     · exact swr_sub hA hA' 12 o (by omega) (by omega)
     · show SWr c.A (c.A + 8#32 + BitVec.ofNat 32 o); rw [ofNat_add_assoc]; exact swr_A _ _ (by omega)
-  apply (PolyInit.init_reach ic iv iw w ie hlr).mono
+  apply (Poly1305Init.init_reach ic iv iw w ie hlr).mono
   intro t ht
   refine ⟨ic, ?_⟩
-  have niw : ∀ o < 160, (o < 8 ∨ 72 ≤ o) → ¬ PolyInit.IWr ic (c.A + BitVec.ofNat 32 o) := by
+  have niw : ∀ o < 160, (o < 8 ∨ 72 ≤ o) → ¬ Poly1305Init.IWr ic (c.A + BitVec.ofNat 32 o) := by
     rintro o ho h (⟨o', ho', e'⟩ | ⟨o', ho', e'⟩)
     · exact ne_of_disj (a := c.A - BitVec.ofNat 32 12) (b := c.A) (n := 12) (m := 160)
         (by rw [s12]; omega) (by omega) (.inl (by rw [s12]; omega)) ho' ho e'.symm
@@ -214,12 +214,12 @@ theorem setup_reach (c : ACall) (hv : AValid c) (e : Nat) (i : BitVec 25)
     apply List.ext_getElem?
     intro j
     by_cases hj : j < 32
-    · rw [ChaChaOut.bytesAt_get _ _ _ _ hj, wm, ofNat_add_assoc, vblk j hj]
-      simp only [M0Crypto.Spec.AEAD.polyKey, List.getElem?_take, hj, ite_true]
-      rw [List.getElem!_eq_getElem?_getD, List.getElem?_eq_getElem (by rw [ChaChaSpec.block_length']; omega)]
+    · rw [ChaCha20Output.bytesAt_get _ _ _ _ hj, wm, ofNat_add_assoc, vblk j hj]
+      simp only [M0Crypto.Spec.Aead.polyKey, List.getElem?_take, hj, ite_true]
+      rw [List.getElem!_eq_getElem?_getD, List.getElem?_eq_getElem (by rw [ChaCha20Spec.block_length']; omega)]
       rfl
     · rw [List.getElem?_eq_none (by rw [bytesAt_length]; omega),
-        List.getElem?_eq_none (by simp [M0Crypto.Spec.AEAD.polyKey, ChaChaSpec.block_length']; omega)]
+        List.getElem?_eq_none (by simp [M0Crypto.Spec.Aead.polyKey, ChaCha20Spec.block_length']; omega)]
   · rw [← hu.nonce]
     apply read32_congr
     intro k hk

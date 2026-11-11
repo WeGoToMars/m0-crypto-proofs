@@ -132,10 +132,10 @@ def bytes : List (BitVec 8) := [
 {body}
   ]
 
-/-- SHA-256 of the source ELF, recorded for receipts. -/
+/-- SHA-256 of the source ELF, recorded for provenance. -/
 def elfSha256 : String := "{elf_sha}"
 
-/-- SHA-256 of `bytes`, recorded for receipts. -/
+/-- SHA-256 of `bytes`, recorded for provenance. -/
 def fragmentSha256 : String := "{code_sha}"
 
 end {module}

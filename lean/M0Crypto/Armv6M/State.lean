@@ -1,5 +1,5 @@
 /-!
-Minimal ARMv6-M architectural state for the pilot.
+Minimal ARMv6-M architectural state for the fragment model.
 
 Scope and assumptions:
 * Thumb state only, privileged/unprivileged mode and exceptions are not modelled.

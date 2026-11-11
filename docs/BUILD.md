@@ -7,7 +7,7 @@ Instructions for iterating on proofs, running sharded checks, and managing memor
 Use one Lake invocation to build the modules you are changing:
 
 ```sh
-lake build +M0Crypto.Release.PolyMac
+lake build +M0Crypto.Release.Poly1305Mac
 lake build +M0Crypto.Thumb.ReleaseCheck
 ```
 

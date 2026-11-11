@@ -1,4 +1,4 @@
-import M0Crypto.Release.AeadRet
+import M0Crypto.Release.AeadReturn
 set_option linter.unusedSimpArgs false
 set_option maxRecDepth 100000
 set_option maxHeartbeats 4000000
@@ -55,7 +55,7 @@ structure Body (c : ACall) (Wr : Word → Prop) (s : State) : Prop where
   frame : ∀ y, ¬ Wr y → s.mem y = c.m0 y
   code : CodeAt s.mem c.base B
 
-theorem SetupPost.body {c : ACall} (hv : AValid c) {e : Nat} {ic : PolyInit.ICtx} {s : State}
+theorem SetupPost.body {c : ACall} (hv : AValid c) {e : Nat} {ic : Poly1305Init.ICtx} {s : State}
     (h : SetupPost c e ic s) : Body c (SWr c.A) s :=
   ⟨h.sp, h.high, h.nonce, fun r a b => h.hi r (by omega) b, h.out, hv.codeAt_of h.out⟩
 
@@ -126,7 +126,7 @@ theorem load_reach (base A d n : Word) (off : Nat) (is : List Instr) (s : State)
   apply Reach.block (by omega) _ off hp ho hseq (by rfl)
     (by simp [alignedAll, Instr.accesses, Access.aligned, Instr.next, Instr.exec, M0Crypto.Armv6M.State.setReg,
       M0Crypto.Armv6M.State.sp, hs, M0Crypto.Proofs.toReg_4, M0Crypto.Proofs.toReg_5, BitVec.toNat_add, BitVec.toNat_ofNat]; exact ha)
-    (ChaChaBlock.noWrites _ _ (by rfl) _)
+    (ChaCha20Block.noWrites _ _ (by rfl) _)
   apply Reach.done
   refine ⟨by rw [execAll_pc _ _ (by rfl), hp, ofNat_add_assoc], ?_, ?_, rfl, ?_⟩
   · simpa [execAll, Instr.next, Instr.exec, M0Crypto.Armv6M.State.setReg, M0Crypto.Armv6M.State.sp, hs, M0Crypto.Proofs.toReg_4, M0Crypto.Proofs.toReg_5, Nat.mul_comm] using hd

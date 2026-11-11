@@ -1,7 +1,7 @@
 import M0Crypto.Sym.Norm
 
 /-!
-# Approach C: known register values at block entry
+# Symbolic executor: known register values at block entry
 
 `SState.initK k` is `SState.init` with the registers listed in `k` replaced by constants.
 Under the hypothesis that the concrete state holds those values, it denotes that state,

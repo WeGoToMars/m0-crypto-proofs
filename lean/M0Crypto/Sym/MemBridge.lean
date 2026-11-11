@@ -1,7 +1,7 @@
 import M0Crypto.Sym.Known
 
 /-!
-# Approach C: memory bridge after a straight-line block
+# Symbolic executor: memory bridge after a straight-line block
 
 `mem_execAll_normK` relates the memory after a block to the symbolic memory from
 `SState.initK k`, under the same hypotheses as `execAll_regs_normK`. It is the memory

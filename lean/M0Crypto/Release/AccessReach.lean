@@ -2,7 +2,7 @@ import M0Crypto.Release.Reach
 import M0Crypto.Thumb.SeqScan
 
 /-! Reachability with instruction-sensitive byte-access policies. -/
-namespace M0Crypto.Release.CT
+namespace M0Crypto.Release.ConstantTime
 open M0Crypto.Armv6M (Word State)
 open M0Crypto.Thumb
 open M0Crypto.Release
@@ -210,4 +210,4 @@ theorem ReachEvents.bl {base : Word} {allowed : Word → Kind → Word → Prop}
       rw [← ht, ← ofNat_add_assoc, BitVec.add_assoc, BitVec.add_assoc, BitVec.add_assoc]]
   exact hq
 
-end M0Crypto.Release.CT
+end M0Crypto.Release.ConstantTime

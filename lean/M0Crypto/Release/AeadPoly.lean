@@ -14,26 +14,26 @@ namespace M0Crypto.Release.Aead
 open M0Crypto.Armv6M (Word Reg State Mem read32 write32 slot)
 open M0Crypto.Thumb
 open M0Crypto.Release.Frame
-open M0Crypto.Release.PolyBlocks (BCtx BValid BEntry BResult accAt keyAt keyAtOK wordAt)
-open M0Crypto.Release.PolyContext (padAt)
-open M0Crypto.Spec.AEAD (p pad16)
+open M0Crypto.Release.Poly1305Blocks (BCtx BValid BEntry BResult accAt keyAt keyAtOK wordAt)
+open M0Crypto.Release.Poly1305Context (padAt)
+open M0Crypto.Spec.Aead (p pad16)
 open M0Crypto.Spec.ChaCha20 (Byte)
 
 structure PInv (A : Word) (ti : Mem) (msg : List Byte) (m : Mem) : Prop where
   key : keyAt m (A + 8#32) = keyAt ti (A + 8#32)
-  keyOK : keyAtOK m (A + 8#32)
+  keyOk : keyAtOK m (A + 8#32)
   pad : padAt m (A + 8#32) = padAt ti (A + 8#32)
-  acc : accAt m (A + 8#32) % p = PolySpec.polyBlocks (keyAt ti (A + 8#32)) 1 (accAt ti (A + 8#32) % p) msg
+  acc : accAt m (A + 8#32) % p = Poly1305Spec.polyBlocks (keyAt ti (A + 8#32)) 1 (accAt ti (A + 8#32) % p) msg
   bound : accAt m (A + 8#32) < 5 * 2 ^ 128
   len : msg.length % 16 = 0
 
-theorem PInv.init (A : Word) (ic : PolyInit.ICtx) (ti : State) (hi : PolyInit.IResult ic ti)
+theorem PInv.init (A : Word) (ic : Poly1305Init.ICtx) (ti : State) (hi : Poly1305Init.IResult ic ti)
     (hc : ic.ctx = A + 8#32) : PInv A ti.mem [] ti.mem where
   key := rfl
-  keyOK := hc ▸ PolyContext.init_keyOK ic ti hi
+  keyOk := hc ▸ Poly1305Context.init_keyOk ic ti hi
   pad := rfl
-  acc := (PolySpec.polyBlocks_nil _ _ _).symm
-  bound := by rw [← hc, PolyContext.init_acc ic ti hi]; decide
+  acc := (Poly1305Spec.polyBlocks_nil _ _ _).symm
+  bound := by rw [← hc, Poly1305Context.init_acc ic ti hi]; decide
   len := rfl
 
 theorem ctx_wordAt {m m' : Mem} {ctx : Word} (h : ∀ j < 64, m' (ctx + BitVec.ofNat 32 j) = m (ctx + BitVec.ofNat 32 j))
@@ -54,7 +54,7 @@ theorem PInv.congr {A : Word} {ti m m' : Mem} {msg : List Byte} (h : PInv A ti m
   have ep : padAt m' (A + 8#32) = padAt m (A + 8#32) := by
     unfold padAt; rw [w 12 (by decide), w 13 (by decide), w 14 (by decide), w 15 (by decide)]
   refine ⟨ek.trans h.key, ?_, ep.trans h.pad, by rw [ea]; exact h.acc, by rw [ea]; exact h.bound, h.len⟩
-  have hk := h.keyOK
+  have hk := h.keyOk
   unfold keyAtOK at hk ⊢
   rw [w 5 (by decide), w 6 (by decide), w 7 (by decide), w 8 (by decide), w 9 (by decide),
     w 10 (by decide), w 11 (by decide)]
@@ -71,9 +71,9 @@ theorem PInv.mac {base A d n : Word} {M : Mem} {m : Nat} {s t : State} {ti : Mem
     unfold padAt
     rw [he.ctx_word ht.frame 12 (by decide) (by decide), he.ctx_word ht.frame 13 (by decide) (by decide),
       he.ctx_word ht.frame 14 (by decide) (by decide), he.ctx_word ht.frame 15 (by decide) (by decide)]
-  refine ⟨(he.key_eq ht.frame).trans h.key, he.keyOK ht.frame h.keyOK, ep.trans h.pad, ?_, ht.bound, ?_⟩
+  refine ⟨(he.key_eq ht.frame).trans h.key, he.keyOk ht.frame h.keyOk, ep.trans h.pad, ?_, ht.bound, ?_⟩
   · rw [ht.acc, h.key, h.acc]
-    exact (PolySpec.polyBlocks_append _ _ _ (msg.length / 16) msg _ (by have := h.len; omega)).symm
+    exact (Poly1305Spec.polyBlocks_append _ _ _ (msg.length / 16) msg _ (by have := h.len; omega)).symm
   · rw [List.length_append]; have := h.len; have := pad16_len (Ctx.bytesAt M d n.toNat); omega
 
 end M0Crypto.Release.Aead

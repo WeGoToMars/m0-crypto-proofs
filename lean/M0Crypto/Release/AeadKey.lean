@@ -1,5 +1,5 @@
-import M0Crypto.Release.AeadPro
-import M0Crypto.Release.ChaChaXor
+import M0Crypto.Release.AeadPrologue
+import M0Crypto.Release.ChaCha20Xor
 set_option linter.unusedSimpArgs false
 set_option maxRecDepth 100000
 set_option maxHeartbeats 4000000
@@ -66,7 +66,7 @@ theorem bytesAt_congr {m1 m2 : Mem} {a : Word} {n : Nat} (h : ∀ j < n, m1 (a +
   apply List.ext_getElem?
   intro j
   by_cases hj : j < n
-  · rw [ChaChaOut.bytesAt_get _ _ _ _ hj, ChaChaOut.bytesAt_get _ _ _ _ hj, h j hj]
+  · rw [ChaCha20Output.bytesAt_get _ _ _ _ hj, ChaCha20Output.bytesAt_get _ _ _ _ hj, h j hj]
   · rw [List.getElem?_eq_none (by rw [bytesAt_length]; omega), List.getElem?_eq_none (by rw [bytesAt_length]; omega)]
 
 theorem add_toNat_sub (a y : Word) : a + BitVec.ofNat 32 (y - a).toNat = y := by
@@ -83,12 +83,12 @@ def ACall.keyB (c : ACall) : List M0Crypto.Spec.ChaCha20.Byte := Ctx.bytesAt c.m
 def ACall.nonceB (c : ACall) : List M0Crypto.Spec.ChaCha20.Byte := Ctx.bytesAt c.m0 c.nonce 12
 
 /-- ChaCha20 of 64 zero bytes at counter 0 is block 0. -/
-theorem chacha_zero (key nonce msg : List M0Crypto.Spec.ChaCha20.Byte) (hl : msg.length = 64)
+theorem chacha20_zero (key nonce msg : List M0Crypto.Spec.ChaCha20.Byte) (hl : msg.length = 64)
     (hz : ∀ j (h : j < 64), msg[j] = 0#8) (j : Nat) (hj : j < 64) :
-    (M0Crypto.Spec.AEAD.chacha20 key 0 nonce msg)[j]! = (block key 0#32 nonce)[j]! := by
-  have h := ChaChaSpec.chacha20_get key nonce msg 0 j (by omega)
+    (M0Crypto.Spec.Aead.chacha20 key 0 nonce msg)[j]! = (block key 0#32 nonce)[j]! := by
+  have h := ChaCha20Spec.chacha20_get key nonce msg 0 j (by omega)
   rw [List.getElem!_eq_getElem?_getD, h, hz j hj, List.getElem!_eq_getElem?_getD,
-    List.getElem?_eq_getElem (by rw [ChaChaSpec.block_length']; omega)]
+    List.getElem?_eq_getElem (by rw [ChaCha20Spec.block_length']; omega)]
   simp only [Option.getD_some, BitVec.zero_xor, show 0 + j / 64 = 0 by omega, show j % 64 = j by omega]
 
 /-- State after the block-0 call returns, at `e + copyOff`. -/
@@ -148,7 +148,7 @@ theorem key_reach (c : ACall) (hv : AValid c) (e : Nat) (i : BitVec 25)
     code := by
       show CodeAt u.mem c.base B
       rw [um]; exact hv.codeAt_of (fun y hy => hp.out y (swr_of_hi hy)) }
-  have xe : ChaChaSetup.Entry xc u := {
+  have xe : ChaCha20Setup.Entry xc u := {
     regs := rfl, mem := rfl, pc := u15
     sp := by show u.regs 13 = c.A; rw [ur 13 (by decide) (by decide), hp.sp]
     r0 := by show u.regs 0 = _; rw [ur 0 (by decide) (by decide), hp.r0]
@@ -158,23 +158,23 @@ theorem key_reach (c : ACall) (hv : AValid c) (e : Nat) (i : BitVec 25)
     argN := by show read32 u.mem c.A = _; rw [um, hp.nonce]
     argC := by show read32 u.mem (c.A + 4#32) = _; rw [um, hp.ctr] }
   have hlr : (xc.regs0 14).getLsbD 0 = true := by show (u.regs 14).getLsbD 0 = true; rw [u14]; exact lr_odd _
-  have wr : ∀ y, ChaChaXor.WrOk xc y → SWr c.A y := by
+  have wr : ∀ y, ChaCha20Xor.WrOk xc y → SWr c.A y := by
     rintro y (⟨o, ho, rfl⟩ | ⟨_, hy⟩)
     · exact swr_lo c.A o ho
     · have hy' : (y - (c.A + 8#32)).toNat < 64 := hy
       have e1 : c.A + BitVec.ofNat 32 (8 + (y - (c.A + 8#32)).toNat) = y := by
         rw [← ofNat_add_assoc]; exact add_toNat_sub _ _
       rw [← e1]; exact swr_A _ _ (by omega)
-  apply ((ChaChaXor.xor_reach xc xv u xe hlr).monoW wr).mono
+  apply ((ChaCha20Xor.xor_reach xc xv u xe hlr).monoW wr).mono
   rintro t ⟨tpc, hr⟩
-  have hok : M0Crypto.Spec.AEAD.counterOk xc.ctr.toNat xc.len.toNat = true := by
-    show M0Crypto.Spec.AEAD.counterOk (0#32 : Word).toNat (64#32 : Word).toNat = true; decide
+  have hok : M0Crypto.Spec.Aead.counterOk xc.ctr.toNat xc.len.toNat = true := by
+    show M0Crypto.Spec.Aead.counterOk (0#32 : Word).toNat (64#32 : Word).toNat = true; decide
   -- the window `[A, A + 160)` is outside the callee frame
-  have sSB := ChaChaLayout.chStackBytes_eq
-  have hiS : ∀ o' < 160, ChaChaXor.OutS xc (c.A + BitVec.ofNat 32 o') := fun o' ho' o ho =>
+  have sSB := ChaCha20Layout.chStackBytes_eq
+  have hiS : ∀ o' < 160, ChaCha20Xor.OutS xc (c.A + BitVec.ofNat 32 o') := fun o' ho' o ho =>
     ne_of_disj (b := c.A - BitVec.ofNat 32 176) (by omega) (by rw [fp_toNat]; omega)
       (.inr (by rw [fp_toNat]; omega)) ho' ho
-  have tm : ∀ y, ChaChaXor.OutS xc y → (∀ j < 64, y ≠ c.A + BitVec.ofNat 32 (8 + j)) → t.mem y = p.mem y := by
+  have tm : ∀ y, ChaCha20Xor.OutS xc y → (∀ j < 64, y ≠ c.A + BitVec.ofNat 32 (8 + j)) → t.mem y = p.mem y := by
     intro y hy hj
     rw [hr.mem y hy, if_neg]
     · exact congrFun um y
@@ -195,13 +195,13 @@ theorem key_reach (c : ACall) (hv : AValid c) (e : Nat) (i : BitVec 25)
       show (c.A + BitVec.ofNat 32 (8 + j) - (c.A + 8#32)).toNat = j
       rw [← ofNat_add_assoc]; exact sub_off _ _ (by omega)
     rw [hr.mem _ (hiS _ (by omega)), Ctx.oidx, ho, if_pos ⟨hok, by show j < (64#32 : Word).toNat; simp; omega⟩]
-    show (M0Crypto.Spec.AEAD.chacha20 xc.keyB (0#32 : Word).toNat xc.nonceB xc.msg)[j]! = _
+    show (M0Crypto.Spec.Aead.chacha20 xc.keyB (0#32 : Word).toNat xc.nonceB xc.msg)[j]! = _
     have kB : xc.keyB = c.keyB := bytesAt_congr (fun j hj => by show u.mem _ = _; rw [um]; exact hk j hj)
     have nB : xc.nonceB = c.nonceB := bytesAt_congr (fun j hj => by show u.mem _ = _; rw [um]; exact hn j hj)
     rw [kB, nB]
-    apply chacha_zero _ _ _ (bytesAt_length _ _ _) _ j hj
+    apply chacha20_zero _ _ _ (bytesAt_length _ _ _) _ j hj
     intro i hi
-    have := ChaChaOut.bytesAt_get u.mem (c.A + 8#32) 64 i hi
+    have := ChaCha20Output.bytesAt_get u.mem (c.A + 8#32) 64 i hi
     rw [List.getElem?_eq_getElem (by rw [bytesAt_length]; exact hi)] at this
     have e := Option.some.inj this
     show (Ctx.bytesAt u.mem (c.A + 8#32) (64#32 : Word).toNat)[i] = _

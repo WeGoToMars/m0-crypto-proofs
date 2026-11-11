@@ -1,14 +1,14 @@
 import M0Crypto.Sym.Access
 
 /-!
-# Approach C, layer 3: the normaliser (template)
+# Symbolic executor, layer 3: the normaliser
 
 `norm : SExpr → SExpr` rewrites the mirror syntax produced by `symExec` towards a
 canonical form, with `norm_sound : (norm e).denote s0 = e.denote s0`. Every rule is a
 separate function with its own soundness lemma; `norm` only composes them bottom-up.
 All functions are structurally recursive, so the kernel evaluates them (`decide`, `rfl`).
 
-Rules in this template:
+Rules:
 * `addK` — constant folding and re-association of `x + k` chains (`k` constant);
 * `rdW` — read-over-write for 32-bit loads through 32-bit stores whose addresses have the
   same symbolic base and constant offsets (`sp + k` style): equal offsets return the

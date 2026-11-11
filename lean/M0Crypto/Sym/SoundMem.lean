@@ -1,7 +1,7 @@
 import M0Crypto.Sym.SoundAlu
 
 /-!
-# Approach C, task H3 (part A): `Sound` for the memory and stack forms
+# Symbolic executor: `Sound` for the memory and stack forms
 
 `sound_ldrLit`, `sound_ldrSp`, `sound_strSp`, `sound_memImm`, `sound_memReg` cover the
 single loads and stores; `sound_push`, `sound_pop` (PC bit clear), `sound_stm`,

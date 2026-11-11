@@ -8,8 +8,8 @@ namespace M0Crypto.Release.Aead
 open M0Crypto.Armv6M (Word Reg State Mem read32 write32 slot)
 open M0Crypto.Thumb
 open M0Crypto.Release.Frame
-open M0Crypto.Release.PolyBlocks (BCtx BValid BEntry accAt keyAt keyAtOK wordAt)
-open M0Crypto.Spec.AEAD (p leBytes)
+open M0Crypto.Release.Poly1305Blocks (BCtx BValid BEntry accAt keyAt keyAtOK wordAt)
+open M0Crypto.Spec.Aead (p leBytes)
 
 theorem macWr_swr (A y : Word) (h : MacWr A y) : SWr A y := by
   rcases h with ⟨o, ho, rfl⟩ | ⟨o, ho, rfl⟩ | ⟨o, ho, rfl⟩
@@ -46,11 +46,11 @@ theorem bytesAt_le64 (m : Mem) (a w : Word) (h0 : read32 m a = w)
   apply List.ext_getElem?
   intro j
   by_cases hj : j < 8
-  · rw [ChaChaOut.bytesAt_get _ _ _ _ hj, PolySpec.leBytes_get _ _ _ hj]
+  · rw [ChaCha20Output.bytesAt_get _ _ _ _ hj, Poly1305Spec.leBytes_get _ _ _ hj]
     congr 1
     by_cases h4 : j < 4
     · rw [byte_of_read32 m a j h4, h0]
-      exact PolyFinish.word_byte_nat w j h4
+      exact Poly1305Finish.word_byte_nat w j h4
     · have ej : a + BitVec.ofNat 32 j = a + 4#32 + BitVec.ofNat 32 (j - 4) := by
         rw [ofNat_add_assoc]; congr 2; omega
       rw [ej, byte_of_read32 m (a + 4#32) (j - 4) (by omega), h1]
@@ -59,7 +59,7 @@ theorem bytesAt_le64 (m : Mem) (a w : Word) (h0 : read32 m a = w)
         rcases (by omega : j = 4 ∨ j = 5 ∨ j = 6 ∨ j = 7) with rfl | rfl | rfl | rfl <;> decide
       rw [Nat.div_eq_of_lt (by omega)]; simp
   · rw [List.getElem?_eq_none (by rw [bytesAt_length]; omega),
-      List.getElem?_eq_none (by rw [PolySpec.leBytes_length]; omega)]
+      List.getElem?_eq_none (by rw [Poly1305Spec.leBytes_length]; omega)]
 
 def lengthMem (m : Mem) (A alen len : Word) : Mem :=
   write32 (write32 (write32 (write32 m (A + 72#32) alen) (A + 80#32) len) (A + 76#32) 0#32)
@@ -97,7 +97,7 @@ theorem lengthMem_words (m : Mem) (A alen len : Word) (j : Nat) (hj : j < 4) :
 
 theorem lengthMem_bytes (m : Mem) (A alen len : Word) :
     Ctx.bytesAt (lengthMem m A alen len) (A + 72#32) 16 = leBytes 8 alen.toNat ++ leBytes 8 len.toNat := by
-  rw [show (16 : Nat) = 8 + 8 from rfl, PolySpec.bytesAt_add]
+  rw [show (16 : Nat) = 8 + 8 from rfl, Poly1305Spec.bytesAt_add]
   congr 1
   · apply bytesAt_le64
     · exact lengthMem_words m A alen len 0 (by decide)
@@ -194,29 +194,29 @@ theorem lengths_reach (c : ACall) (hv : AValid c) (off : Nat) (i : BitVec 25)
     by change x.regs 0 = c.A + 8#32; rw [xr 0 (by decide) (by decide), e0], by change x.regs 1 = c.A + 72#32; rw [xr 1 (by decide) (by decide), e1],
     by change x.regs 2 = 1#32; rw [xr 2 (by decide) (by decide), e2], by change x.regs 3 = 1#32; rw [xr 3 (by decide) (by decide), e3]⟩
   have hlr : (bc.regs0 14).getLsbD 0 = true := by show (x.regs 14).getLsbD 0 = true; rw [x14]; exact lr_odd _
-  apply ((PolyBlocks.blocks_reach bc bv x be hlr).monoW (bwr_mac c.A bc rfl rfl)).mono
+  apply ((Poly1305Blocks.blocks_reach bc bv x be hlr).monoW (bwr_mac c.A bc rfl rfl)).mono
   intro t ht'
   have tf : ∀ y, ¬ MacWr c.A y → t.mem y = s.mem y := fun y hy => by
-    rw [PolyBlocks.result_frame bc bv x t be hlr ht' y (fun h => hy (bwr_mac c.A bc rfl rfl y h))]
+    rw [Poly1305Blocks.result_frame bc bv x t be hlr ht' y (fun h => hy (bwr_mac c.A bc rfl rfl y h))]
     exact xM y hy
-  obtain ⟨acc, bound⟩ := PolyBlocks.result_blocks_correct bc bv x t be ht' xp.keyOK xp.bound (by change (1#32 : Word).toNat ≤ 1; decide)
+  obtain ⟨acc, bound⟩ := Poly1305Blocks.result_blocks_correct bc bv x t be ht' xp.keyOk xp.bound (by change (1#32 : Word).toNat ≤ 1; decide)
   refine ⟨?_, ht'.sp, ?_, tf, ?_⟩
   · rw [ht'.pc]; show x.regs 14 &&& ~~~1#32 = _
     rw [x14, lr_mask _ (even_off c.base hv.base4 _ (by omega)), blSize_eq]
   · intro r a b
     rw [ht'.regs r a b]; show x.regs r = _
     rw [xr r (by omega) (by omega), er r a (by omega)]
-  · have ep : PolyContext.padAt t.mem (c.A + 8#32) = PolyContext.padAt s.mem (c.A + 8#32) := by
-      unfold PolyContext.padAt
+  · have ep : Poly1305Context.padAt t.mem (c.A + 8#32) = Poly1305Context.padAt s.mem (c.A + 8#32) := by
+      unfold Poly1305Context.padAt
       rw [he.ctx_word tf 12 (by decide) (by decide), he.ctx_word tf 13 (by decide) (by decide),
         he.ctx_word tf 14 (by decide) (by decide), he.ctx_word tf 15 (by decide) (by decide)]
-    refine ⟨(he.key_eq tf).trans hp.key, he.keyOK tf hp.keyOK, ep.trans hp.pad, ?_, bound, ?_⟩
-    · change accAt t.mem (c.A + 8#32) % p = PolySpec.polyBlocks (keyAt x.mem (c.A + 8#32)) 1
+    refine ⟨(he.key_eq tf).trans hp.key, he.keyOk tf hp.keyOk, ep.trans hp.pad, ?_, bound, ?_⟩
+    · change accAt t.mem (c.A + 8#32) % p = Poly1305Spec.polyBlocks (keyAt x.mem (c.A + 8#32)) 1
         (accAt x.mem (c.A + 8#32) % p) (Ctx.bytesAt x.mem (c.A + 72#32) 16) at acc
       rw [xp.key, xp.acc, xm, lengthMem_bytes] at acc
       rw [acc]
-      exact (PolySpec.polyBlocks_append _ _ _ (msg.length / 16) msg _ (by have := hp.len; omega)).symm
+      exact (Poly1305Spec.polyBlocks_append _ _ _ (msg.length / 16) msg _ (by have := hp.len; omega)).symm
     · have := hp.len
-      simp only [List.length_append, lengthBlock, PolySpec.leBytes_length]; omega
+      simp only [List.length_append, lengthBlock, Poly1305Spec.leBytes_length]; omega
 
 end M0Crypto.Release.Aead

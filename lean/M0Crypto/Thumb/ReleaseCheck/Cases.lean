@@ -1,5 +1,5 @@
 import M0Crypto.Thumb.FastRun
-import M0Crypto.Spec.AEAD
+import M0Crypto.Spec.Aead
 import M0Crypto.Artifacts.Release
 
 /-!
@@ -9,7 +9,7 @@ Each case loads `Artifacts.Release.bytes` at a 4-byte-aligned address, calls an
 exported function the way the AAPCS does (r0-r3, then stack arguments, LR = a
 return address outside the code), runs it to the return, and checks:
 
-* the result against the RFC 8439 specification (`M0Crypto.Spec.AEAD`);
+* the result against the RFC 8439 specification (`M0Crypto.Spec.Aead`);
 * **every data access in the trace**: reads only from the input buffers, the key,
   nonce, AAD and tag, the code (literal pools) and the stack window; writes only
   to `out`, the tag (encrypt) and the stack below the entry SP. This is the
@@ -28,7 +28,7 @@ namespace M0Crypto.Thumb.ReleaseCheck
 
 open M0Crypto.Armv6M (Word Reg State Mem)
 open M0Crypto.Thumb
-open M0Crypto.Spec.AEAD
+open M0Crypto.Spec.Aead
 open M0Crypto.Spec.ChaCha20 (Byte)
 open M0Crypto.Artifacts
 
@@ -149,11 +149,11 @@ def stackWin (maxStack nArgs : Nat) : Nat × Nat := (entrySp - maxStack, maxStac
 
 /-! ## ChaCha20 -/
 
-def chachaStack : Nat := 176
+def chacha20Stack : Nat := 176
 
 /-- One `m0c_chacha20_xor` case. `outOff`/`inOff` are offsets from aligned bases;
 `inPlace` uses the input buffer as output. -/
-def chachaCase (len outOff inOff : Nat) (inPlace : Bool) (ctr seed : Nat) : Option String :=
+def chacha20Case (len outOff inOff : Nat) (inPlace : Bool) (ctr seed : Nat) : Option String :=
   let inA := 0x20001000 + inOff
   let outA := if inPlace then inA else 0x20002000 + outOff
   let keyA := 0x20003001; let nonceA := 0x20003103
@@ -168,16 +168,16 @@ def chachaCase (len outOff inOff : Nat) (inPlace : Bool) (ctr seed : Nat) : Opti
   | .ok o =>
     let accept := counterOk ctr len
     let reads := [(inA, len), (keyA, 32), (nonceA, 12), (codeBase, codeArr.size),
-      stackWin chachaStack 2]
-    let writes := (if accept then [(outA, len)] else []) ++ [stackWin chachaStack 0]
+      stackWin chacha20Stack 2]
+    let writes := (if accept then [(outA, len)] else []) ++ [stackWin chacha20Stack 0]
     let ret := o.final.regs 0
     let tag := s!"chacha20 len {len} out+{outOff} in+{inOff} inplace {inPlace} ctr {ctr}"
     if accept ∧ ret != 0 then some s!"{tag}: returned {ret.toNat}"
     else if ¬accept ∧ ret != BitVec.ofNat 32 (2 ^ 32 - 1) then some s!"{tag}: not rejected"
     else if accept ∧ readMem o.final outA len != chacha20 key ctr nonce msg then
       some s!"{tag}: output differs from the spec"
-    else ((common o reads writes chachaStack []) <|>
-      sameResidue r1 r_res chachaStack <|>
+    else ((common o reads writes chacha20Stack []) <|>
+      sameResidue r1 r_res chacha20Stack <|>
       sameTrace r1 r_ct
       ).map fun e => s!"{tag}: {e}"
 
@@ -251,10 +251,10 @@ Partition descriptors before executing the model. Each index must occur exactly
 once across the shards; the import root also checks the IDs actually scheduled.
 -/
 
-abbrev ChaChaArgs := Nat × Nat × Nat × Bool × Nat × Nat
+abbrev ChaCha20Args := Nat × Nat × Nat × Bool × Nat × Nat
 abbrev AeadArgs := Nat × Nat × Nat × Nat × Bool × Nat
 
-def chachaInputs : List ChaChaArgs :=
+def chacha20Inputs : List ChaCha20Args :=
   let lens := [0, 1, 15, 16, 63, 64, 65, 127, 128, 129, 200]
   let aligns := [(0, 0, false), (1, 3, false), (2, 2, false), (0, 1, false), (3, 0, false),
     (0, 0, true), (1, 1, true)]
@@ -269,15 +269,15 @@ def aeadInputs : List AeadArgs :=
   let aligns := [(0, 0, false), (1, 3, false), (0, 2, false), (0, 0, true), (3, 3, true)]
   shapes.flatMap fun (l, a) => aligns.map fun (o, i, ip) => (l, a, o, i, ip, l + a)
 
-def checkChaCha (args : ChaChaArgs) : Option String :=
+def checkChaCha20 (args : ChaCha20Args) : Option String :=
   let (l, o, i, ip, ctr, seed) := args
-  chachaCase l o i ip ctr seed
+  chacha20Case l o i ip ctr seed
 
 def checkAead (args : AeadArgs) : Option String :=
   let (l, a, o, i, ip, seed) := args
   aeadCase l a o i ip seed
 
-def chachaCases (_ : Unit) : List (Option String) := chachaInputs.map checkChaCha
+def chacha20Cases (_ : Unit) : List (Option String) := chacha20Inputs.map checkChaCha20
 def aeadCases (_ : Unit) : List (Option String) := aeadInputs.map checkAead
 
 def run (name : String) (cases : List (Option String)) : IO Unit := do
@@ -294,17 +294,17 @@ def coveredExactlyOnce {α : Type} [BEq α] (count : Nat) (xs : List α) : Bool 
   (((List.range count).flatMap fun s => partitionCases count s xs).mergeSort
     fun a b => a.2 ≤ b.2) == xs.zipIdx
 
-def chachaShardCount : Nat := 4
+def chacha20ShardCount : Nat := 4
 def aeadShardCount : Nat := 8
 
-#guard chachaInputs.length == 83
+#guard chacha20Inputs.length == 83
 #guard aeadInputs.length == 45
-#guard coveredExactlyOnce chachaShardCount chachaInputs
+#guard coveredExactlyOnce chacha20ShardCount chacha20Inputs
 #guard coveredExactlyOnce aeadShardCount aeadInputs
 
-def runChaChaShard (shard : Fin chachaShardCount) : IO Unit :=
-  run s!"chacha20 shard {shard.val}" ((partitionCases chachaShardCount shard.val chachaInputs).map
-    fun (args, _) => checkChaCha args)
+def runChaCha20Shard (shard : Fin chacha20ShardCount) : IO Unit :=
+  run s!"chacha20 shard {shard.val}" ((partitionCases chacha20ShardCount shard.val chacha20Inputs).map
+    fun (args, _) => checkChaCha20 args)
 
 def runAeadShard (shard : Fin aeadShardCount) : IO Unit :=
   run s!"aead shard {shard.val}" ((partitionCases aeadShardCount shard.val aeadInputs).map

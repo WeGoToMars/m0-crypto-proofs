@@ -1,7 +1,7 @@
 import M0Crypto.Release.Frame
-import M0Crypto.Release.ChaChaSetup
-import M0Crypto.Release.ChaChaLayout
-import M0Crypto.Release.AeadPro
+import M0Crypto.Release.ChaCha20Setup
+import M0Crypto.Release.ChaCha20Layout
+import M0Crypto.Release.AeadPrologue
 import M0Crypto.Release.AeadCrypt
 import M0Crypto.Release.AeadDecrypt
 import M0Crypto.Release.RunStates
@@ -67,10 +67,10 @@ def aeadStackBytes : Nat := 320
 
 theorem aeadStackBytes_eq : aeadStackBytes = 320 := by decide
 
-/-- Stack bytes allocated by `m0c_chacha20_xor`, matching `ChaChaLayout.chStackBytes`. -/
-def chachaStackBytes : Nat := ChaChaLayout.chStackBytes
+/-- Stack bytes allocated by `m0c_chacha20_xor`, matching `ChaCha20Layout.chStackBytes`. -/
+def chacha20StackBytes : Nat := ChaCha20Layout.chStackBytes
 
-theorem chachaStackBytes_eq : chachaStackBytes = 176 := ChaChaLayout.chStackBytes_eq
+theorem chacha20StackBytes_eq : chacha20StackBytes = 176 := ChaCha20Layout.chStackBytes_eq
 
 /-! ## Read access model -/
 
@@ -84,20 +84,19 @@ def ReadsFrom (Rd : Word → Prop) (tr : List Event) : Prop :=
 
 /-- Allowed readable regions for `m0c_chacha20_xor`: input buffer, key, nonce,
 code, and the function's stack window including caller stack arguments. -/
-def ChaChaRd (c : Ctx) (y : Word) : Prop :=
+def ChaCha20XorReadRegion (c : Ctx) (y : Word) : Prop :=
   (∃ o < c.len.toNat, y = c.inp + BitVec.ofNat 32 o) ∨
   (∃ o < 32, y = c.key + BitVec.ofNat 32 o) ∨
   (∃ o < 12, y = c.nonce + BitVec.ofNat 32 o) ∨
   (∃ o < Artifacts.Release.size, y = c.base + BitVec.ofNat 32 o) ∨
-  (∃ o < ChaChaLayout.chStackBytes + 8,
-    y = c.sp0 - BitVec.ofNat 32 ChaChaLayout.chStackBytes + BitVec.ofNat 32 o)
+  (∃ o < ChaCha20Layout.chStackBytes + 8,
+    y = c.sp0 - BitVec.ofNat 32 ChaCha20Layout.chStackBytes + BitVec.ofNat 32 o)
 
-abbrev CRd := ChaChaRd
 
 /-- Allowed readable regions for `m0c_chacha20poly1305_encrypt`: input buffer, AAD, key,
 nonce, output buffer (MAC reads ciphertext), code, and the AEAD stack window including
 caller stack arguments. -/
-def EncryptRd (c : ACall) (y : Word) : Prop :=
+def AeadEncryptReadRegion (c : ACall) (y : Word) : Prop :=
   (∃ o < c.len.toNat, y = c.inp + BitVec.ofNat 32 o) ∨
   (∃ o < c.alen.toNat, y = c.aad + BitVec.ofNat 32 o) ∨
   (∃ o < 32, y = c.key + BitVec.ofNat 32 o) ∨
@@ -107,14 +106,12 @@ def EncryptRd (c : ACall) (y : Word) : Prop :=
   (∃ o < aeadStackBytes + 16,
     y = c.sp0 - BitVec.ofNat 32 aeadStackBytes + BitVec.ofNat 32 o)
 
-abbrev ARd := EncryptRd
 
 /-- Allowed readable regions for `m0c_chacha20poly1305_decrypt`: the encrypt set plus
 tag[0, 16). -/
-def DecryptRd (c : ACall) (y : Word) : Prop :=
-  EncryptRd c y ∨ (∃ o < 16, y = c.tag + BitVec.ofNat 32 o)
+def AeadDecryptReadRegion (c : ACall) (y : Word) : Prop :=
+  AeadEncryptReadRegion c y ∨ (∃ o < 16, y = c.tag + BitVec.ofNat 32 o)
 
-abbrev DRd := DecryptRd
 
 /-! ## Stack window containment -/
 
@@ -126,45 +123,42 @@ def InStackWindow (sp0 : Word) (stackBytes : Nat) (sp : Word) : Prop :=
 
 /-- ChaCha20 constant-time trace theorem: executions from two valid entry states with
 equal public inputs produce identical traces for all fuel values. -/
-def ChaCha20CT : Prop :=
+def ChaCha20XorConstantTime : Prop :=
   ∀ c₁ c₂ s₁ s₂,
-    Valid c₁ → ChaChaSetup.Entry c₁ s₁ → (c₁.regs0 14).getLsbD 0 = true →
+    Valid c₁ → ChaCha20Setup.Entry c₁ s₁ → (c₁.regs0 14).getLsbD 0 = true →
     (∀ i < Artifacts.Release.size, c₁.ret ≠ c₁.base + BitVec.ofNat 32 i) →
-    Valid c₂ → ChaChaSetup.Entry c₂ s₂ → (c₂.regs0 14).getLsbD 0 = true →
+    Valid c₂ → ChaCha20Setup.Entry c₂ s₂ → (c₂.regs0 14).getLsbD 0 = true →
     (∀ i < Artifacts.Release.size, c₂.ret ≠ c₂.base + BitVec.ofNat 32 i) →
     c₁.pub = c₂.pub →
     ∀ fuel, (Thumb.runUntil c₁.ret fuel s₁).map Prod.snd =
             (Thumb.runUntil c₂.ret fuel s₂).map Prod.snd
 
-abbrev XorCT := ChaCha20CT
 
 /-- ChaCha20 read bounds: every data read in the execution trace lies in the
 caller-provided readable regions. -/
-def ChaCha20Reads : Prop :=
+def ChaCha20XorReads : Prop :=
   ∀ c s,
-    Valid c → ChaChaSetup.Entry c s → (c.regs0 14).getLsbD 0 = true →
+    Valid c → ChaCha20Setup.Entry c s → (c.regs0 14).getLsbD 0 = true →
     (∀ i < Artifacts.Release.size, c.ret ≠ c.base + BitVec.ofNat 32 i) →
     ∃ n, ∀ fuel, n ≤ fuel →
-      ∃ t tr, Thumb.runUntil c.ret fuel s = .ok (t, tr) ∧ ReadsFrom (ChaChaRd c) tr
+      ∃ t tr, Thumb.runUntil c.ret fuel s = .ok (t, tr) ∧ ReadsFrom (ChaCha20XorReadRegion c) tr
 
-abbrev XorReads := ChaCha20Reads
 
 /-- ChaCha20 stack bounds: at every step of execution, SP remains within `[sp0 - 176, sp0]`. -/
-def ChaCha20Stack : Prop :=
+def ChaCha20XorStack : Prop :=
   ∀ c s,
-    Valid c → ChaChaSetup.Entry c s → (c.regs0 14).getLsbD 0 = true →
+    Valid c → ChaCha20Setup.Entry c s → (c.regs0 14).getLsbD 0 = true →
     (∀ i < Artifacts.Release.size, c.ret ≠ c.base + BitVec.ofNat 32 i) →
     ∃ n, ∀ fuel, n ≤ fuel →
       ∃ states tr, runStates c.ret fuel s = .ok (states, tr) ∧
-        ∀ st ∈ states, InStackWindow c.sp0 ChaChaLayout.chStackBytes (st.regs 13)
+        ∀ st ∈ states, InStackWindow c.sp0 ChaCha20Layout.chStackBytes (st.regs 13)
 
-abbrev XorStack := ChaCha20Stack
 
 /-! ## AEAD encrypt specifications -/
 
 /-- AEAD encrypt constant-time trace theorem: executions from two valid entry states with
 equal public inputs produce identical traces for all fuel values. -/
-def EncryptCT : Prop :=
+def AeadEncryptConstantTime : Prop :=
   ∀ c₁ c₂ s₁ s₂,
     AValid c₁ → ABuf c₁ → AEntry c₁ encOff s₁ → (c₁.regs0 14).getLsbD 0 = true →
     (∀ i < Artifacts.Release.size, c₁.ret ≠ c₁.base + BitVec.ofNat 32 i) →
@@ -176,15 +170,15 @@ def EncryptCT : Prop :=
 
 /-- AEAD encrypt read bounds: every data read in the execution trace lies in the
 caller-provided readable regions. -/
-def EncryptReads : Prop :=
+def AeadEncryptReads : Prop :=
   ∀ c s,
     AValid c → ABuf c → AEntry c encOff s → (c.regs0 14).getLsbD 0 = true →
     (∀ i < Artifacts.Release.size, c.ret ≠ c.base + BitVec.ofNat 32 i) →
     ∃ n, ∀ fuel, n ≤ fuel →
-      ∃ t tr, Thumb.runUntil c.ret fuel s = .ok (t, tr) ∧ ReadsFrom (EncryptRd c) tr
+      ∃ t tr, Thumb.runUntil c.ret fuel s = .ok (t, tr) ∧ ReadsFrom (AeadEncryptReadRegion c) tr
 
 /-- AEAD encrypt stack bounds: at every step of execution, SP remains within `[sp0 - 320, sp0]`. -/
-def EncryptStack : Prop :=
+def AeadEncryptStack : Prop :=
   ∀ c s,
     AValid c → ABuf c → AEntry c encOff s → (c.regs0 14).getLsbD 0 = true →
     (∀ i < Artifacts.Release.size, c.ret ≠ c.base + BitVec.ofNat 32 i) →
@@ -196,7 +190,7 @@ def EncryptStack : Prop :=
 
 /-- AEAD decrypt constant-time trace theorem: executions from two valid entry states with
 equal public inputs and equal authentication verdicts produce identical traces for all fuel values. -/
-def DecryptCT : Prop :=
+def AeadDecryptConstantTime : Prop :=
   ∀ c₁ c₂ s₁ s₂,
     AValid c₁ → ABuf c₁ → AEntry c₁ decOff s₁ → (c₁.regs0 14).getLsbD 0 = true →
     (∀ i < Artifacts.Release.size, c₁.ret ≠ c₁.base + BitVec.ofNat 32 i) →
@@ -209,15 +203,15 @@ def DecryptCT : Prop :=
 
 /-- AEAD decrypt read bounds: every data read in the execution trace lies in the
 caller-provided readable regions. -/
-def DecryptReads : Prop :=
+def AeadDecryptReads : Prop :=
   ∀ c s,
     AValid c → ABuf c → AEntry c decOff s → (c.regs0 14).getLsbD 0 = true →
     (∀ i < Artifacts.Release.size, c.ret ≠ c.base + BitVec.ofNat 32 i) →
     ∃ n, ∀ fuel, n ≤ fuel →
-      ∃ t tr, Thumb.runUntil c.ret fuel s = .ok (t, tr) ∧ ReadsFrom (DecryptRd c) tr
+      ∃ t tr, Thumb.runUntil c.ret fuel s = .ok (t, tr) ∧ ReadsFrom (AeadDecryptReadRegion c) tr
 
 /-- AEAD decrypt stack bounds: at every step of execution, SP remains within `[sp0 - 320, sp0]`. -/
-def DecryptStack : Prop :=
+def AeadDecryptStack : Prop :=
   ∀ c s,
     AValid c → ABuf c → AEntry c decOff s → (c.regs0 14).getLsbD 0 = true →
     (∀ i < Artifacts.Release.size, c.ret ≠ c.base + BitVec.ofNat 32 i) →

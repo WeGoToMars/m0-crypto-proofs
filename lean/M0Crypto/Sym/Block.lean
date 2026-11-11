@@ -2,7 +2,7 @@ import M0Crypto.Sym.Access
 import M0Crypto.Sym.Norm
 
 /-!
-# Approach C, H7: alignment and write-region checks for a straight-line segment
+# Symbolic alignment and write-region checks for a straight-line segment
 
 `Reach.block` needs, besides the bytes (`seqAt`) and fall-through (`falls`), two facts
 about the concrete state: every data access is aligned (`alignedAll`), and every write

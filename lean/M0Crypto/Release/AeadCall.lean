@@ -1,5 +1,5 @@
 import M0Crypto.Release.AeadCode
-import M0Crypto.Release.PolyContext
+import M0Crypto.Release.Poly1305Context
 set_option linter.unusedSimpArgs false
 
 /-!

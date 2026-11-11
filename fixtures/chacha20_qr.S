@@ -1,8 +1,8 @@
 /*
- * ChaCha20 quarter round, register-only feasibility kernel (pilot E02).
+ * ChaCha20 quarter round, register-only standalone fragment.
  *
  * This is a straight-line FRAGMENT, not an AAPCS function. It has no return
- * instruction and will later be inlined into a double-round / block schedule.
+ * instruction.
  * The proved region is exactly the bytes of the symbol below (st_value with the
  * Thumb bit cleared, length st_size).
  *

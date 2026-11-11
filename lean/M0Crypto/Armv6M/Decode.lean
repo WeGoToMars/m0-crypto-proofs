@@ -1,9 +1,9 @@
 import M0Crypto.Armv6M.State
 
 /-!
-Thumb decoder for the pilot instruction subset (ARMv6-M ARM, DDI 0419, §A5/§A6).
+Thumb decoder for the fragment instruction subset (ARMv6-M ARM, DDI 0419, §A5/§A6).
 
-Only the encodings emitted by the pilot kernel are accepted. Every other 16-bit
+Only the encodings emitted by the standalone ChaCha20 fragments (`fixtures/`) are accepted. Every other 16-bit
 halfword decodes to `unsupported16`, and every first halfword of a 32-bit
 encoding (bits[15:11] ∈ {0b11101, 0b11110, 0b11111}) decodes to `unsupported32`.
 Executing either is a fault, never a silent no-op.

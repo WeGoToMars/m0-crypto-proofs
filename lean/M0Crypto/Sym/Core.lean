@@ -2,7 +2,7 @@ import M0Crypto.Thumb.Seq
 import M0Crypto.Spec.ChaCha20
 
 /-!
-# Approach C, layer 1: the mirror executor
+# Symbolic executor, layer 1: mirror semantics
 
 A symbolic machine state (`SState`) whose registers, flags and memory are *syntax*
 (`SExpr`, `SBool`, `SMem`) over one unknown initial state. `symStep i` builds the
@@ -292,8 +292,9 @@ theorem symExec_sound : ∀ (is : List Instr), (∀ i ∈ is, Sound i) → ∀ (
     rw [symExec_sound is (fun j hj => h j (List.mem_cons_of_mem _ hj)), h i List.mem_cons_self]
 
 /-- Instruction forms whose soundness is closed below by unfolding alone. The remaining
-`falls` forms (`dp`, shifts, loads, stores, push/pop, stm/ldm) are tasks H2 and H3,
-which extend this to `sound_of_falls : i.falls = true → Sound i`. -/
+`falls` forms (`dp`, shifts, loads, stores, push/pop, stm/ldm) are covered in
+`SoundAlu.lean` and `SoundMem.lean`, which extend this to
+`sound_of_falls : i.falls = true → Sound i`. -/
 def symBasic : Instr → Bool
   | .addReg .. | .subReg .. | .addImm3 .. | .subImm3 .. | .movImm .. | .cmpImm ..
   | .addImm8 .. | .subImm8 .. | .addRdSp .. | .addSp .. | .subSp .. | .uxth .. => true

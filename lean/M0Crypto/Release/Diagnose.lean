@@ -1,8 +1,8 @@
 import M0Crypto.Release.Frame
-import M0Crypto.Release.PolyBlocksCode
+import M0Crypto.Release.Poly1305BlocksCode
 
 /-!
-Failure companions for the Boolean checks `Frame.frameWB` and `PolyBlocks.stable`.
+Failure companions for the Boolean checks `Frame.frameWB` and `Poly1305Blocks.stable`.
 
 Each `…Failure` function returns `none` exactly when its check holds, and otherwise the
 first failing site: the index in the list, the instruction, and a short reason. The
@@ -59,7 +59,7 @@ theorem frameWBFailure_eq_none (n : Nat) (is : List Instr) :
 
 end M0Crypto.Release.Frame
 
-namespace M0Crypto.Release.PolyBlocks
+namespace M0Crypto.Release.Poly1305Blocks
 
 open M0Crypto.Thumb
 
@@ -99,4 +99,4 @@ theorem stableFailure_eq_none (is : List Instr) :
     stableFailure is = none ↔ stable is = true :=
   stableFailureFrom_eq_none is 0
 
-end M0Crypto.Release.PolyBlocks
+end M0Crypto.Release.Poly1305Blocks

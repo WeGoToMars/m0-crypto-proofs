@@ -1,7 +1,7 @@
 import M0Crypto.Sym.SoundMem
 
 /-!
-# Approach C, task H3 (part B): symbolic accesses (layer 2)
+# Symbolic executor, layer 2: accesses and traces
 
 `symAccesses i ss` mirrors `Instr.accesses` constructor for constructor, with the
 addresses as syntax over the symbolic state. `symAccesses_sound` holds for every

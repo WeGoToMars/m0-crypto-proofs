@@ -4,8 +4,8 @@ import M0Crypto.Armv6M.State
 Thumb decoder for the instruction forms of the release artifact
 (ARMv6-M Architecture Reference Manual, DDI 0419E, §A5.2 and §A6.7).
 
-This is the whole-function model. It is separate from the pilot model in
-`M0Crypto.Armv6M`, whose six-instruction subset and proofs are left unchanged.
+This is the whole-function model. It is separate from the fragment model in
+`M0Crypto.Armv6M`, which covers six instructions of the standalone ChaCha20 fragments.
 
 Accepted encodings are exactly the forms the artifact uses, plus the other
 non-signed load/store widths of the two load/store groups. Everything else decodes

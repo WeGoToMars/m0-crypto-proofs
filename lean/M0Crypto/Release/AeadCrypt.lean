@@ -12,7 +12,7 @@ namespace M0Crypto.Release.Aead
 open M0Crypto.Armv6M (Word Reg State Mem read32 write32 slot)
 open M0Crypto.Thumb
 open M0Crypto.Release.Frame
-open M0Crypto.Spec.AEAD (chacha20)
+open M0Crypto.Spec.Aead (chacha20)
 
 /-- Caller buffer placement. `in` is exactly `out` or disjoint from it; `out`, `in`,
 `aad` and `tag` stay clear of the stack region and caller arguments, and `out`,
@@ -79,7 +79,7 @@ theorem crypt_reach_select (c : ACall) (hv : AValid c) (hb : ABuf c) (off : Nat)
     (t : State) (tpc : t.pc = c.base + BitVec.ofNat 32 off) (t13 : t.regs 13 = c.A) (thi : Hi c t.mem)
     (tn : read32 t.mem c.A = c.nonce) (tout : ∀ y, ¬ SWr c.A y → t.mem y = c.m0 y)
     (Q : State → Prop)
-    (hselect : ∀ (xc : Ctx) (u : State), Valid xc → ChaChaSetup.Entry xc u →
+    (hselect : ∀ (xc : Ctx) (u : State), Valid xc → ChaCha20Setup.Entry xc u →
       xc.base = c.base → xc.out = c.out → xc.len = c.len → xc.ctr = 1#32 →
       xc.inp = c.inp → xc.key = c.key → xc.nonce = c.nonce → xc.sp0 = c.A →
       Reach c.base (CryptWr c) u (CryptPost c off t) → Reach c.base (CryptWr c) u Q) :
@@ -143,7 +143,7 @@ theorem crypt_reach_select (c : ACall) (hv : AValid c) (hb : ABuf c) (off : Nat)
     keyF := hv.win hv.keyS 0 176 _ (by show (c.A - BitVec.ofNat 32 176).toNat = _; omega) (by omega)
     nonceF := hv.win hv.nonceS 0 176 _ (by show (c.A - BitVec.ofNat 32 176).toNat = _; omega) (by omega)
     code := hv.codeAt_of umem }
-  have xe : ChaChaSetup.Entry xc u := {
+  have xe : ChaCha20Setup.Entry xc u := {
     regs := rfl, mem := rfl, pc := u15
     sp := by show u.regs 13 = c.A; rw [ur 13 (by decide) (by decide), cr 13 (by decide) (by decide) (by decide)
       (by decide) (by decide), t13]
@@ -155,16 +155,16 @@ theorem crypt_reach_select (c : ACall) (hv : AValid c) (hb : ABuf c) (off : Nat)
     argC := by show read32 u.mem (c.A + 4#32) = _; rw [um, cm]; exact M0Crypto.Armv6M.read32_write32_same _ _ _ }
   have hrest : Reach c.base (CryptWr c) u (CryptPost c off t) := by
     have hlr : (xc.regs0 14).getLsbD 0 = true := by show (u.regs 14).getLsbD 0 = true; rw [u14]; exact lr_odd _
-    have wr : ∀ y, ChaChaXor.WrOk xc y → CryptWr c y := by
+    have wr : ∀ y, ChaCha20Xor.WrOk xc y → CryptWr c y := by
       rintro y (⟨o, ho, rfl⟩ | ⟨_, hy⟩)
       · exact .inl (swr_lo c.A o ho)
       · exact .inr hy
-    apply ((ChaChaXor.xor_reach xc xv u xe hlr).monoW wr).mono
+    apply ((ChaCha20Xor.xor_reach xc xv u xe hlr).monoW wr).mono
     rintro v ⟨vpc, hr⟩
-    have hok : M0Crypto.Spec.AEAD.counterOk xc.ctr.toNat xc.len.toNat = true := by
-      show M0Crypto.Spec.AEAD.counterOk (1#32 : Word).toNat c.len.toNat = true
+    have hok : M0Crypto.Spec.Aead.counterOk xc.ctr.toNat xc.len.toNat = true := by
+      show M0Crypto.Spec.Aead.counterOk (1#32 : Word).toNat c.len.toNat = true
       have := c.len.isLt
-      simp [M0Crypto.Spec.AEAD.counterOk]; omega
+      simp [M0Crypto.Spec.Aead.counterOk]; omega
     have outD := hv.win hb.outS 0 176 (c.A - BitVec.ofNat 32 176) (by omega) (by omega)
     refine ⟨?_, hr.sp, ?_, ?_, ?_⟩
     · rw [vpc]; show u.regs 14 &&& ~~~1#32 = _
@@ -180,18 +180,18 @@ theorem crypt_reach_select (c : ACall) (hv : AValid c) (hb : ABuf c) (off : Nat)
       apply List.ext_getElem?
       intro j
       by_cases hj : j < c.len.toNat
-      · rw [ChaChaOut.bytesAt_get _ _ _ _ hj]
-        have hS : ChaChaXor.OutS xc (c.out + BitVec.ofNat 32 j) := fun o ho =>
+      · rw [ChaCha20Output.bytesAt_get _ _ _ _ hj]
+        have hS : ChaCha20Xor.OutS xc (c.out + BitVec.ofNat 32 j) := fun o ho =>
           ne_of_disj outD.1 outD.2.1 outD.2.2 hj ho
         rw [hr.mem _ hS, Ctx.oidx, show xc.out = c.out from rfl, sub_off _ _ (by have := c.len.isLt; omega),
           if_pos ⟨hok, hj⟩]
         show some ((chacha20 xc.keyB (1#32 : Word).toNat xc.nonceB xc.msg)[j]!) = _
         rw [kB, nB, mB, show (1#32 : Word).toNat = 1 from rfl]
         have hl : j < (chacha20 c.keyB 1 c.nonceB c.ptB).length := by
-          rw [ChaChaSpec.chacha20_length, ACall.ptB, bytesAt_length]; exact hj
+          rw [ChaCha20Spec.chacha20_length, ACall.ptB, bytesAt_length]; exact hj
         rw [List.getElem!_eq_getElem?_getD, List.getElem?_eq_getElem hl]; rfl
       · rw [List.getElem?_eq_none (by rw [bytesAt_length]; omega), List.getElem?_eq_none (by
-          rw [ChaChaSpec.chacha20_length, ACall.ptB, bytesAt_length]; omega)]
+          rw [ChaCha20Spec.chacha20_length, ACall.ptB, bytesAt_length]; omega)]
     · intro y h1 h2 h3
       rw [hr.mem y h1, if_neg (fun h => h3 h.2)]
       show u.mem y = _
@@ -208,7 +208,7 @@ theorem crypt_reaches_chacha (c : ACall) (hv : AValid c) (hb : ABuf c) (off : Na
     (thi : Hi c t.mem) (tn : read32 t.mem c.A = c.nonce)
     (tout : ∀ y, ¬ SWr c.A y → t.mem y = c.m0 y) :
     Reach c.base (CryptWr c) t (fun u => ∃ xc : Ctx,
-      Valid xc ∧ ChaChaSetup.Entry xc u ∧ xc.base = c.base ∧ xc.out = c.out ∧
+      Valid xc ∧ ChaCha20Setup.Entry xc u ∧ xc.base = c.base ∧ xc.out = c.out ∧
       xc.len = c.len ∧ xc.ctr = 1#32 ∧ xc.inp = c.inp ∧ xc.key = c.key ∧
       xc.nonce = c.nonce ∧ xc.sp0 = c.A ∧ Reach c.base (CryptWr c) u (CryptPost c off t)) := by
   apply crypt_reach_select c hv hb off i hseq hbl ht ho hox t tpc t13 thi tn tout

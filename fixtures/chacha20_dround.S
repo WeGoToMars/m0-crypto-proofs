@@ -1,5 +1,5 @@
 /*
- * ChaCha20 double round (column round + diagonal round), readable version 1.
+ * ChaCha20 double round (column round + diagonal round).
  * Proof fixture (not part of the library); see README.md.
  *
  * Straight-line FRAGMENT, not an AAPCS function: no return instruction. It will be

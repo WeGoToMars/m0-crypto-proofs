@@ -59,9 +59,9 @@ theorem litImm_target (off pool : Nat) (hp : pool % 4 = 0) (hle : (off + 4) / 4 
     (off + 4) / 4 * 4 + litImm off pool * 4 = pool := by
   unfold litImm; omega
 
-/-! Poly1305 blocks frame (`PolyBlocksCode` uses it). It is defined here, below `PolyMac`, so
-that `PolyMac`'s column-end lemma can state its frame bound by name without an import cycle. -/
-namespace PolyBlocks
+/-! Poly1305 blocks frame (`Poly1305BlocksCode` uses it). It is defined here, below `Poly1305Mac`, so
+that `Poly1305Mac`'s column-end lemma can state its frame bound by name without an import cycle. -/
+namespace Poly1305Blocks
 
 /-- Frame size in words. The ChaCha save area starts `frameBytes` above `fp`. -/
 def frameWords : Nat := 7
@@ -69,6 +69,6 @@ def frameWords : Nat := 7
 /-- Frame size in bytes: `frameWords` words. -/
 def frameBytes : Nat := 4 * frameWords
 
-end PolyBlocks
+end Poly1305Blocks
 
 end M0Crypto.Release

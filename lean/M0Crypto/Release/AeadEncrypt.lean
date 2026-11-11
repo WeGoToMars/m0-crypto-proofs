@@ -7,7 +7,7 @@ namespace M0Crypto.Release.Aead
 open M0Crypto.Armv6M (Word Reg State Mem read32)
 open M0Crypto.Thumb
 open M0Crypto.Release.Frame
-open M0Crypto.Spec.AEAD (pad16 macData encrypt chacha20)
+open M0Crypto.Spec.Aead (pad16 macData encrypt chacha20)
 
 /-- Ciphertext and tag, erasure and C ABI for encryption. -/
 structure EncryptResult (c : ACall) (t : State) : Prop extends RetPost c 0#32 t where
@@ -77,7 +77,7 @@ theorem encrypt_reach (c : ACall) (hv : AValid c) (hb : ABuf c) (s : State)
   have by' := hx.body.lengths hv hy (fun y h => .inl (macWr_swr _ y h))
   have plen : PInv c.A u.mem (macData c.aadB ct) y.mem := by
     have h := hy.inv
-    have hl : ct.length = c.len.toNat := by rw [ChaChaSpec.chacha20_length, ACall.ptB, bytesAt_length]
+    have hl : ct.length = c.len.toNat := by rw [ChaCha20Spec.chacha20_length, ACall.ptB, bytesAt_length]
     simpa only [macData, ACall.aadB, bytesAt_length, lengthBlock, hl, List.append_assoc] using h
   have ctY : Ctx.bytesAt y.mem c.out c.len.toNat = ct := by
     rw [← ctX]
@@ -117,8 +117,8 @@ theorem encrypt_reach (c : ACall) (hv : AValid c) (hb : ABuf c) (s : State)
   · change Ctx.bytesAt t.mem c.out c.len.toNat = ct
     rw [tm, ← ctZ]
     exact bytesAt_congr (fun j hj => hq.frame _ (fun h => hv.not_swr hb.outStack hj (clearWr_swr _ _ h)))
-  · change Ctx.bytesAt t.mem c.tag 16 = M0Crypto.Spec.AEAD.poly1305
-      (M0Crypto.Spec.AEAD.polyKey c.keyB c.nonceB) (macData c.aadB ct)
+  · change Ctx.bytesAt t.mem c.tag 16 = M0Crypto.Spec.Aead.poly1305
+      (M0Crypto.Spec.Aead.polyKey c.keyB c.nonceB) (macData c.aadB ct)
     rw [tm, ← hz.tagBytes]
     exact bytesAt_congr (fun j hj => hq.frame _ (fun h => hv.not_swr hb.tagStack hj (clearWr_swr _ _ h)))
   · intro a ha

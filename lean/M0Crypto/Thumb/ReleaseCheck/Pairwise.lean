@@ -1,7 +1,7 @@
 import M0Crypto.Thumb.ReleaseCheck.Cases
 
 namespace M0Crypto.Thumb.ReleaseCheck
-open M0Crypto.Spec.AEAD M0Crypto.Artifacts
+open M0Crypto.Spec.Aead M0Crypto.Artifacts
 
 /-! ## Pairwise constant-time checks -/
 

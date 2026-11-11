@@ -1,4 +1,4 @@
-import M0Crypto.Release.AeadWin
+import M0Crypto.Release.AeadStackWindow
 set_option linter.unusedSimpArgs false
 set_option maxRecDepth 100000
 set_option maxHeartbeats 4000000
@@ -13,8 +13,8 @@ namespace M0Crypto.Release.Aead
 open M0Crypto.Armv6M (Word Reg State Mem read32 write32 slot)
 open M0Crypto.Thumb
 open M0Crypto.Release.Frame
-open M0Crypto.Release.PolyBlocks (BCtx BValid BEntry BResult accAt keyAt keyAtOK wordAt)
-open M0Crypto.Spec.AEAD (p)
+open M0Crypto.Release.Poly1305Blocks (BCtx BValid BEntry BResult accAt keyAt keyAtOK wordAt)
+open M0Crypto.Spec.Aead (p)
 
 namespace MacEnv
 variable {base A d n : Word} {M : Mem} (he : MacEnv base A d n M)
@@ -26,7 +26,7 @@ theorem key_eq {m1 m2 : Mem} (hf : ∀ y, ¬ MacWr A y → m1 y = m2 y) :
   rw [he.ctx_word hf 5 (by decide) (by decide), he.ctx_word hf 6 (by decide) (by decide),
     he.ctx_word hf 7 (by decide) (by decide), he.ctx_word hf 8 (by decide) (by decide)]
 
-theorem keyOK {m1 m2 : Mem} (hf : ∀ y, ¬ MacWr A y → m1 y = m2 y) (hk : keyAtOK m2 (A + 8#32)) :
+theorem keyOk {m1 m2 : Mem} (hf : ∀ y, ¬ MacWr A y → m1 y = m2 y) (hk : keyAtOK m2 (A + 8#32)) :
     keyAtOK m1 (A + 8#32) := by
   unfold keyAtOK at hk ⊢
   rw [he.ctx_word hf 5 (by decide) (by decide), he.ctx_word hf 6 (by decide) (by decide),

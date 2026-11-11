@@ -1,7 +1,7 @@
 import M0Crypto.Sym.Core
 
 /-!
-# Approach C, task H2: `Sound` for the ALU forms
+# Symbolic executor: `Sound` for the ALU forms
 
 `sound_dp` covers all ten `DpOp`s; `sound_lslImm` and `sound_lsrImm` cover the immediate
 shifts. Each proof unfolds `symStep`, `Instr.next` and `Instr.exec` down to the

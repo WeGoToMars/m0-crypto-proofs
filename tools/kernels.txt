@@ -1,4 +1,4 @@
 # source-stem  symbol                     Lean artifact module
-chacha20_qr     m0c_chacha20_qr_frag       M0Crypto.Artifacts.ChaCha20QR
-chacha20_dround m0c_chacha20_dround_frag   M0Crypto.Artifacts.ChaCha20DRound
-chacha20_dround_v2 m0c_chacha20_dround_v2_frag M0Crypto.Artifacts.ChaCha20DRoundV2
+chacha20_qr     m0c_chacha20_qr_frag       M0Crypto.Artifacts.ChaCha20QuarterRound
+chacha20_dround m0c_chacha20_dround_frag   M0Crypto.Artifacts.ChaCha20DoubleRound
+chacha20_dround_keep15 m0c_chacha20_dround_keep15_frag M0Crypto.Artifacts.ChaCha20DoubleRoundKeep15

@@ -3,7 +3,7 @@ import M0Crypto.Sym.Block
 
 /-!
 `Reach.symBlock`: `Reach.block` with its two concrete-state side conditions discharged
-by the symbolic checks of `M0Crypto.Sym.Block` (approach C, H7).
+by the symbolic checks of `M0Crypto.Sym.Block`.
 
 The caller supplies the base-register alignments `al` and the write regions `rg`, and
 shows that the regions lie in `Wr` on the segment's entry state. The checks
@@ -36,7 +36,7 @@ theorem Reach.symBlock {s : State} {Q : State → Prop} (hb : base.toNat % 2 = 0
     (M0Crypto.Sym.alignChk_sound al is (M0Crypto.Sym.sound_all hf) s hal ha) hwt hq
 
 /-- The one-entry alignment annotation `[(r, a)]`: `r` is a multiple of `a`. -/
-theorem Reach.alOne {s : State} {r : Reg} {a : Nat} (h : (s.regs r).toNat % a = 0) :
+theorem Reach.aligned_one {s : State} {r : Reg} {a : Nat} (h : (s.regs r).toNat % a = 0) :
     ∀ p ∈ [(r, a)], (s.regs p.1).toNat % p.2 = 0 := by
   intro p hp
   rw [List.mem_singleton] at hp
@@ -44,7 +44,7 @@ theorem Reach.alOne {s : State} {r : Reg} {a : Nat} (h : (s.regs r).toNat % a = 
   exact h
 
 /-- The one-entry write annotation `[(r, k, n)]`: `n` bytes from `regs r + k` are in `Wr`. -/
-theorem Reach.rgOne {s : State} {r : Reg} {k : Word} {n : Nat}
+theorem Reach.region_one {s : State} {r : Reg} {k : Word} {n : Nat}
     (h : ∀ o < n, Wr (s.regs r + k + BitVec.ofNat 32 o)) :
     ∀ p ∈ [(r, k, n)], ∀ o < p.2.2, Wr (s.regs p.1 + p.2.1 + BitVec.ofNat 32 o) := by
   intro p hp

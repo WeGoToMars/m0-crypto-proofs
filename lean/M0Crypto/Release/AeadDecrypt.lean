@@ -8,7 +8,7 @@ namespace M0Crypto.Release.Aead
 open M0Crypto.Armv6M (Word Reg State Mem read32)
 open M0Crypto.Thumb
 open M0Crypto.Release.Frame
-open M0Crypto.Spec.AEAD (pad16 macData chacha20 decrypt poly1305 polyKey)
+open M0Crypto.Spec.Aead (pad16 macData chacha20 decrypt poly1305 polyKey)
 
 def ACall.tagB (c : ACall) := Ctx.bytesAt c.m0 c.tag 16
 def ACall.expected (c : ACall) := poly1305 (polyKey c.keyB c.nonceB) (macData c.aadB c.ptB)
@@ -43,8 +43,8 @@ theorem verdict_effect (s : State) : (execAll verdict s).z=(s.regs 3==0#32) ∧
     simp [verdict, Instr.dsts, Fin.ext_iff, h0, h5]; omega)⟩
   simp [verdict, execAll, Instr.next, Instr.exec, addFlags, M0Crypto.Armv6M.State.setReg,
     M0Crypto.Armv6M.State.setNZ, M0Crypto.Armv6M.State.setNZCV, M0Crypto.Armv6M.State.reg,
-    ChaChaLoop.sub_flags]
-  rw [show (4294967295#32 : Word)= ~~~0#32 from rfl, ChaChaLoop.sub_flags, BitVec.sub_zero]
+    ChaCha20Loop.sub_flags]
+  rw [show (4294967295#32 : Word)= ~~~0#32 from rfl, ChaCha20Loop.sub_flags, BitVec.sub_zero]
 
 def statusCode (bad : Bool) : List Instr := if bad then reject else accept
 
@@ -66,7 +66,7 @@ theorem status_reach (c : ACall) (hv : AValid c) (Wr : Word → Prop) (bad : Boo
   obtain ⟨e4, em, er⟩ := status_effect bad s
   apply Reach.block (by have := hv.base4; omega) (statusCode bad) off hp ho hat
     (by cases bad <;> rfl) (by cases bad <;> simp [statusCode, reject, accept, alignedAll, Instr.accesses])
-    (ChaChaBlock.noWrites _ _ (by cases bad <;> rfl) _)
+    (ChaCha20Block.noWrites _ _ (by cases bad <;> rfl) _)
   apply Reach.done
   refine ⟨?_, e4, em, er⟩
   rw [execAll_pc _ _ (by cases bad <;> rfl), hp, ofNat_add_assoc]
@@ -129,7 +129,7 @@ theorem decrypt_verdict_reaches_crypt (c : ACall) (hv : AValid c) (s : State)
   obtain ⟨spro, blx, scopy, bli, laad, mad, lin, mct, slen, bll, sf, blf, scma, scml, bcml, sv, bcr, scr, blc, sa, bsk, sr, sca, scl, bcl, sepi, pop⟩ := dec_at
   obtain ⟨ez, em, er⟩ := verdict_effect s
   apply Reach.block (by have := hv.base4; omega) verdict decVerdictAt hp (by decide) sv (by decide)
-    (by simp [alignedAll, verdict, Instr.accesses]) (ChaChaBlock.noWrites _ _ (by decide) _)
+    (by simp [alignedAll, verdict, Instr.accesses]) (ChaCha20Block.noWrites _ _ (by decide) _)
   generalize hu : execAll verdict s = u at ez em er
   have up : u.pc = c.base + BitVec.ofNat 32 decRejectBrAt := by
     rw [← hu, execAll_pc _ _ (by decide), hp, ofNat_add_assoc]; rfl
@@ -157,7 +157,7 @@ theorem decrypt_tail (c : ACall) (hv : AValid c) (hb : ABuf c) (s : State)
   obtain ⟨spro, blx, scopy, bli, laad, mad, lin, mct, slen, bll, sf, blf, scma, scml, bcml, sv, bcr, scr, blc, sa, bsk, sr, sca, scl, bcl, sepi, pop⟩ := dec_at
   obtain ⟨ez, em, er⟩ := verdict_effect s
   apply Reach.block (by have := hv.base4; omega) verdict decVerdictAt hp (by decide) sv (by decide)
-    (by simp [alignedAll, verdict, Instr.accesses]) (ChaChaBlock.noWrites _ _ (by decide) _)
+    (by simp [alignedAll, verdict, Instr.accesses]) (ChaCha20Block.noWrites _ _ (by decide) _)
   generalize hu : execAll verdict s=u at ez em er
   have up : u.pc=c.base+BitVec.ofNat 32 decRejectBrAt := by rw [←hu, execAll_pc _ _ (by decide), hp, ofNat_add_assoc]; rfl
   have ub : Body c (SWr c.A) u := h.same em (er 13 (by decide) (by decide))

@@ -2,7 +2,7 @@ import M0Crypto.Armv6M.Decode
 import M0Crypto.Armv6M.Memory
 
 /-!
-Execution semantics for the pilot subset, transcribed from the ARMv6-M ARM
+Execution semantics for the fragment subset, transcribed from the ARMv6-M ARM
 pseudocode (`AddWithCarry`, `Shift_C`, `ROR_C`, and the per-instruction
 operation blocks).
 

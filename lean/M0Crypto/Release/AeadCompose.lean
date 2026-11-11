@@ -6,7 +6,7 @@ namespace M0Crypto.Release.Aead
 open M0Crypto.Armv6M (Word Reg State Mem read32)
 open M0Crypto.Thumb
 open M0Crypto.Release.Frame
-open M0Crypto.Spec.AEAD (pad16)
+open M0Crypto.Spec.Aead (pad16)
 
 structure PhasePost (c : ACall) (Wr : Word → Prop) (e : Nat) (ti : Mem)
     (msg : List M0Crypto.Spec.ChaCha20.Byte) (s t : State) : Prop where
@@ -40,7 +40,7 @@ theorem mac_phase (c : ACall) (hv : AValid c) (Wr : Word → Prop) (off : Nat) (
   have he := hv.macEnv hd tb.code
   have pi : PInv c.A ti msg t.mem := by rw [tm]; exact hpi
   apply ((mac_padded c.base c.A d n t.mem (off + seqSize is) i1 i2 hat (by omega) hx he t tp tb.sp
-    t4 t5 rfl pi.keyOK pi.bound).monoW hw).mono
+    t4 t5 rfl pi.keyOk pi.bound).monoW hw).mono
   intro z hz
   refine ⟨hz.pc, tb.mac he hz hw, ?_, fun y hy => (hz.frame y hy).trans (congrFun tm y)⟩
   have pz := pi.mac he hz
@@ -71,8 +71,8 @@ theorem finish_phase (c : ACall) (hv : AValid c) (hb : ABuf c) (dec : Bool) (off
     (ho : off % 2 = 0) (hx : off + seqSize (finArgs dec) + blSize ≤ Artifacts.Release.size) (s : State)
     (hp : s.pc = c.base + BitVec.ofNat 32 off) (hs : s.regs 13 = c.A) (hh : Hi c s.mem)
     (hc : CodeAt s.mem c.base B)
-    (ic : PolyInit.ICtx) (ti : State) (hi : PolyInit.IResult ic ti) (hctx : ic.ctx = c.A+8#32)
-    (hk : Ctx.bytesAt ic.m0 ic.key 32 = M0Crypto.Spec.AEAD.polyKey c.keyB c.nonceB)
+    (ic : Poly1305Init.ICtx) (ti : State) (hi : Poly1305Init.IResult ic ti) (hctx : ic.ctx = c.A+8#32)
+    (hk : Ctx.bytesAt ic.m0 ic.key 32 = M0Crypto.Spec.Aead.polyKey c.keyB c.nonceB)
     (msg : List M0Crypto.Spec.ChaCha20.Byte) (hpi : PInv c.A ti.mem msg s.mem) :
     Reach c.base (FinishWr c.A (if dec then c.A+72#32 else c.tag)) s
       (FinishPost c (if dec then c.A+72#32 else c.tag) (off + seqSize (finArgs dec)) msg s) := by
@@ -84,7 +84,7 @@ theorem finish_phase (c : ACall) (hv : AValid c) (hb : ABuf c) (dec : Bool) (off
     (by cases dec <;> rfl)
     (alignedAll_sp _ _ (sp_al (by cases dec <;> rfl))
       (by rw [hs, hv.A_toNat]; have := hv.sp8; have := hv.spLo; omega))
-    (ChaChaBlock.noWrites _ _ (by cases dec <;> rfl) _)
+    (ChaCha20Block.noWrites _ _ (by cases dec <;> rfl) _)
   generalize hu : execAll (finArgs dec) s = u at e0 e1 em er
   have up : u.pc = c.base + BitVec.ofNat 32 (off + seqSize (finArgs dec)) := by
     rw [← hu, execAll_pc _ _ (by cases dec <;> rfl), hp, ofNat_add_assoc]

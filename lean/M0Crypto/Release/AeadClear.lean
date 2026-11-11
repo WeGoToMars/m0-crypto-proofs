@@ -41,9 +41,9 @@ theorem clrL_effect (s : State) :
     (by simp [clrL, Instr.dsts, Fin.ext_iff, MemOp.isLoad, h1, h2])⟩ <;>
     simp [clrL, execAll, Instr.next, Instr.exec, M0Crypto.Armv6M.State.setReg, M0Crypto.Armv6M.State.setNZ,
       M0Crypto.Armv6M.State.setNZCV, M0Crypto.Armv6M.State.reg,
-      Instr.exec.memOp, addFlags, ChaChaOut.add_flags, ChaChaLoop.sub_flags, ChaChaLoop.sub_flags (s.regs 2) 1#32]
+      Instr.exec.memOp, addFlags, ChaCha20Output.add_flags, ChaCha20Loop.sub_flags, ChaCha20Loop.sub_flags (s.regs 2) 1#32]
 
-  all_goals rw [show (4294967294#32 : Word) = ~~~1#32 from rfl, ChaChaLoop.sub_flags]
+  all_goals rw [show (4294967294#32 : Word) = ~~~1#32 from rfl, ChaCha20Loop.sub_flags]
 
 theorem clrA_size : seqSize clrA = 6 := by decide
 
@@ -146,7 +146,7 @@ theorem clear_reach (base A : Word) (off : Nat)
   obtain ⟨e0, e1, e2, em, er⟩ := clrA_effect s
   have hAs := clrA_size
   apply Reach.block (by omega) clrA off hp ho hA (by decide)
-    (by simp [alignedAll, clrA, Instr.accesses]) (ChaChaBlock.noWrites _ _ (by decide) _)
+    (by simp [alignedAll, clrA, Instr.accesses]) (ChaCha20Block.noWrites _ _ (by decide) _)
   generalize hu : execAll clrA s = u at e0 e1 e2 em er
   have up : u.pc = base + BitVec.ofNat 32 (off + seqSize clrA) := by
     rw [← hu, execAll_pc _ _ (by decide), hp, ofNat_add_assoc]

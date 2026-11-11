@@ -16,8 +16,8 @@ namespace M0Crypto.Release.Aead
 open M0Crypto.Armv6M (Word Reg State Mem read32 slot)
 open M0Crypto.Thumb
 open M0Crypto.Release.Frame
-open M0Crypto.Release.PolyBlocks (BCtx BValid BEntry BResult accAt keyAt keyAtOK)
-open M0Crypto.Spec.AEAD (p)
+open M0Crypto.Release.Poly1305Blocks (BCtx BValid BEntry BResult accAt keyAt keyAtOK)
+open M0Crypto.Spec.Aead (p)
 
 /-- Bytes `MAC_PADDED` may write: the 64 bytes below `A` used by `blocks`, the five
 accumulator words of `CTX`, and the first 16 bytes of `BLK`. -/
@@ -104,7 +104,7 @@ structure MacMid (base A d n : Word) (M : Mem) (m : Nat) (s t : State) : Prop wh
   r5 : t.regs 5 = n
   hi : ∀ r : Reg, 7 ≤ r.val → r.val < 12 → t.regs r = s.regs r
   frame : ∀ y, ¬ MacWr A y → t.mem y = M y
-  acc : accAt t.mem (A + 8#32) % p = PolySpec.polyBlocks (keyAt M (A + 8#32)) 1 (accAt M (A + 8#32) % p)
+  acc : accAt t.mem (A + 8#32) % p = Poly1305Spec.polyBlocks (keyAt M (A + 8#32)) 1 (accAt M (A + 8#32) % p)
     (Ctx.bytesAt M d (16 * (n.toNat / 16)))
   bound : accAt t.mem (A + 8#32) < 5 * 2 ^ 128
 
@@ -164,7 +164,7 @@ theorem mac_head (base A d n : Word) (M : Mem) (m : Nat) (i1 i2 : BitVec 25) (ha
       by rw [setReg_ne _ _ _ _ (by decide), ar _ (by decide) (by decide), h5],
       fun r a b => by rw [setReg_ne _ _ _ _ (by rintro rfl; exact absurd b (by decide)), ar _ (by intro e; omega) (by omega)],
       fun y _ => by rw [setReg_mem, am, hmem], ?_, ?_⟩
-    · rw [setReg_mem, am, hmem, hn, Nat.mul_zero]; exact (PolySpec.polyBlocks_nil _ _ _).symm
+    · rw [setReg_mem, am, hmem, hn, Nat.mul_zero]; exact (Poly1305Spec.polyBlocks_nil _ _ _).symm
     · rw [setReg_mem, am, hmem]; exact hh
   · intro hz
     have hz' : s.regs 5 >>> 4 ≠ 0#32 := by simpa [condPassed, az] using hz
@@ -219,7 +219,7 @@ theorem mac_head (base A d n : Word) (M : Mem) (m : Nat) (i1 i2 : BitVec 25) (ha
       u0, u1, u2, u3⟩
     have hlr : (c.regs0 14).getLsbD 0 = true := by show (u.regs 14).getLsbD 0 = true; rw [u14]; exact lr_odd _
     apply Reach.bind
-    apply ((PolyBlocks.blocks_reach c hv u hen hlr).monoW (bwr_mac A c rfl rfl)).mono
+    apply ((Poly1305Blocks.blocks_reach c hv u hen hlr).monoW (bwr_mac A c rfl rfl)).mono
     intro t ht
     apply Reach.done
     have hret : t.pc = base + BitVec.ofNat 32 (m + macCOff) := by
@@ -227,7 +227,7 @@ theorem mac_head (base A d n : Word) (M : Mem) (m : Nat) (i1 i2 : BitVec 25) (ha
       have hke : (m + macBlOff + 4) % 2 = 0 := by have := macBlOff_even; omega
       rw [ht.pc]; show u.regs 14 &&& ~~~1#32 = _
       rw [u14, lr_mask _ (even_off base he.base4 (m + macBlOff + 4) hke), hcm]
-    obtain ⟨acc, bound⟩ := PolyBlocks.result_blocks_correct c hv u t hen ht (by show keyAtOK u.mem (A + 8#32); rw [um]; exact hk)
+    obtain ⟨acc, bound⟩ := Poly1305Blocks.result_blocks_correct c hv u t hen ht (by show keyAtOK u.mem (A + 8#32); rw [um]; exact hk)
       (by show accAt u.mem (A + 8#32) < _; rw [um]; exact hh)
       (by show (1#32 : Word).toNat ≤ 1; decide)
     refine ⟨hret, ht.sp, ?_, ?_, ?_, ?_, ?_, bound⟩
@@ -239,9 +239,9 @@ theorem mac_head (base A d n : Word) (M : Mem) (m : Nat) (i1 i2 : BitVec 25) (ha
       rw [ht.regs r (by omega) b]
       exact us r (by omega) (by omega) (by omega) (by omega) (by omega)
     · intro y hy
-      rw [PolyBlocks.result_frame c hv u t hen hlr ht y (fun h => hy (bwr_mac A c rfl rfl y h))]
+      rw [Poly1305Blocks.result_frame c hv u t hen hlr ht y (fun h => hy (bwr_mac A c rfl rfl y h))]
       show u.mem y = M y; rw [um]
-    · have acc' : accAt t.mem (A + 8#32) % p = PolySpec.polyBlocks (keyAt u.mem (A + 8#32)) 1
+    · have acc' : accAt t.mem (A + 8#32) % p = Poly1305Spec.polyBlocks (keyAt u.mem (A + 8#32)) 1
           (accAt u.mem (A + 8#32) % p) (Ctx.bytesAt u.mem d (16 * (n >>> 4).toNat)) := acc
       rw [um, hcnt] at acc'; exact acc'
 

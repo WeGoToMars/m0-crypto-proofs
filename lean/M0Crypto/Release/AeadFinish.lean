@@ -8,7 +8,7 @@ namespace M0Crypto.Release.Aead
 open M0Crypto.Armv6M (Word Reg State Mem read32)
 open M0Crypto.Thumb
 open M0Crypto.Release.Frame
-open M0Crypto.Release.PolyFinish (FCtx FValid FEntry)
+open M0Crypto.Release.Poly1305Finish (FCtx FValid FEntry)
 
 /-- Writes of finish: its saved registers below A and the chosen tag destination. -/
 def FinishWr (A tag y : Word) : Prop := InFrame (A - 20#32) 5 y ∨ InFrame tag 4 y
@@ -33,8 +33,8 @@ structure FinishPost (c : ACall) (tag : Word) (off : Nat) (msg : List M0Crypto.S
   sp : t.regs 13 = c.A
   hi : ∀ r : Reg, 4 ≤ r.val → r.val < 12 → t.regs r = s.regs r
   frame : ∀ y, ¬ FinishWr c.A tag y → t.mem y = s.mem y
-  tagBytes : Ctx.bytesAt t.mem tag 16 = M0Crypto.Spec.AEAD.poly1305
-    (M0Crypto.Spec.AEAD.polyKey c.keyB c.nonceB) msg
+  tagBytes : Ctx.bytesAt t.mem tag 16 = M0Crypto.Spec.Aead.poly1305
+    (M0Crypto.Spec.Aead.polyKey c.keyB c.nonceB) msg
 
 /-- From the `bl finish` instruction, refine the accumulated message to the RFC tag.
 The tag destination is either the caller tag or the stack's expected-tag block. -/
@@ -44,8 +44,8 @@ theorem finish_call (c : ACall) (hv : AValid c) (tag : Word) (off : Nat) (i : Bi
     (s : State) (hpc : s.pc = c.base + BitVec.ofNat 32 off) (h13 : s.regs 13 = c.A)
     (h0 : s.regs 0 = c.A + 8#32) (h1 : s.regs 1 = tag) (hc : CodeAt s.mem c.base B)
     (hcodeT : Disj c.base Artifacts.Release.size tag 16) (htagS : Disj tag 16 (c.A - 20#32) 20)
-    (ic : PolyInit.ICtx) (ti : State) (hi : PolyInit.IResult ic ti) (hctx : ic.ctx = c.A + 8#32)
-    (hk : Ctx.bytesAt ic.m0 ic.key 32 = M0Crypto.Spec.AEAD.polyKey c.keyB c.nonceB)
+    (ic : Poly1305Init.ICtx) (ti : State) (hi : Poly1305Init.IResult ic ti) (hctx : ic.ctx = c.A + 8#32)
+    (hk : Ctx.bytesAt ic.m0 ic.key 32 = M0Crypto.Spec.Aead.polyKey c.keyB c.nonceB)
     (msg : List M0Crypto.Spec.ChaCha20.Byte) (hp : PInv c.A ti.mem msg s.mem) :
     Reach c.base (FinishWr c.A tag) s (FinishPost c tag off msg s) := by
   have hb2 : c.base.toNat % 2 = 0 := by have := hv.base4; omega
@@ -77,7 +77,7 @@ theorem finish_call (c : ACall) (hv : AValid c) (tag : Word) (off : Nat) (i : Bi
     by change x.regs 13 = c.A; rw [xr 13 (by decide) (by decide), h13], by change x.regs 0 = c.A + 8#32; rw [xr 0 (by decide) (by decide), h0],
     by change x.regs 1 = tag; rw [xr 1 (by decide) (by decide), h1]⟩
   have hlr : (fc.regs0 14).getLsbD 0 = true := by show (x.regs 14).getLsbD 0 = true; rw [x14]; exact lr_odd _
-  apply (PolyFinish.finish_reach fc fv x fe hlr).mono
+  apply (Poly1305Finish.finish_reach fc fv x fe hlr).mono
   intro t ht'
   refine ⟨?_, ht'.sp, ?_, ?_, ?_⟩
   · rw [ht'.ret]; show x.regs 14 &&& ~~~1#32 = _
@@ -86,16 +86,16 @@ theorem finish_call (c : ACall) (hv : AValid c) (tag : Word) (off : Nat) (i : Bi
     rw [ht'.callee r a b]; show x.regs r = _
     rw [xr r (by omega) (by omega)]
   · intro y hy
-    rw [PolyFinish.result_frame fc x t fe ht' y hy]; exact congrFun xm y
-  · have hh : fc.acc < 2 * M0Crypto.Spec.AEAD.p := by
-      rw [PolyContext.finish_acc]; change PolyBlocks.accAt x.mem (c.A + 8#32) < _
-      rw [xm]; exact PolyContext.finish_bound _ hp.bound
-    have tagval := PolyFinish.result_tag fc fv x t fe ht' hh
-    rw [PolyContext.finish_acc, PolyContext.finish_pad] at tagval
-    change Ctx.bytesAt t.mem tag 16 = M0Crypto.Spec.AEAD.leBytes 16
-      (PolyBlocks.accAt x.mem (c.A + 8#32) % _ + PolyContext.padAt x.mem (c.A + 8#32)) at tagval
+    rw [Poly1305Finish.result_frame fc x t fe ht' y hy]; exact congrFun xm y
+  · have hh : fc.acc < 2 * M0Crypto.Spec.Aead.p := by
+      rw [Poly1305Context.finish_acc]; change Poly1305Blocks.accAt x.mem (c.A + 8#32) < _
+      rw [xm]; exact Poly1305Context.finish_bound _ hp.bound
+    have tagval := Poly1305Finish.result_tag fc fv x t fe ht' hh
+    rw [Poly1305Context.finish_acc, Poly1305Context.finish_pad] at tagval
+    change Ctx.bytesAt t.mem tag 16 = M0Crypto.Spec.Aead.leBytes 16
+      (Poly1305Blocks.accAt x.mem (c.A + 8#32) % _ + Poly1305Context.padAt x.mem (c.A + 8#32)) at tagval
     rw [xm] at tagval
-    rw [tagval, ← hctx, PolyContext.poly1305_chain ic ti hi s.mem msg hp.len
+    rw [tagval, ← hctx, Poly1305Context.poly1305_chain ic ti hi s.mem msg hp.len
       (by rw [hctx]; exact hp.pad) (by rw [hctx]; exact hp.acc), hk]
 
 end M0Crypto.Release.Aead

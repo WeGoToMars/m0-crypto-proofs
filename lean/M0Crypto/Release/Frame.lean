@@ -1,6 +1,6 @@
 import M0Crypto.Release.Reach
-import M0Crypto.Release.ChaChaSpec
-import M0Crypto.Release.ChaChaLayout
+import M0Crypto.Release.ChaCha20Spec
+import M0Crypto.Release.ChaCha20Layout
 
 set_option linter.unusedSimpArgs false
 
@@ -18,8 +18,8 @@ namespace M0Crypto.Release.Frame
 open M0Crypto.Armv6M (Word Reg LowReg State Mem read32 write32 slot)
 open M0Crypto.Thumb
 open M0Crypto.Spec.ChaCha20 (Byte initState)
-open M0Crypto.Spec.AEAD (chacha20)
-open M0Crypto.Release.ChaChaLayout (chStackBytes chFrameBytes chFrameWords slotJ slotLen slotOutp slotInp)
+open M0Crypto.Spec.Aead (chacha20)
+open M0Crypto.Release.ChaCha20Layout (chStackBytes chFrameBytes chFrameWords slotJ slotLen slotOutp slotInp)
 
 /-- A stack-relative word store advances the PC and writes its selected slot. -/
 theorem strSp_next (t : State) (src : LowReg) (k : Nat) (hk : k < 256) :
@@ -409,7 +409,7 @@ structure Valid (c : Ctx) : Prop where
 
 /-- State at `.Lblock` (offset `bpreOff`) before block `k`. -/
 structure BlockInv (c : Ctx) (k : Nat) (t : State) : Prop where
-  pc : t.pc = c.base + BitVec.ofNat 32 M0Crypto.Release.ChaChaLayout.bpreOff
+  pc : t.pc = c.base + BitVec.ofNat 32 M0Crypto.Release.ChaCha20Layout.bpreOff
   sp : t.regs 13 = c.fp
   j : ∀ i < 16, c.fw t (slotJ + i) = c.J k i
   len : c.fw t slotLen = c.len - BitVec.ofNat 32 (64 * k)
@@ -417,6 +417,24 @@ structure BlockInv (c : Ctx) (k : Nat) (t : State) : Prop where
   inp : c.fw t slotInp = c.inp + BitVec.ofNat 32 (64 * k)
   mem : c.MemOk (64 * k) t.mem
   lt : 64 * k < c.len.toNat
-  ok : M0Crypto.Spec.AEAD.counterOk c.ctr.toNat c.len.toNat = true
+  ok : M0Crypto.Spec.Aead.counterOk c.ctr.toNat c.len.toNat = true
+
+/-! ## Saved registers and register-list helpers -/
+
+/-- Saved register words at slots 35..43: r8-r11, r4-r7, LR. -/
+def saved (r : Reg → Word) (i : Nat) : Word :=
+  match i with
+  | 0 => r 8 | 1 => r 9 | 2 => r 10 | 3 => r 11
+  | 4 => r 4 | 5 => r 5 | 6 => r 6 | 7 => r 7 | _ => r 14
+
+theorem listRegs_f0 : listRegs 0xf0 = [4, 5, 6, 7] := by decide
+
+theorem listRegs_240 : listRegs 240#8 = [4, 5, 6, 7] := by decide
+
+theorem bitCount_f0 : bitCount 0xf0 = 4 := by decide
+
+theorem four_eq : (4#32 : Word) = BitVec.ofNat 32 4 := rfl
+
+theorem slot_eq (fp : Word) (i : Nat) : slot fp i = fp + BitVec.ofNat 32 (4 * i) := rfl
 
 end M0Crypto.Release.Frame
