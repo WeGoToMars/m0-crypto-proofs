@@ -12,7 +12,6 @@ namespace M0Crypto.Release.Poly1305Blocks
 open M0Crypto.Armv6M (Word Reg LowReg State Mem read32 write32 slot)
 open M0Crypto.Thumb
 open M0Crypto.Release.Frame
-open M0Crypto.Release.Frame (saved listRegs_f0 listRegs_240 bitCount_f0)
 
 attribute [local simp] M0Crypto.Proofs.toReg_0 M0Crypto.Proofs.toReg_1 M0Crypto.Proofs.toReg_2
   M0Crypto.Proofs.toReg_3 M0Crypto.Proofs.toReg_4 M0Crypto.Proofs.toReg_5
@@ -68,11 +67,13 @@ theorem popAt_eq : popAt = epilogueAt + seqSize epilogue := by
 
 theorem blocks_pop_at : instrAt B popAt = some (.pop 0xf0 true) := by decide +kernel
 
-theorem blocks_ret (c : BCtx) (hv : BValid c) (Wr : Word → Prop) (s : State)
+theorem blocks_ret_g (c : BCtx) (hv : BValid c) {Pn : Word → Prop} (Wr : Word → Prop) (s : State)
+    (hrE : InRegion Pn c.base epilogueAt (seqSize epilogue))
+    (hrP : Pn (c.base + BitVec.ofNat 32 popAt))
     (hpc : s.pc = c.base + BitVec.ofNat 32 epilogueAt) (hsp : s.regs 13 = c.fp)
     (hsv : ∀ i < 9, read32 s.mem (slot c.fp (7 + i)) = saved c.regs0 i)
     (hlr : (c.regs0 14).getLsbD 0 = true) :
-    Reach c.base Wr s fun t => t.pc = c.regs0 14 &&& ~~~1#32 ∧ t.regs 13 = c.sp0 ∧
+    ReachW c.base Pn Wr s fun t => t.pc = c.regs0 14 &&& ~~~1#32 ∧ t.regs 13 = c.sp0 ∧
       (∀ r : Reg, 4 ≤ r.val → r.val < 12 → t.regs r = c.regs0 r) ∧
       (∀ r : Reg, r.val < 4 ∨ r.val = 12 ∨ r.val = 14 → t.regs r = s.regs r) ∧ t.mem = s.mem := by
   have hb2 : c.base.toNat % 2 = 0 := by have := hv.base4; omega
@@ -83,7 +84,7 @@ theorem blocks_ret (c : BCtx) (hv : BValid c) (Wr : Word → Prop) (s : State)
   have sv3 := sv 3 (by omega); have sv4 := sv 4 (by omega); have sv5 := sv 5 (by omega)
   have sv6 := sv 6 (by omega); have sv7 := sv 7 (by omega); have sv8 := sv 8 (by omega)
   simp only [saved, Nat.mul_zero, Nat.add_zero, Nat.mul_one] at sv0 sv1 sv2 sv3 sv4 sv5 sv6 sv7 sv8
-  apply Reach.block hb2 epilogue epilogueAt hpc (by decide +kernel) epilogue_at (by decide)
+  apply ReachW.block hb2 epilogue epilogueAt hpc (by decide +kernel) epilogue_at (by decide)
   · simp [alignedAll, epilogue, Instr.next, Instr.exec, Instr.accesses, M0Crypto.Armv6M.State.setReg,
       M0Crypto.Armv6M.State.sp, bitCount_f0, listRegs_f0, wordAccesses, List.range_succ, Access.aligned,
       hsp, BitVec.toNat_add, M0Crypto.Armv6M.State.pc]
@@ -92,6 +93,7 @@ theorem blocks_ret (c : BCtx) (hv : BValid c) (Wr : Word → Prop) (s : State)
     simp only [traceAll, epilogue, List.mem_cons, List.not_mem_nil, or_false] at he
     rcases he with rfl | rfl | rfl | rfl | rfl | rfl <;>
       simp [Instr.accesses, wordAccesses] at ha <;> (try obtain ⟨_, _, rfl⟩ := ha) <;> simp_all
+  · exact hrE
   simp only [frameBytes, frameWords, Nat.reduceMul, Nat.reduceAdd] at sv0 sv1 sv2 sv3 sv4 sv5 sv6 sv7 sv8
   have q : ∀ r : Reg, (execAll epilogue s).regs r = (if r = 13 then c.fp + 44#32 else if r = 15 then c.base + BitVec.ofNat 32 popAt
       else if r = 4 then c.regs0 8 else if r = 5 then c.regs0 9 else if r = 6 then c.regs0 10
@@ -135,12 +137,13 @@ theorem blocks_ret (c : BCtx) (hv : BValid c) (Wr : Word → Prop) (s : State)
   have hex' := hex
   simp only [Instr.exec, M0Crypto.Armv6M.State.sp, hsp1, hm, sv8, hlr, ite_true, Except.ok.injEq] at hex'
   subst hex'
-  apply Reach.step hb2 popAt _ t15 (by decide +kernel) blocks_pop_at (by rw [B_len]; decide +kernel)
+  apply ReachW.step hb2 popAt _ t15 (by decide +kernel) blocks_pop_at (by rw [B_len]; decide +kernel)
     (by simp [Instr.accesses, wordAccesses, List.range_succ, Access.aligned, bitCount_f0,
           M0Crypto.Armv6M.State.sp, t13, BitVec.toNat_add]; exact ⟨fun _ _ => by omega, by omega⟩)
     hex (by intro y ⟨a, ha, hw, _⟩; simp [Instr.accesses, wordAccesses] at ha
             obtain ⟨_, _, rfl⟩ := ha; cases hw)
-  apply Reach.done
+    hrP
+  apply ReachS.done
   generalize hF : (((loadRegs (t.setReg 15 (t.pc + BitVec.ofNat 32 (Instr.pop 240 true).size)) (t.regs 13)
       (List.map LowReg.toReg (listRegs 240))).setReg 13 (t.regs 13 + BitVec.ofNat 32 (4 * (bitCount 240 + true.toNat)))).setReg
       15 (c.regs0 14 &&& ~~~1#32)) = F
@@ -177,6 +180,16 @@ theorem blocks_ret (c : BCtx) (hv : BValid c) (Wr : Word → Prop) (s : State)
     rw [qF, q]
     simp only [n4, n5, n6, n7, n8, n9, n10, n11, n13, n15, ite_false]
 
+theorem blocks_ret_w (c : BCtx) (hv : BValid c) (Wr : Word → Prop) (s : State)
+    (hpc : s.pc = c.base + BitVec.ofNat 32 epilogueAt) (hsp : s.regs 13 = c.fp)
+    (hsv : ∀ i < 9, read32 s.mem (slot c.fp (7 + i)) = saved c.regs0 i)
+    (hlr : (c.regs0 14).getLsbD 0 = true) :
+    ReachW c.base (BlkPc c.base) Wr s fun t => t.pc = c.regs0 14 &&& ~~~1#32 ∧ t.regs 13 = c.sp0 ∧
+      (∀ r : Reg, 4 ≤ r.val → r.val < 12 → t.regs r = c.regs0 r) ∧
+      (∀ r : Reg, r.val < 4 ∨ r.val = 12 ∨ r.val = 14 → t.regs r = s.regs r) ∧ t.mem = s.mem :=
+  blocks_ret_g c hv Wr s (inRegion_pcBetween (lo := entryAt) (hi := popAt + 2) (by decide +kernel) (by decide +kernel))
+    ⟨popAt, by decide +kernel, by decide +kernel, rfl⟩ hpc hsp hsv hlr
+
 /-- At the call boundary only h0..h4 of the context are replaced. -/
 def publishMem (s : State) : Mem :=
   storeWords (storeWords s.mem (s.regs 7)
@@ -203,12 +216,13 @@ theorem publish_effect (s : State) :
         List.append_assoc, List.cons_append, List.nil_append, Instr.next, Instr.exec, Instr.exec.memOp, MemOp.width,
         M0Crypto.Armv6M.State.setReg, M0Crypto.Armv6M.State.setNZ, M0Crypto.Armv6M.State.reg]
 
-theorem publish_run {base : Word} (hb : base.toNat % 4 = 0) (s : State)
+theorem publish_run_g {base : Word} {Pn : Word → Prop} (hr : InRegion Pn base publishAt (seqSize publish))
+    (hb : base.toNat % 4 = 0) (s : State)
     (hp : s.pc = base + BitVec.ofNat 32 publishAt)
     (hs : (s.regs 13).toNat % 4 = 0) (hc : (s.regs 7).toNat % 4 = 0) :
-    Reach base (fun y => InFrame (s.regs 13) frameWords y ∨ InFrame (s.regs 7) 5 y) s
+    ReachW base Pn (fun y => InFrame (s.regs 13) frameWords y ∨ InFrame (s.regs 7) 5 y) s
       (fun t => t = execAll publish s) := by
-  apply Reach.block (by omega) publish publishAt hp (by decide +kernel) segments_at.2.2.2.2.2 (by decide)
+  apply ReachW.block (by omega) publish publishAt hp (by decide +kernel) segments_at.2.2.2.2.2 (by decide)
   · simp (config := { decide := true }) [bitCount, listRegs, List.range_succ, alignedAll, publish,
       frameWords, List.range_zero, List.map_append, List.map_cons, List.map_nil,
       List.append_assoc, List.cons_append, List.nil_append, Instr.next, Instr.exec, Instr.exec.memOp, Instr.accesses,
@@ -240,7 +254,15 @@ theorem publish_run {base : Word} (hb : base.toNat % 4 = 0) (s : State)
       | (right; refine ⟨8+k, by omega, ?_⟩; bv_omega)
       | (right; refine ⟨12+k, by omega, ?_⟩; bv_omega)
       | (right; refine ⟨16+k, by omega, ?_⟩; bv_omega)
-  · exact Reach.done rfl
+  · exact hr
+  · exact ReachS.done rfl
+
+theorem publish_run {base : Word} (hb : base.toNat % 4 = 0) (s : State)
+    (hp : s.pc = base + BitVec.ofNat 32 publishAt)
+    (hs : (s.regs 13).toNat % 4 = 0) (hc : (s.regs 7).toNat % 4 = 0) :
+    ReachW base (BlkPc base) (fun y => InFrame (s.regs 13) frameWords y ∨ InFrame (s.regs 7) 5 y) s
+      (fun t => t = execAll publish s) :=
+  publish_run_g (inRegion_pcBetween (lo := entryAt) (hi := popAt + 2) (by decide +kernel) (by decide +kernel)) hb s hp hs hc
 
 theorem mP_saved (c : BCtx) (hv : BValid c) (i : Nat) (hi : i < 9) :
     read32 c.mP (slot c.fp (7 + i)) = saved c.regs0 i := by
@@ -280,12 +302,13 @@ theorem setup_effect (s : State) :
     M0Crypto.Armv6M.State.setReg, M0Crypto.Armv6M.State.setNZ,
     M0Crypto.Armv6M.State.reg, M0Crypto.Armv6M.State.sp, lslC, slot, slotMsg, slotCount]
 
-theorem setup_run {base : Word} (hb : base.toNat % 4 = 0) {Wr : Word → Prop} (s : State)
+theorem setup_run_g {base : Word} {Pn : Word → Prop} (hr : InRegion Pn base setupAt (seqSize setup))
+    (hb : base.toNat % 4 = 0) {Wr : Word → Prop} (s : State)
     (hp : s.pc = base + BitVec.ofNat 32 setupAt)
     (hs : (s.regs 13).toNat % 4 = 0) (hc : (s.regs 0).toNat % 4 = 0)
     (hw : ∀ o < belowPadBytes, Wr (s.regs 13 + BitVec.ofNat 32 o)) :
-    Reach base Wr s (fun t => t = execAll setup s) := by
-  apply Reach.block (by omega) setup setupAt hp (by decide) setup_at (by decide)
+    ReachW base Pn Wr s (fun t => t = execAll setup s) := by
+  apply ReachW.block (by omega) setup setupAt hp (by decide) setup_at (by decide)
   · simp (config := { decide := true }) [bitCount, listRegs, List.range_succ, alignedAll, setup, Instr.next, Instr.exec, Instr.exec.memOp, Instr.accesses,
       MemOp.width, MemOp.isLoad, M0Crypto.Armv6M.State.setReg, M0Crypto.Armv6M.State.setNZ,
       M0Crypto.Armv6M.State.reg, M0Crypto.Armv6M.State.sp, lslC, Access.aligned, BitVec.toNat_add]
@@ -293,7 +316,15 @@ theorem setup_run {base : Word} (hb : base.toNat % 4 = 0) {Wr : Word → Prop} (
   · intro e he y hy
     obtain ⟨o, ho, rfl⟩ := frameWB_writes setup s (show frameWB slotPad setup = true from by decide) e he y hy
     exact hw o ho
-  · exact Reach.done rfl
+  · exact hr
+  · exact ReachS.done rfl
+
+theorem setup_run {base : Word} (hb : base.toNat % 4 = 0) {Wr : Word → Prop} (s : State)
+    (hp : s.pc = base + BitVec.ofNat 32 setupAt)
+    (hs : (s.regs 13).toNat % 4 = 0) (hc : (s.regs 0).toNat % 4 = 0)
+    (hw : ∀ o < belowPadBytes, Wr (s.regs 13 + BitVec.ofNat 32 o)) :
+    ReachW base (BlkPc base) Wr s (fun t => t = execAll setup s) :=
+  setup_run_g (inRegion_pcBetween (lo := entryAt) (hi := popAt + 2) (by decide +kernel) (by decide +kernel)) hb s hp hs hc hw
 
 theorem prologue_effect (c : BCtx) (s : State) (he : BEntry c s) :
     let t := execAll prologue s
@@ -308,12 +339,13 @@ theorem prologue_effect (c : BCtx) (s : State) (he : BEntry c s) :
   change ((M0Crypto.Armv6M.addWithCarry c.count (~~~0#32) true).1 == 0#32) = _
   rw [M0Crypto.Release.sub_flags, BitVec.sub_zero]
 
-theorem prologue_run (c : BCtx) (hv : BValid c) (s : State) (he : BEntry c s) :
-    Reach c.base c.Wr s (fun t => t = execAll prologue s) := by
+theorem prologue_run_g (c : BCtx) {Pn : Word → Prop} (hr : InRegion Pn c.base entryAt (seqSize prologue))
+    (hv : BValid c) (s : State) (he : BEntry c s) :
+    ReachW c.base Pn c.Wr s (fun t => t = execAll prologue s) := by
   have hp : s.pc = c.base + BitVec.ofNat 32 entryAt := by show s.regs 15 = _; rw [he.regs, he.pc]
   have hs : s.regs 13 = c.sp0 := by rw [he.regs, he.sp]
   have hs4 : c.sp0.toNat % 4 = 0 := by have := hv.sp8; omega
-  apply Reach.block (by have := hv.base4; omega) prologue entryAt hp (by decide) prologue_at (by decide)
+  apply ReachW.block (by have := hv.base4; omega) prologue entryAt hp (by decide) prologue_at (by decide)
   · simp (config := { decide := true }) [alignedAll, prologue, Instr.next, Instr.exec, Instr.accesses,
       M0Crypto.Armv6M.State.setReg, M0Crypto.Armv6M.State.sp, wordAccesses,
       bitCount_f0, bitCount, listRegs_f0, listRegs_240, List.range_succ, Access.aligned,
@@ -333,6 +365,20 @@ theorem prologue_run (c : BCtx) (hv : BValid c) (s : State) (he : BEntry c s) :
       first
       | (refine ⟨44 + 4*j + k, by omega, ?_⟩; rw [hy]; simp only [BCtx.fp]; bv_omega)
       | (refine ⟨frameBytes + 4*j + k, by simp only [frameBytes, frameWords]; omega, ?_⟩; rw [hy]; simp only [BCtx.fp, frameBytes, frameWords]; bv_omega)
-  · exact Reach.done rfl
+  · exact hr
+  · exact ReachS.done rfl
+
+theorem prologue_run (c : BCtx) (hv : BValid c) (s : State) (he : BEntry c s) :
+    ReachW c.base (BlkPc c.base) c.Wr s (fun t => t = execAll prologue s) :=
+  prologue_run_g c (inRegion_pcBetween (lo := entryAt) (hi := popAt + 2) (by decide +kernel) (by decide +kernel)) hv s he
+
+theorem blocks_ret (c : BCtx) (hv : BValid c) (Wr : Word → Prop) (s : State)
+    (hpc : s.pc = c.base + BitVec.ofNat 32 epilogueAt) (hsp : s.regs 13 = c.fp)
+    (hsv : ∀ i < 9, read32 s.mem (slot c.fp (7 + i)) = saved c.regs0 i)
+    (hlr : (c.regs0 14).getLsbD 0 = true) :
+    Reach c.base Wr s fun t => t.pc = c.regs0 14 &&& ~~~1#32 ∧ t.regs 13 = c.sp0 ∧
+      (∀ r : Reg, 4 ≤ r.val → r.val < 12 → t.regs r = c.regs0 r) ∧
+      (∀ r : Reg, r.val < 4 ∨ r.val = 12 ∨ r.val = 14 → t.regs r = s.regs r) ∧ t.mem = s.mem :=
+  (blocks_ret_w c hv Wr s hpc hsp hsv hlr).toReach
 
 end M0Crypto.Release.Poly1305Blocks

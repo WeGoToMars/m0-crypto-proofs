@@ -1,5 +1,6 @@
 import M0Crypto.Release.ChaCha20Setup
 import M0Crypto.Release.ChaCha20Layout
+import M0Crypto.Release.ChaCha20Policy
 
 set_option linter.unusedSimpArgs false
 
@@ -21,11 +22,6 @@ open M0Crypto.Spec.ChaCha20 (wordOfBytes)
 set_option maxRecDepth 100000
 
 /-! ## Single stores and loads -/
-
-theorem strSp_next (t : State) (src : LowReg) (k : Nat) (hk : k < 256) :
-    (Instr.strSp src (BitVec.ofNat 8 k)).next t =
-      { t.setReg 15 (t.pc + 2#32) with mem := write32 t.mem (slot (t.regs 13) k) (t.regs src.toReg) } :=
-  Frame.strSp_next t src k hk
 
 /-- A store chunk: register-only code ending in `str r0, [sp, #4k]`. -/
 theorem store_effect (t : State) (is : List Instr) (k : Nat) (hk : k < 256)
@@ -87,6 +83,17 @@ theorem stride_even (base i : Nat) (hb : base % 2 = 0) : (base + kchSize * i) % 
   have hn : kchSize % 2 = 0 := by decide
   rw [Nat.add_mod, Nat.mul_mod, hn]; simp [hb]
 
+/-- A run of `n` chunks starting at `o` ends before the first output store. -/
+theorem chunk_fits (o n i k j : Nat) (hi : i < n) (h : o + kchSize * n ≤ ChaCha20Layout.achOff) :
+    o + kchSize * i + seqSize (kch k j) ≤ ChaCha20Layout.achOff := by
+  rw [kch_size]
+  have : kchSize * (i + 1) ≤ kchSize * n := Nat.mul_le_mul_left _ hi
+  rw [Nat.mul_succ] at this
+  omega
+
+theorem key_fits : keyOff + kchSize * 8 ≤ ChaCha20Layout.achOff := by decide
+theorem nonce_fits : nonOff + kchSize * 3 ≤ ChaCha20Layout.achOff := by decide
+
 theorem kch_pc (t : State) (off k : Nat) :
     (execAll (kch off k) t).pc = t.pc + BitVec.ofNat 32 kchSize := by
   rw [execAll_pc _ t (by simp [kch, le32, Instr.falls]), kch_size]
@@ -132,6 +139,85 @@ theorem kch_step (c : Ctx) (hv : Valid c) (t : State) (a : Word) (n i k : Nat) (
   have r0 := rd 0 (by omega); simp only [Nat.add_zero] at r0
   rw [em, h13, h3, r0, rd 1 (by omega), rd 2 (by omega), rd 3 (by omega)]
 
+theorem traceAll_inv (R : State → Prop) : ∀ (is : List Instr) (s : State), R s →
+    (∀ i ∈ is, ∀ u, R u → R (i.next u)) →
+    ∀ e ∈ traceAll is s, ∃ u i, i ∈ is ∧ R u ∧ e = ⟨u.pc, i, i.accesses u⟩
+  | [], _, _, _, e, he => by cases he
+  | i :: is, s, hs, hR, e, he => by
+    simp only [traceAll, List.mem_cons] at he
+    rcases he with rfl | he
+    · exact ⟨s, i, List.mem_cons_self, hs, rfl⟩
+    · obtain ⟨u, j, hj, hu, rfl⟩ := traceAll_inv R is (i.next s) (hR i List.mem_cons_self s hs)
+        (fun j hj => hR j (List.mem_cons_of_mem _ hj)) e he
+      exact ⟨u, j, List.mem_cons_of_mem _ hj, hu, rfl⟩
+
+theorem ldrb_read (u : State) (a : Word) (h3 : u.regs 3 = a) (r : LowReg) (d : Nat) (hd : d < 32)
+    (x : Access) (hx : x ∈ (Instr.memImm .ldrb r 3 (BitVec.ofNat 5 d)).accesses u) :
+    x.kind = .read ∧ x.addr = a + BitVec.ofNat 32 d ∧ x.width = 1 := by
+  simp [Instr.accesses, MemOp.isLoad, MemOp.width] at hx
+  subst hx
+  simp [M0Crypto.Armv6M.State.reg, ← h3, Nat.mod_eq_of_lt hd]
+  rfl
+
+theorem kch_reads (off k : Nat) (hoff : off + 3 < 32) (t : State) (a : Word) (h3 : t.regs 3 = a) :
+    ∀ e ∈ traceAll (kch off k) t, ∀ x ∈ e.accesses, x.kind = .read →
+      ∃ q < 4, x.addr = a + BitVec.ofNat 32 (off + q) ∧ x.width = 1 := by
+  have hd : ∀ i ∈ kch off k, (3 : Reg).val ∉ i.dsts := by
+    intro i hi
+    simp only [kch, le32, List.mem_append, List.mem_cons, List.not_mem_nil, or_false] at hi
+    rcases hi with (rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl) | rfl <;>
+      (simp [Instr.dsts, MemOp.isLoad]; try decide)
+  intro e he x hx hk
+  obtain ⟨u, i, hi, hu, rfl⟩ := traceAll_inv (fun u => u.regs 3 = a) _ t h3
+    (fun i hi u hu => by rw [next_regs_other u 3 (by decide) (hd i hi)]; exact hu) e he
+  simp only [kch, le32, List.mem_append, List.mem_cons, List.not_mem_nil, or_false] at hi
+  rcases hi with (rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl) | rfl
+  · obtain ⟨-, h1, h2⟩ := ldrb_read u a hu 0 off (by omega) x hx
+    exact ⟨0, by omega, h1, h2⟩
+  · obtain ⟨-, h1, h2⟩ := ldrb_read u a hu 1 (off + 1) (by omega) x hx
+    exact ⟨1, by omega, h1, h2⟩
+  · simp [Instr.accesses] at hx
+  · simp [Instr.accesses] at hx
+  · obtain ⟨-, h1, h2⟩ := ldrb_read u a hu 1 (off + 2) (by omega) x hx
+    exact ⟨2, by omega, h1, h2⟩
+  · simp [Instr.accesses] at hx
+  · simp [Instr.accesses] at hx
+  · obtain ⟨-, h1, h2⟩ := ldrb_read u a hu 1 (off + 3) (by omega) x hx
+    exact ⟨3, by omega, h1, h2⟩
+  · simp [Instr.accesses] at hx
+  · simp [Instr.accesses] at hx
+  · simp [Instr.accesses] at hx; subst hx; simp at hk
+
+/-- The caller-memory bytes read by the key and nonce loads. -/
+def KNRd (c : Ctx) (y : Word) : Prop :=
+  (∃ o < 32, y = c.key + BitVec.ofNat 32 o) ∨ (∃ o < 12, y = c.nonce + BitVec.ofNat 32 o)
+
+/-- The accesses of one `LOAD_LE32; str` chunk: reads lie in `Rd`, writes in the frame. -/
+theorem kch_accesses (c : Ctx) {Rd : Word → Prop} (allowed : Word → Kind → Word → Prop)
+    (hS : ChaCha20Policy.AdmitsSite c.base c.Wr Rd allowed) (t : State) (i k off0 : Nat) (a : Word)
+    (h4i : 4 * i + 3 < 32) (hk : k < chFrameWords) (h13 : t.regs 13 = c.fp) (h3 : t.regs 3 = a)
+    (hRd : ∀ q < 4, Rd (a + BitVec.ofNat 32 (4 * i + q)))
+    (hpc : t.pc = c.base + BitVec.ofNat 32 off0)
+    (hs : ∀ j < kchSize, ChaCha20Policy.KNOff (off0 + j)) :
+    ConstantTime.EventAccessesTo allowed (traceAll (kch (4 * i) k) t) := by
+  have sFW := ChaCha20Layout.chFrameWords_eq
+  have sSW := ChaCha20Layout.chStackWords_eq
+  intro e he x hx q hq
+  obtain ⟨j, hj, hep⟩ := traceAll_pc_offset (kch (4 * i) k) t (by simp [kch, le32, Instr.falls]) e he
+  have hsite : ChaCha20Policy.KNPC c.base e.pc :=
+    ⟨off0 + j, hs j (by rw [kch_size] at hj; exact hj), by rw [hep, hpc, ofNat_add_assoc]⟩
+  apply hS _ _ _ hsite
+  · intro hw
+    have := frameWB_writes _ t (kch_frameWB (4 * i) k hk) e he _ ⟨x, hx, hw, q, hq, rfl⟩
+    rw [h13] at this
+    exact wr_frame this (by omega)
+  · intro hr
+    obtain ⟨q', hq', h1, h2⟩ := kch_reads (4 * i) k h4i t a h3 e he x hx hr
+    rw [h2] at hq
+    obtain rfl : q = 0 := by omega
+    rw [h1, BitVec.add_zero]
+    exact hRd q' hq'
+
 /-- Facts during the key loads (offset `keyOff + kchSize * i`). -/
 structure KInv (c : Ctx) (i : Nat) (t : State) : Prop where
   pc : t.pc = c.base + BitVec.ofNat 32 (keyOff + kchSize * i)
@@ -145,9 +231,11 @@ structure KInv (c : Ctx) (i : Nat) (t : State) : Prop where
   cst : ∀ j < 4, c.fw t (slotJ + j) = c.J 0 j
   key : ∀ j < i, c.fw t (slotKey + j) = keyW c j
 
-theorem key_loop (c : Ctx) (hv : Valid c) (Q : State → Prop) :
-    ∀ m i, i + m = 8 → ∀ t, KInv c i t → (∀ t', KInv c 8 t' → Reach c.base c.Wr t' Q) →
-      Reach c.base c.Wr t Q
+theorem key_loop_S {Pc : Word → Prop} (c : Ctx) (hv : Valid c) (allowed : Word → Kind → Word → Prop) (hA : ChaCha20Policy.Admits (ChaCha20Policy.FrontPc c.base) c.Wr allowed)
+    (hS : ChaCha20Policy.AdmitsSite c.base c.Wr (KNRd c) allowed)
+    (hPc : ∀ pc, ChaCha20Policy.ChaPc c.base pc → Pc pc) (Q : State → Prop) :
+    ∀ m i, i + m = 8 → ∀ t, KInv c i t → (∀ t', KInv c 8 t' → ReachS c.base (ChaCha20Policy.EvP Pc allowed) t' Q) →
+      ReachS c.base (ChaCha20Policy.EvP Pc allowed) t Q
   | 0, i, hm, t, h, k => by obtain rfl : i = 8 := by omega
                             exact k t h
   | m + 1, i, hm, t, h, k => by
@@ -162,10 +250,19 @@ theorem key_loop (c : Ctx) (hv : Valid c) (Q : State → Prop) :
     have hb2 : c.base.toNat % 2 = 0 := by have := hv.base4; omega
     have hseq : seqAt B (keyOff + kchSize * i) (kch (4 * i) (slotKey + i)) = true := by
       have := kch_at_key; simp only [List.all_eq_true, List.mem_range] at this; exact this i (by omega)
-    apply Reach.block hb2 _ _ h.pc (stride_even keyOff i (by decide)) hseq (by simp [kch, le32, Instr.falls])
+    apply ChaCha20Policy.blockP hPc hb2 _ _ h.pc (stride_even keyOff i (by decide)) hseq (by simp [kch, le32, Instr.falls])
       (kch_aligned t _ _ (by rw [h.sp]; exact fp4 hv))
-      (fun e he y hy => wr_frame (by have := frameWB_writes _ t (kch_frameWB (4 * i) (slotKey + i) (by omega)) e he y hy; rwa [h.sp] at this) (by omega))
-    apply key_loop c hv Q m (i + 1) (by omega) _ _ k
+      (kch_accesses c allowed hS t i (slotKey + i) (keyOff + kchSize * i) c.key (by omega) (by omega) h.sp h.r3
+        (fun q hq => Or.inl ⟨4 * i + q, by omega, rfl⟩) h.pc
+        (fun j hj => by
+          have : kchSize * (i + 1) ≤ kchSize * 8 := Nat.mul_le_mul_left _ (by omega)
+          have hd : keyOff + kchSize * 8 = stCtrOff := rfl
+          rw [Nat.mul_succ] at this
+          unfold ChaCha20Policy.KNOff; omega))
+      (by have := chunk_fits keyOff 8 i (4 * i) (slotKey + i) (by omega) key_fits
+          have : ChaCha20Layout.achOff ≤ ChaCha20Policy.chaEnd := by decide +kernel
+          omega)
+    apply key_loop_S c hv allowed hA hS hPc Q m (i + 1) (by omega) _ _ k
     obtain ⟨em, er⟩ := kch_step c hv t c.key 8 i (slotKey + i) hv.keyF (by omega) (by omega) (by omega) h.sp h.r3 h.mem
     have fw' : ∀ j, j < 2 ^ 28 → c.fw (execAll (kch (4 * i) (slotKey + i)) t) j =
         if slotKey + i = j then keyW c i else c.fw t j := fun j hj => c.fw_write em j (by omega) hj
@@ -200,9 +297,11 @@ structure NInv (c : Ctx) (i : Nat) (t : State) : Prop where
   ctr : c.fw t slotCtr = c.ctr
   non : ∀ j < i, c.fw t (slotNon + j) = nonceW c j
 
-theorem nonce_loop (c : Ctx) (hv : Valid c) (Q : State → Prop) :
-    ∀ m i, i + m = 3 → ∀ t, NInv c i t → (∀ t', NInv c 3 t' → Reach c.base c.Wr t' Q) →
-      Reach c.base c.Wr t Q
+theorem nonce_loop_S {Pc : Word → Prop} (c : Ctx) (hv : Valid c) (allowed : Word → Kind → Word → Prop) (hA : ChaCha20Policy.Admits (ChaCha20Policy.FrontPc c.base) c.Wr allowed)
+    (hS : ChaCha20Policy.AdmitsSite c.base c.Wr (KNRd c) allowed)
+    (hPc : ∀ pc, ChaCha20Policy.ChaPc c.base pc → Pc pc) (Q : State → Prop) :
+    ∀ m i, i + m = 3 → ∀ t, NInv c i t → (∀ t', NInv c 3 t' → ReachS c.base (ChaCha20Policy.EvP Pc allowed) t' Q) →
+      ReachS c.base (ChaCha20Policy.EvP Pc allowed) t Q
   | 0, i, hm, t, h, k => by obtain rfl : i = 3 := by omega
                             exact k t h
   | m + 1, i, hm, t, h, k => by
@@ -219,10 +318,19 @@ theorem nonce_loop (c : Ctx) (hv : Valid c) (Q : State → Prop) :
     have hb2 : c.base.toNat % 2 = 0 := by have := hv.base4; omega
     have hseq : seqAt B (nonOff + kchSize * i) (kch (4 * i) (slotNon + i)) = true := by
       have := kch_at_nonce; simp only [List.all_eq_true, List.mem_range] at this; exact this i (by omega)
-    apply Reach.block hb2 _ _ h.pc (stride_even nonOff i (by decide)) hseq (by simp [kch, le32, Instr.falls])
+    apply ChaCha20Policy.blockP hPc hb2 _ _ h.pc (stride_even nonOff i (by decide)) hseq (by simp [kch, le32, Instr.falls])
       (kch_aligned t _ _ (by rw [h.sp]; exact fp4 hv))
-      (fun e he y hy => wr_frame (by have := frameWB_writes _ t (kch_frameWB (4 * i) (slotNon + i) (by omega)) e he y hy; rwa [h.sp] at this) (by omega))
-    apply nonce_loop c hv Q m (i + 1) (by omega) _ _ k
+      (kch_accesses c allowed hS t i (slotNon + i) (nonOff + kchSize * i) c.nonce (by omega) (by omega) h.sp h.r3
+        (fun q hq => Or.inr ⟨4 * i + q, by omega, rfl⟩) h.pc
+        (fun j hj => by
+          have : kchSize * (i + 1) ≤ kchSize * 3 := Nat.mul_le_mul_left _ (by omega)
+          have hd : nonOff + kchSize * 3 = bpreOff := rfl
+          rw [Nat.mul_succ] at this
+          unfold ChaCha20Policy.KNOff; omega))
+      (by have := chunk_fits nonOff 3 i (4 * i) (slotNon + i) (by omega) nonce_fits
+          have : ChaCha20Layout.achOff ≤ ChaCha20Policy.chaEnd := by decide +kernel
+          omega)
+    apply nonce_loop_S c hv allowed hA hS hPc Q m (i + 1) (by omega) _ _ k
     obtain ⟨em, er⟩ := kch_step c hv t c.nonce 3 i (slotNon + i) hv.nonceF (by omega) (by omega) (by omega) h.sp h.r3 h.mem
     have fw' : ∀ j, j < 2 ^ 28 → c.fw (execAll (kch (4 * i) (slotNon + i)) t) j =
         if slotNon + i = j then nonceW c i else c.fw t j := fun j hj => c.fw_write em j (by omega) hj
@@ -263,25 +371,29 @@ theorem memOk_read32 (c : Ctx) {P : Nat} {m : Mem} (h : c.MemOk P m) (a : Word)
   intro k hk
   rw [h _ (ha k hk).1, ite_eq_right_of_eq_false _ _ (eq_false (ha k hk).2)]
 
-theorem str_block (c : Ctx) (hv : Valid c) (t : State) (off k : Nat) (src : LowReg) (hk : k < chFrameWords)
+theorem str_block_S {Pc : Word → Prop} (c : Ctx) (hv : Valid c) (allowed : Word → Kind → Word → Prop) (hA : ChaCha20Policy.Admits (ChaCha20Policy.FrontPc c.base) c.Wr allowed)
+    (hPc : ∀ pc, ChaCha20Policy.ChaPc c.base pc → Pc pc) (t : State) (off k : Nat) (src : LowReg) (hk : k < chFrameWords)
     (ho : off % 2 = 0) (hpc : t.pc = c.base + BitVec.ofNat 32 off)
-    (hseq : seqAt B off [.strSp src (BitVec.ofNat 8 k)] = true) (h13 : t.regs 13 = c.fp) (Q : State → Prop)
+    (hseq : seqAt B off [.strSp src (BitVec.ofNat 8 k)] = true)
+    (hlt : ChaCha20Policy.FrontRange off (seqSize [.strSp src (BitVec.ofNat 8 k)]))
+    (h13 : t.regs 13 = c.fp) (Q : State → Prop)
     (cont : ∀ t', t'.pc = c.base + BitVec.ofNat 32 (off + 2) →
       t'.mem = write32 t.mem (slot c.fp k) (t.regs src.toReg) →
-      (∀ r : Reg, r.val ≠ 15 → t'.regs r = t.regs r) → Reach c.base c.Wr t' Q) :
-    Reach c.base c.Wr t Q := by
+      (∀ r : Reg, r.val ≠ 15 → t'.regs r = t.regs r) → ReachS c.base (ChaCha20Policy.EvP Pc allowed) t' Q) :
+    ReachS c.base (ChaCha20Policy.EvP Pc allowed) t Q := by
   have hb2 : c.base.toNat % 2 = 0 := by have := hv.base4; omega
   have sFW := ChaCha20Layout.chFrameWords_eq
   have sSB := ChaCha20Layout.chStackBytes_eq
   have sSW := ChaCha20Layout.chStackWords_eq
   have hk' : (BitVec.ofNat 8 k).toNat = k := by simp; omega
-  apply Reach.block hb2 _ off hpc ho hseq (by simp [Instr.falls])
+  apply ChaCha20Policy.frontBlockP hA hPc hb2 _ off hpc ho hseq (by simp [Instr.falls])
     (by simp only [alignedAll, Instr.accesses, M0Crypto.Armv6M.State.sp, h13, List.all_cons, List.all_nil,
           Access.aligned, Bool.and_true, beq_iff_eq, hk', BitVec.toNat_add, BitVec.toNat_ofNat]
         have := fp4 hv; omega)
     (fun e he y hy => wr_frame (by
       have := frameWB_writes (n := chFrameWords) [.strSp src (BitVec.ofNat 8 k)] t (by simp [frameWB, hk', hk]) e he y hy
       rwa [h13] at this) (by omega))
+    hlt
   apply cont
   · rw [execAll_pc _ _ (by simp [Instr.falls]), hpc, ofNat_add_assoc]; rfl
   · simp only [execAll, strSp_next t src k (by omega), h13]
@@ -289,15 +401,17 @@ theorem str_block (c : Ctx) (hv : Valid c) (t : State) (off k : Nat) (src : LowR
 
 /-- `ldr r0, [pc, #imm]; str r0, [sp, #4k]` at offset `off` (≡ 2 mod 4), loading the word at `pool`.
 The ldr immediate is `litImm off pool`, so the literal pool offset is the only layout input. -/
-theorem lit_block (c : Ctx) (hv : Valid c) (t : State) (off pool k : Nat) (hk : k < chFrameWords) (ho : off % 4 = 2)
+theorem lit_block_S {Pc : Word → Prop} (c : Ctx) (hv : Valid c) (allowed : Word → Kind → Word → Prop) (hA : ChaCha20Policy.Admits (ChaCha20Policy.FrontPc c.base) c.Wr allowed)
+    (hPc : ∀ pc, ChaCha20Policy.ChaPc c.base pc → Pc pc) (t : State) (off pool k : Nat) (hk : k < chFrameWords) (ho : off % 4 = 2)
     (hp : pool % 4 = 0) (hle : (off + 4) / 4 * 4 ≤ pool) (hi : litImm off pool < 256)
     (hpsz : pool + 4 ≤ Artifacts.Release.size) (hpc : t.pc = c.base + BitVec.ofNat 32 off)
     (hseq : seqAt B off [.ldrLit 0 (BitVec.ofNat 8 (litImm off pool)), .strSp 0 (BitVec.ofNat 8 k)] = true)
+    (hlt : ChaCha20Policy.FrontRange off (seqSize [.ldrLit 0 (BitVec.ofNat 8 (litImm off pool)), .strSp 0 (BitVec.ofNat 8 k)]))
     (h13 : t.regs 13 = c.fp) (hm : c.MemOk 0 t.mem) (Q : State → Prop)
     (cont : ∀ t', t'.pc = c.base + BitVec.ofNat 32 (off + 4) →
       t'.mem = write32 t.mem (slot c.fp k) (codeWord pool) →
-      (∀ r : Reg, r.val ≠ 0 → r.val ≠ 15 → t'.regs r = t.regs r) → Reach c.base c.Wr t' Q) :
-    Reach c.base c.Wr t Q := by
+      (∀ r : Reg, r.val ≠ 0 → r.val ≠ 15 → t'.regs r = t.regs r) → ReachS c.base (ChaCha20Policy.EvP Pc allowed) t' Q) :
+    ReachS c.base (ChaCha20Policy.EvP Pc allowed) t Q := by
   have hb2 : c.base.toNat % 2 = 0 := by have := hv.base4; omega
   have sFW := ChaCha20Layout.chFrameWords_eq
   have sSB := ChaCha20Layout.chStackBytes_eq
@@ -316,7 +430,7 @@ theorem lit_block (c : Ctx) (hv : Valid c) (t : State) (off pool k : Nat) (hk : 
   have e1 : execAll [.ldrLit 0 (BitVec.ofNat 8 (litImm off pool))] t =
       (t.setReg 15 (t.pc + 2#32)).setReg 0 (codeWord pool) := by
     simp only [execAll, Instr.next, Instr.exec, M0Crypto.Proofs.toReg_0, hla, hv0]; rfl
-  apply Reach.block hb2 _ off hpc (by omega) hseq (by simp [Instr.falls])
+  apply ChaCha20Policy.frontBlockP hA hPc hb2 _ off hpc (by omega) hseq (by simp [Instr.falls])
     (by simp only [alignedAll, Instr.accesses, M0Crypto.Armv6M.State.sp, List.all_cons, List.all_nil,
           Access.aligned, Bool.and_true, beq_iff_eq, hk']
         rw [hla]
@@ -329,6 +443,7 @@ theorem lit_block (c : Ctx) (hv : Valid c) (t : State) (off pool k : Nat) (hk : 
       have := frameWB_writes (n := chFrameWords) [.ldrLit 0 (BitVec.ofNat 8 (litImm off pool)), .strSp 0 (BitVec.ofNat 8 k)] t
         (by simp [frameWB, hk', hk, Instr.writesMem, Instr.dsts]) e he y hy
       rwa [h13] at this) (by omega))
+    hlt
   have r13 : (execAll [.ldrLit 0 (BitVec.ofNat 8 (litImm off pool))] t).regs 13 = t.regs 13 := by
     rw [e1]; rw [setReg_regs_ne _ _ _ _ (by decide), setReg15_regs _ _ 13 (by decide)]
   apply cont
@@ -363,8 +478,10 @@ theorem fw_same (c : Ctx) {t t' : State} {k : Nat} {v : Word} (h : t'.mem = writ
     (hk : k < 64) : c.fw t' k = v := by
   rw [c.fw_write h k (by omega) (by omega), if_pos rfl]
 
-theorem init (c : Ctx) (hv : Valid c) (t : State) (h : Acc c t) (Q : State → Prop)
-    (k : ∀ t', BlockInv c 0 t' → Reach c.base c.Wr t' Q) : Reach c.base c.Wr t Q := by
+theorem init_S {Pc : Word → Prop} (c : Ctx) (hv : Valid c) (allowed : Word → Kind → Word → Prop) (hA : ChaCha20Policy.Admits (ChaCha20Policy.FrontPc c.base) c.Wr allowed)
+    (hS : ChaCha20Policy.AdmitsSite c.base c.Wr (KNRd c) allowed)
+    (hPc : ∀ pc, ChaCha20Policy.ChaPc c.base pc → Pc pc) (t : State) (h : Acc c t) (Q : State → Prop)
+    (k : ∀ t', BlockInv c 0 t' → ReachS c.base (ChaCha20Policy.EvP Pc allowed) t' Q) : ReachS c.base (ChaCha20Policy.EvP Pc allowed) t Q := by
   have hb2 : c.base.toNat % 2 = 0 := by have := hv.base4; omega
   have m0 : c.MemOk 0 t.mem := by intro y _; rw [h.mem]; rfl
   have sFW := ChaCha20Layout.chFrameWords_eq
@@ -379,11 +496,12 @@ theorem init (c : Ctx) (hv : Valid c) (t : State) (h : Acc c t) (Q : State → P
   have sKey : slotKey = 20 := by decide
   have sNon : slotNon = 29 := by decide
   -- OUTP, INP, LEN
-  apply str_block c hv t accOff slotOutp 0 (by decide) (by decide) h.pc (by decide) h.sp
+  apply str_block_S c hv allowed hA hPc t accOff slotOutp 0 (by decide) (by decide) h.pc (by decide) (by decide) h.sp
   intro t1 p1 e1 r1
-  apply str_block c hv t1 stInpOff slotInp 1 (by decide) (by decide) p1 (by decide) (by rw [r1 13 (by decide), h.sp])
+  apply str_block_S c hv allowed hA hPc t1 stInpOff slotInp 1 (by decide) (by decide) p1 (by decide) (by decide)
+    (by rw [r1 13 (by decide), h.sp])
   intro t2 p2 e2 r2
-  apply str_block c hv t2 stLenOff slotLen 2 (by decide) (by decide) p2 (by decide)
+  apply str_block_S c hv allowed hA hPc t2 stLenOff slotLen 2 (by decide) (by decide) p2 (by decide) (by decide)
     (by rw [r2 13 (by decide), r1 13 (by decide), h.sp])
   intro t3 p3 e3 r3
   have s3 : t3.regs 13 = c.fp := by rw [r3 13 (by decide), r2 13 (by decide), r1 13 (by decide), h.sp]
@@ -391,28 +509,28 @@ theorem init (c : Ctx) (hv : Valid c) (t : State) (h : Acc c t) (Q : State → P
     rw [e3, e2, e1]
     exact c.memOk_write_slot (c.memOk_write_slot (c.memOk_write_slot m0 _ (by decide) _) _ (by decide) _) _ (by decide) _
   -- constants
-  apply lit_block c hv t3 litJ0Off poolOff slotJ (by decide) (by decide) (by decide) (by decide) (by decide)
-    (by decide) p3 (by decide) s3 m3
+  apply lit_block_S c hv allowed hA hPc t3 litJ0Off poolOff slotJ (by decide) (by decide) (by decide) (by decide) (by decide)
+    (by decide) p3 (by decide) (by decide) s3 m3
   intro t4 p4 e4 r4
   have s4 : t4.regs 13 = c.fp := by rw [r4 13 (by decide) (by decide), s3]
   have m4 : c.MemOk 0 t4.mem := by rw [e4]; exact c.memOk_write_slot m3 _ (by decide) _
-  apply lit_block c hv t4 litJ1Off (poolOff + 4) (slotJ + 1) (by decide) (by decide) (by decide) (by decide) (by decide)
-    (by decide) p4 (by decide) s4 m4
+  apply lit_block_S c hv allowed hA hPc t4 litJ1Off (poolOff + 4) (slotJ + 1) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (by decide) p4 (by decide) (by decide) s4 m4
   intro t5 p5 e5 r5
   have s5 : t5.regs 13 = c.fp := by rw [r5 13 (by decide) (by decide), s4]
   have m5 : c.MemOk 0 t5.mem := by rw [e5]; exact c.memOk_write_slot m4 _ (by decide) _
-  apply lit_block c hv t5 litJ2Off (poolOff + 8) (slotJ + 2) (by decide) (by decide) (by decide) (by decide) (by decide)
-    (by decide) p5 (by decide) s5 m5
+  apply lit_block_S c hv allowed hA hPc t5 litJ2Off (poolOff + 8) (slotJ + 2) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (by decide) p5 (by decide) (by decide) s5 m5
   intro t6 p6 e6 r6
   have s6 : t6.regs 13 = c.fp := by rw [r6 13 (by decide) (by decide), s5]
   have m6 : c.MemOk 0 t6.mem := by rw [e6]; exact c.memOk_write_slot m5 _ (by decide) _
-  apply lit_block c hv t6 litJ3Off (poolOff + 12) (slotJ + 3) (by decide) (by decide) (by decide) (by decide) (by decide)
-    (by decide) p6 (by decide) s6 m6
+  apply lit_block_S c hv allowed hA hPc t6 litJ3Off (poolOff + 12) (slotJ + 3) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (by decide) p6 (by decide) (by decide) s6 m6
   intro t7 p7 e7 r7
   have s7 : t7.regs 13 = c.fp := by rw [r7 13 (by decide) (by decide), s6]
   have m7 : c.MemOk 0 t7.mem := by rw [e7]; exact c.memOk_write_slot m6 _ (by decide) _
   -- b keyOff
-  apply Reach.b hb2 b7Off keyOff 7 p7 (by decide) b48_at (by decide) (by decide)
+  apply ChaCha20Policy.evB hb2 b7Off keyOff 7 p7 (by decide) b48_at (by decide) (by decide) (hr := ChaCha20Policy.chaAt hPc (by decide +kernel))
   have rr : ∀ r : Reg, r.val ≠ 0 → r.val ≠ 15 → t7.regs r = t.regs r := fun r h0 h15 => by
     rw [r7 r h0 h15, r6 r h0 h15, r5 r h0 h15, r4 r h0 h15, r3 r h15, r2 r h15, r1 r h15]
   -- frame words from keyOff
@@ -420,7 +538,7 @@ theorem init (c : Ctx) (hv : Valid c) (t : State) (h : Acc c t) (Q : State → P
     intro j hj a b d e
     rw [fw_other c e7 j (by omega) hj (by omega), fw_other c e6 j (by omega) hj (by omega),
       fw_other c e5 j (by omega) hj (by omega), fw_other c e4 j (by omega) hj (by omega)]
-  apply key_loop c hv Q 8 0 rfl (t7.setReg 15 (c.base + BitVec.ofNat 32 keyOff)) {
+  apply key_loop_S c hv allowed hA hS hPc Q 8 0 rfl (t7.setReg 15 (c.base + BitVec.ofNat 32 keyOff)) {
     pc := by rw [setReg15_pc, Nat.mul_zero, Nat.add_zero]
     sp := by rw [setReg15_regs _ _ 13 (by decide), s7]
     r3 := by rw [setReg15_regs _ _ 3 (by decide), rr 3 (by decide) (by decide), h.r3]
@@ -454,7 +572,7 @@ theorem init (c : Ctx) (hv : Valid c) (t : State) (h : Acc c t) (Q : State → P
     key := fun j hj => absurd hj (by omega) }
   intro t8 h8
   -- str r4, [sp, #112]: j[12] = counter
-  apply str_block c hv t8 stCtrOff slotCtr 4 (by decide) (by decide) h8.pc (by decide) h8.sp
+  apply str_block_S c hv allowed hA hPc t8 stCtrOff slotCtr 4 (by decide) (by decide) h8.pc (by decide) (by decide) h8.sp
   intro t9 p9 e9 r9
   rw [stCtr_next] at p9
   have s9 : t9.regs 13 = c.fp := by rw [r9 13 (by decide), h8.sp]
@@ -473,20 +591,21 @@ theorem init (c : Ctx) (hv : Valid c) (t : State) (h : Acc c t) (Q : State → P
       have sFB := ChaCha20Layout.chFrameBytes_eq
       rw [ofNat_add_assoc, toNat_add_ofNat _ _ (by omega), toNat_add_ofNat _ _ (by omega)] at he
       omega
-  apply Reach.block hb2 [.ldrSp 3 (BitVec.ofNat 8 slotArgNonce)] ldrNonceOff p9 (by decide) (by decide) (by decide)
+  apply ChaCha20Policy.frontBlockP hA hPc hb2 [.ldrSp 3 (BitVec.ofNat 8 slotArgNonce)] ldrNonceOff p9 (by decide) (by decide) (by decide)
     (by simp only [alignedAll, Instr.accesses, M0Crypto.Armv6M.State.sp, s9, List.all_cons, List.all_nil,
           Access.aligned, Bool.and_true, beq_iff_eq, BitVec.toNat_add, BitVec.toNat_ofNat]
         have := fp4 hv; simp; omega)
     (fun e he y ⟨a, ha, hw, _⟩ => by
       simp only [traceAll, List.mem_cons, List.not_mem_nil, or_false] at he; subst he
       simp only [Instr.accesses, List.mem_singleton] at ha; subst ha; cases hw)
+    (by decide)
   have e10 : execAll [.ldrSp 3 (BitVec.ofNat 8 slotArgNonce)] t9 = (t9.setReg 15 (t9.pc + 2#32)).setReg 3 c.nonce := by
     simp only [execAll, Instr.next, Instr.exec, M0Crypto.Armv6M.State.sp, s9, hn, M0Crypto.Proofs.toReg_3]; rfl
   rw [e10]
   have rr : ∀ r : Reg, r.val ≠ 0 → r.val ≠ 1 → r.val ≠ 15 → t9.regs r = t8.regs r := fun r _ _ h15 => r9 r h15
   have f9 : ∀ j, j < 64 → j ≠ slotCtr → c.fw t9 j = c.fw t8 j := fun j hj hne =>
     fw_other c e9 j (by omega) hj (Ne.symm hne)
-  apply nonce_loop c hv Q 3 0 rfl ((t9.setReg 15 (t9.pc + 2#32)).setReg 3 c.nonce) {
+  apply nonce_loop_S c hv allowed hA hS hPc Q 3 0 rfl ((t9.setReg 15 (t9.pc + 2#32)).setReg 3 c.nonce) {
     pc := by
       show ((t9.setReg 15 (t9.pc + 2#32)).setReg 3 c.nonce).regs 15 = _
       rw [setReg_regs_ne _ _ _ _ (by decide)]
@@ -530,5 +649,26 @@ theorem init (c : Ctx) (hv : Valid c) (t : State) (h : Acc c t) (Q : State → P
       have : c.len.toNat ≠ 0 := fun e => this (BitVec.eq_of_toNat_eq (by simpa using e))
       omega
     ok := h.ok }
+
+/-! ## Statements without access events -/
+
+theorem init_events (c : Ctx) (hv : Valid c) (allowed : Word → Kind → Word → Prop) (hA : ChaCha20Policy.Admits (ChaCha20Policy.FrontPc c.base) c.Wr allowed)
+    (hS : ChaCha20Policy.AdmitsSite c.base c.Wr (KNRd c) allowed) (t : State) (h : Acc c t) (Q : State → Prop)
+    (k : ∀ t', BlockInv c 0 t' → ConstantTime.ReachEvents c.base allowed t' Q) : ConstantTime.ReachEvents c.base allowed t Q :=
+  ChaCha20Policy.ofEvP (init_S (Pc := fun _ => True) c hv allowed hA hS (fun _ _ => trivial) t h Q
+    (fun t' h' => ChaCha20Policy.reachEvents_toEvP (k t' h')))
+
+/-- The key and nonce loads and the frame set-up, with every program counter in `Pc`. -/
+theorem init_w {Pc : Word → Prop} (c : Ctx) (hv : Valid c) (hPc : ∀ pc, ChaCha20Policy.ChaPc c.base pc → Pc pc)
+    (t : State) (h : Acc c t) (Q : State → Prop)
+    (k : ∀ t', BlockInv c 0 t' → ReachW c.base Pc c.Wr t' Q) : ReachW c.base Pc c.Wr t Q :=
+  ChaCha20Policy.ofEvPW
+    (init_S c hv _ (ChaCha20Policy.admits_writeOnly _ c.Wr) (ChaCha20Policy.admitsSite_writeOnly _ _ _) hPc t h Q
+      (fun t' h' => ChaCha20Policy.reachW_toEvP (k t' h')))
+
+theorem init (c : Ctx) (hv : Valid c) (t : State) (h : Acc c t) (Q : State → Prop)
+    (k : ∀ t', BlockInv c 0 t' → Reach c.base c.Wr t' Q) : Reach c.base c.Wr t Q :=
+  (init_w (Pc := fun _ => True) c hv (fun _ _ => trivial) t h Q
+    (fun t' h' => (k t' h').toReachW)).toReach
 
 end M0Crypto.Release.ChaCha20Init

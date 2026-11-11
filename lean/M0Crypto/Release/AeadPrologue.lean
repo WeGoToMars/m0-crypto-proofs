@@ -295,9 +295,10 @@ theorem sp_writes {A : Word} {l : List Instr} (t : State) (ht : t.regs 13 = A)
   obtain ⟨o, ho, rfl⟩ := traceAll_writes_sp' (fun o => o < 144) l t (sp_wr h) e he y hy
   rw [ht]; exact swr_A A o ho
 
-theorem pro_reach (c : ACall) (hv : AValid c) (e : Nat) (hseq : seqAt B e pro = true) (he : e % 2 = 0)
-    (s : State) (h : AEntry c e s) {Q : State → Prop}
-    (k : ∀ p, ProPost c e p → Reach c.base (SWr c.A) p Q) : Reach c.base (SWr c.A) s Q := by
+theorem pro_reach_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (e : Nat) (hseq : seqAt B e pro = true)
+    (he : e % 2 = 0) (s : State) (h : AEntry c e s) {Q : State → Prop}
+    (hrg : InRegion Pc c.base e (seqSize pro))
+    (k : ∀ p, ProPost c e p → ReachW c.base Pc (SWr c.A) p Q) : ReachW c.base Pc (SWr c.A) s Q := by
   have hb2 : c.base.toNat % 2 = 0 := by have := hv.base4; omega
   have s13 : s.regs 13 = c.sp0 := by rw [h.regs, h.sp]
   have hpc : s.pc = c.base + BitVec.ofNat 32 e := by
@@ -319,7 +320,7 @@ theorem pro_reach (c : ACall) (hv : AValid c) (e : Nat) (hseq : seqAt B e pro = 
   have z0 : (execAll zeroCtx t2).regs 0 = 0#32 := by rw [zeroCtx_zs, zs_regs 16 t2 0 (by decide), b0]
   rw [z13, z0] at cm
   rw [z13] at c0 c1 c3
-  refine Reach.block hb2 pro e hpc he hseq (by decide) ?_ ?_ ?_
+  refine ReachW.blockR hrg hb2 hpc he hseq (by decide) ?_ ?_ ?_
   · rw [pro_split, alignedAll_append, alignedAll_append, alignedAll_append]
     simp only [execAll_append, ht1, ht2, Bool.and_eq_true]
     refine ⟨⟨⟨?_, alignedAll_sp _ _ (sp_al (by decide)) (by rw [a13]; exact hA4)⟩,

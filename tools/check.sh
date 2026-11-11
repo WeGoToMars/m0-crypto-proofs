@@ -235,7 +235,16 @@ M0Crypto.Release.Aead.compare_loop
 M0Crypto.Release.Aead.compare_reach
 M0Crypto.Release.Aead.decrypt_reach
 M0Crypto.Release.Aead.decrypt_correct
-M0Crypto.Release.Aead.rejected_writes"
+M0Crypto.Release.Aead.rejected_writes
+M0Crypto.Release.ChaCha20Xor.xor_constant_time
+M0Crypto.Release.ChaCha20Xor.xor_reads
+M0Crypto.Release.ChaCha20Xor.xor_stack
+M0Crypto.Release.Aead.encrypt_constant_time
+M0Crypto.Release.Aead.encrypt_reads
+M0Crypto.Release.Aead.encrypt_stack
+M0Crypto.Release.Aead.decrypt_constant_time
+M0Crypto.Release.Aead.decrypt_reads
+M0Crypto.Release.Aead.decrypt_stack"
 ALLOWED="(propext|Classical\.choice|Quot\.sound)"
 for name in $EXPECTED; do
     n=$(grep -c -F "'$name' " "$TMP/axioms.txt" || true)

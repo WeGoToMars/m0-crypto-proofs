@@ -38,7 +38,7 @@ structure FinishPost (c : ACall) (tag : Word) (off : Nat) (msg : List M0Crypto.S
 
 /-- From the `bl finish` instruction, refine the accumulated message to the RFC tag.
 The tag destination is either the caller tag or the stack's expected-tag block. -/
-theorem finish_call (c : ACall) (hv : AValid c) (tag : Word) (off : Nat) (i : BitVec 25)
+theorem finish_call_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (tag : Word) (off : Nat) (i : BitVec 25)
     (hbl : instrAt B off = some (.bl i)) (ht : blTarget off i = BitVec.ofNat 32 finishOff)
     (ho : off % 2 = 0) (hox : off + blSize ≤ Artifacts.Release.size)
     (s : State) (hpc : s.pc = c.base + BitVec.ofNat 32 off) (h13 : s.regs 13 = c.A)
@@ -46,10 +46,12 @@ theorem finish_call (c : ACall) (hv : AValid c) (tag : Word) (off : Nat) (i : Bi
     (hcodeT : Disj c.base Artifacts.Release.size tag 16) (htagS : Disj tag 16 (c.A - 20#32) 20)
     (ic : Poly1305Init.ICtx) (ti : State) (hi : Poly1305Init.IResult ic ti) (hctx : ic.ctx = c.A + 8#32)
     (hk : Ctx.bytesAt ic.m0 ic.key 32 = M0Crypto.Spec.Aead.polyKey c.keyB c.nonceB)
-    (msg : List M0Crypto.Spec.ChaCha20.Byte) (hp : PInv c.A ti.mem msg s.mem) :
-    Reach c.base (FinishWr c.A tag) s (FinishPost c tag off msg s) := by
+    (msg : List M0Crypto.Spec.ChaCha20.Byte) (hp : PInv c.A ti.mem msg s.mem)
+    (hrg : Pc (c.base + BitVec.ofNat 32 off))
+    (hfin : ∀ pc, Poly1305Finish.FinPc c.base pc → Pc pc) :
+    ReachW c.base Pc (FinishWr c.A tag) s (FinishPost c tag off msg s) := by
   have hb2 : c.base.toNat % 2 = 0 := by have := hv.base4; omega
-  apply Reach.bl hb2 off finishOff i hpc ho hbl (by have := blSize_eq; omega) ht
+  apply ReachW.blR hrg hb2 finishOff i hpc ho hbl (by have := blSize_eq; omega) ht
   rw [show off + 4 = off + blSize by rw [blSize_eq]]
   generalize hx : (s.setReg 14 ((c.base + BitVec.ofNat 32 (off + blSize)) ||| 1#32)).setReg 15
     (c.base + BitVec.ofNat 32 finishOff) = x
@@ -77,7 +79,7 @@ theorem finish_call (c : ACall) (hv : AValid c) (tag : Word) (off : Nat) (i : Bi
     by change x.regs 13 = c.A; rw [xr 13 (by decide) (by decide), h13], by change x.regs 0 = c.A + 8#32; rw [xr 0 (by decide) (by decide), h0],
     by change x.regs 1 = tag; rw [xr 1 (by decide) (by decide), h1]⟩
   have hlr : (fc.regs0 14).getLsbD 0 = true := by show (x.regs 14).getLsbD 0 = true; rw [x14]; exact lr_odd _
-  apply (Poly1305Finish.finish_reach fc fv x fe hlr).mono
+  apply ((Poly1305Finish.finish_reach_w fc fv x fe hlr).monoPc hfin).mono (fun _ _ h => h)
   intro t ht'
   refine ⟨?_, ht'.sp, ?_, ?_, ?_⟩
   · rw [ht'.ret]; show x.regs 14 &&& ~~~1#32 = _
@@ -97,5 +99,18 @@ theorem finish_call (c : ACall) (hv : AValid c) (tag : Word) (off : Nat) (i : Bi
     rw [xm] at tagval
     rw [tagval, ← hctx, Poly1305Context.poly1305_chain ic ti hi s.mem msg hp.len
       (by rw [hctx]; exact hp.pad) (by rw [hctx]; exact hp.acc), hk]
+
+theorem finish_call (c : ACall) (hv : AValid c) (tag : Word) (off : Nat) (i : BitVec 25)
+    (hbl : instrAt B off = some (.bl i)) (ht : blTarget off i = BitVec.ofNat 32 finishOff)
+    (ho : off % 2 = 0) (hox : off + blSize ≤ Artifacts.Release.size)
+    (s : State) (hpc : s.pc = c.base + BitVec.ofNat 32 off) (h13 : s.regs 13 = c.A)
+    (h0 : s.regs 0 = c.A + 8#32) (h1 : s.regs 1 = tag) (hc : CodeAt s.mem c.base B)
+    (hcodeT : Disj c.base Artifacts.Release.size tag 16) (htagS : Disj tag 16 (c.A - 20#32) 20)
+    (ic : Poly1305Init.ICtx) (ti : State) (hi : Poly1305Init.IResult ic ti) (hctx : ic.ctx = c.A + 8#32)
+    (hk : Ctx.bytesAt ic.m0 ic.key 32 = M0Crypto.Spec.Aead.polyKey c.keyB c.nonceB)
+    (msg : List M0Crypto.Spec.ChaCha20.Byte) (hp : PInv c.A ti.mem msg s.mem) :
+    Reach c.base (FinishWr c.A tag) s (FinishPost c tag off msg s) :=
+  (finish_call_w (Pc := fun _ => True) c hv tag off i hbl ht ho hox s hpc h13 h0 h1 hc hcodeT htagS ic ti hi hctx hk msg hp
+    trivial (fun _ _ => trivial)).toReach
 
 end M0Crypto.Release.Aead

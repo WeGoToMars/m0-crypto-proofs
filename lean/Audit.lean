@@ -86,7 +86,7 @@ theorem depends only on `propext`, `Classical.choice` and `Quot.sound`
 #print axioms M0Crypto.Release.ChaCha20Xor.xor_correct
 #print axioms M0Crypto.Release.ChaCha20Xor.result_output
 
--- Gate 5: Poly1305.
+-- Poly1305: arithmetic, specification and init.
 #print axioms M0Crypto.Release.Poly1305Arith.mul_fold
 #print axioms M0Crypto.Release.Poly1305Arith.carry_fold
 #print axioms M0Crypto.Release.Poly1305Arith.block_arith
@@ -103,7 +103,7 @@ theorem depends only on `propext`, `Classical.choice` and `Quot.sound`
 #print axioms M0Crypto.Release.Poly1305Mac.narrow_run
 #print axioms M0Crypto.Release.Poly1305Mac.colend_run
 
--- Gate 5: blocks execution layer (RFC refinement is audited below).
+-- Poly1305 blocks: execution (the RFC refinement follows).
 #print axioms M0Crypto.Release.Poly1305Blocks.segments_at
 #print axioms M0Crypto.Release.Poly1305Blocks.prologue_at
 #print axioms M0Crypto.Release.Poly1305Blocks.setup_at
@@ -125,7 +125,7 @@ theorem depends only on `propext`, `Classical.choice` and `Quot.sound`
 #print axioms M0Crypto.Release.Poly1305Blocks.result_key_preserved
 #print axioms M0Crypto.Release.Poly1305Blocks.blocks_execution_safe
 
--- Gate 5: machine arithmetic refined to the RFC block fold.
+-- Poly1305 blocks: machine arithmetic refined to the RFC block fold.
 #print axioms M0Crypto.Release.Poly1305Carry.adc5
 #print axioms M0Crypto.Release.Poly1305Carry.adc5_mod
 #print axioms M0Crypto.Release.Poly1305Blocks.addMsg_h
@@ -136,7 +136,7 @@ theorem depends only on `propext`, `Classical.choice` and `Quot.sound`
 #print axioms M0Crypto.Release.Poly1305Blocks.result_blocks_correct
 #print axioms M0Crypto.Release.Poly1305Blocks.blocks_correct
 
--- Gate 5: finish and context invariant preservation.
+-- Poly1305 finish and the context invariant across calls.
 #print axioms M0Crypto.Release.Poly1305Finish.segments_at
 #print axioms M0Crypto.Release.Poly1305Finish.carry_correct
 #print axioms M0Crypto.Release.Poly1305Finish.arithmetic_correct
@@ -160,7 +160,7 @@ theorem depends only on `propext`, `Classical.choice` and `Quot.sound`
 #print axioms M0Crypto.Release.Poly1305Context.key_split
 #print axioms M0Crypto.Release.Poly1305Context.poly1305_chain
 
--- Gate 6: AEAD composition.
+-- ChaCha20-Poly1305: encryption and checked decryption.
 #print axioms M0Crypto.Release.Aead.mac_padded
 #print axioms M0Crypto.Release.Aead.aead_setup
 #print axioms M0Crypto.Release.Aead.crypt_reach
@@ -182,16 +182,15 @@ theorem depends only on `propext`, `Classical.choice` and `Quot.sound`
 #print axioms M0Crypto.Release.Aead.decrypt_correct
 #print axioms M0Crypto.Release.Aead.rejected_writes
 
--- Conditional analysis components and contract consequences.
 
--- Approach C: mirror symbolic executor.
+-- Symbolic executor: mirror semantics.
 #print axioms M0Crypto.Sym.symExec_sound
 #print axioms M0Crypto.Sym.sound_basic
 #print axioms M0Crypto.Sym.sound_dp
 #print axioms M0Crypto.Sym.sound_lslImm
 #print axioms M0Crypto.Sym.sound_lsrImm
 
--- Approach C, H3 part A: memory and stack forms, and every falling-through instruction.
+-- Symbolic executor: memory and stack forms, and every falling-through instruction.
 #print axioms M0Crypto.Sym.sound_ldrLit
 #print axioms M0Crypto.Sym.sound_ldrSp
 #print axioms M0Crypto.Sym.sound_strSp
@@ -203,25 +202,25 @@ theorem depends only on `propext`, `Classical.choice` and `Quot.sound`
 #print axioms M0Crypto.Sym.sound_ldm
 #print axioms M0Crypto.Sym.sound_of_falls
 
--- Approach C, H3 part B: symbolic accesses, symbolic traces and alignment.
+-- Symbolic executor: accesses, traces and alignment.
 #print axioms M0Crypto.Sym.symAccesses_sound
 #print axioms M0Crypto.Sym.symTrace_sound
 #print axioms M0Crypto.Sym.alignedAll_sym
 
--- Approach C, layer 3 template: normaliser and register bridge.
+-- Symbolic executor: normaliser and register bridge.
 #print axioms M0Crypto.Sym.norm_sound
 #print axioms M0Crypto.Sym.read32_write32_far
 #print axioms M0Crypto.Sym.execAll_regs_norm
 #print axioms M0Crypto.Sym.demo
 
--- Approach C, H1.5: carry/rotation rules, known registers, ChaCha core pilot.
+-- Symbolic executor: carry and rotation rules, known registers, ChaCha20 quarter-round core.
 #print axioms M0Crypto.Sym.awcK_sound
 #print axioms M0Crypto.Sym.rorK_sound
 #print axioms M0Crypto.Sym.initK_denote
 #print axioms M0Crypto.Sym.execAll_regs_normK
 #print axioms M0Crypto.Sym.core_regs_sym
 
--- Approach C, H5a: double-round pilot through the symbolic checker.
+-- Symbolic executor: ChaCha20 double round.
 #print axioms M0Crypto.Sym.read32_execAll_normK
 #print axioms M0Crypto.Sym.innerBlockF_hi
 #print axioms M0Crypto.Sym.inner_view
@@ -232,12 +231,12 @@ theorem depends only on `propext`, `Classical.choice` and `Quot.sound`
 #print axioms M0Crypto.Sym.dround_word
 #print axioms M0Crypto.Sym.dround_view_sym
 
--- Approach C, H5b: second block family (ChaCha output word) through the checker.
+-- Symbolic executor: ChaCha20 output word.
 #print axioms M0Crypto.Release.ChaCha20Output.ach_mem_sym
 #print axioms M0Crypto.Release.ChaCha20Output.ach_regs_sym
 #print axioms M0Crypto.Release.ChaCha20Output.ach_effect
 
--- Approach C, H7a: alignment and write-region checkers, their soundness, and Reach.symBlock.
+-- Symbolic executor: alignment and write-region checks, their soundness, and Reach.symBlock.
 #print axioms M0Crypto.Sym.peel_sound
 #print axioms M0Crypto.Sym.add_toNat_mod_of_dvd
 #print axioms M0Crypto.Sym.accAligned_sound
@@ -253,3 +252,25 @@ theorem depends only on `propext`, `Classical.choice` and `Quot.sound`
 #print axioms M0Crypto.Release.ChaCha20Xor.clear_regs
 #print axioms M0Crypto.Release.ChaCha20Xor.clear_accesses
 #print axioms M0Crypto.Release.ChaCha20Xor.clear_aligned
+
+-- Constant-time traces, read bounds and stack bounds: supporting lemmas.
+#print axioms M0Crypto.Release.ConstantTime.aligned_chunk_write_pc
+#print axioms M0Crypto.Release.ConstantTime.aligned_chunk_read_addresses
+#print axioms M0Crypto.Release.ConstantTime.aligned_chunk_policy
+#print axioms M0Crypto.Release.ConstantTime.chacha20_code_stack_disjoint
+#print axioms M0Crypto.Release.ConstantTime.aead_code_stack_disjoint
+#print axioms M0Crypto.Release.ConstantTime.chacha20_code_no_wrap
+#print axioms M0Crypto.Release.ConstantTime.aead_code_no_wrap
+#print axioms M0Crypto.Release.ConstantTime.chacha20_result_stack_window
+#print axioms M0Crypto.Release.ConstantTime.aead_result_stack_window
+
+-- Constant-time traces, read bounds and stack bounds (`Release/TraceSpec.lean`).
+#print axioms M0Crypto.Release.ChaCha20Xor.xor_constant_time
+#print axioms M0Crypto.Release.ChaCha20Xor.xor_reads
+#print axioms M0Crypto.Release.ChaCha20Xor.xor_stack
+#print axioms M0Crypto.Release.Aead.encrypt_constant_time
+#print axioms M0Crypto.Release.Aead.encrypt_reads
+#print axioms M0Crypto.Release.Aead.encrypt_stack
+#print axioms M0Crypto.Release.Aead.decrypt_constant_time
+#print axioms M0Crypto.Release.Aead.decrypt_reads
+#print axioms M0Crypto.Release.Aead.decrypt_stack

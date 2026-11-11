@@ -1,5 +1,6 @@
 import M0Crypto.Release.Frame
 import M0Crypto.Release.Layout
+import M0Crypto.Release.ReachSteps
 
 set_option linter.unusedSimpArgs false
 set_option maxRecDepth 100000
@@ -76,7 +77,6 @@ theorem read32_wctx_slot (ctx : Word) (j : Nat) (hj : j < 16) :
     rw [this]
 
 
-
 /-! ## The call -/
 
 structure ICtx where
@@ -148,19 +148,19 @@ theorem kw_read {c : ICtx} (hv : IValid c) (L : List (Nat × Word)) (hl : ∀ p 
 def gAnd (i a : Nat) : List Instr :=
   [.memImm .ldr 2 1 (BitVec.ofNat 5 i), .dp .ands 2 4, .memImm .str 2 0 (BitVec.ofNat 5 a)]
 
-theorem gAnd_run {c : ICtx} (hv : IValid c) {Wr : Word → Prop} (hW : ∀ o < 64, Wr (c.ctx + BitVec.ofNat 32 o))
+theorem gAnd_run {c : ICtx} (hv : IValid c) {Pc Wr : Word → Prop} (hW : ∀ o < 64, Wr (c.ctx + BitVec.ofNat 32 o))
     {off : Nat} {i a : Nat} {L : List (Nat × Word)} {t : State} (hI : IS c off L t) (ho : off % 2 = 0)
-    (hseq : seqAt B off (gAnd i a) = true) (hi : i < 8) (ha : a < 16) {Q : State → Prop}
+    (hseq : seqAt B off (gAnd i a) = true) (hi : i < 8) (ha : a < 16) (hr : InRegion Pc c.base off (seqSize (gAnd i a))) {Q : State → Prop}
     (k : ∀ t', IS c (off + seqSize (gAnd i a)) (L ++ [(a, c.kw i &&& t.regs 4)]) t' → t'.regs 2 = c.kw i &&& t.regs 4 →
-      t'.regs 4 = t.regs 4 → t'.regs 5 = t.regs 5 → Reach c.base Wr t' Q) :
-    Reach c.base Wr t Q := by
+      t'.regs 4 = t.regs 4 → t'.regs 5 = t.regs 5 → ReachW c.base Pc Wr t' Q) :
+    ReachW c.base Pc Wr t Q := by
   have hb2 : c.base.toNat % 2 = 0 := by have := hv.base4; omega
   obtain ⟨_, hc, _⟩ := hv.codeC
   have hk4 := hv.key4; have hc4 := hv.ctx4
   obtain ⟨hk, _, _⟩ := hv.keyC
   have ha' : a % 32 = a := Nat.mod_eq_of_lt (by omega)
   have hi' : i % 32 = i := Nat.mod_eq_of_lt (by omega)
-  apply Reach.block hb2 (gAnd i a) off hI.pc ho hseq (by simp [gAnd, Instr.falls])
+  apply ReachW.block hb2 (gAnd i a) off hI.pc ho hseq (by simp [gAnd, Instr.falls])
   · simp [alignedAll, gAnd, Instr.next, Instr.exec, Instr.exec.memOp, Instr.accesses, Access.aligned, MemOp.width,
       MemOp.isLoad, M0Crypto.Armv6M.State.setReg, M0Crypto.Armv6M.State.setNZ, M0Crypto.Armv6M.State.reg, M0Crypto.Proofs.toReg_0, M0Crypto.Proofs.toReg_1,
       M0Crypto.Proofs.toReg_2, M0Crypto.Proofs.toReg_4, hI.r0, hI.r1, hi', ha', BitVec.toNat_add]
@@ -174,6 +174,7 @@ theorem gAnd_run {c : ICtx} (hv : IValid c) {Wr : Word → Prop} (hW : ∀ o < 6
       ha'] at hy
     rw [hy, ofNat_add_assoc]
     exact hW (a * 4 + q) (by omega)
+  · exact hr
   · have e2 : ∀ r : Reg, r.val ≠ 15 → (execAll (gAnd i a) t).regs r =
         if r = 2 then c.kw i &&& t.regs 4 else t.regs r := by
       intro r hr
@@ -217,17 +218,17 @@ theorem keys_app {L : List (Nat × Word)} (hl : ∀ p ∈ L, p.1 < 16) (l : List
 
 def gS (b : Nat) : List Instr := [.lsrImm 5 2 2, .addReg 5 5 2, .memImm .str 5 0 (BitVec.ofNat 5 b)]
 
-theorem gS_run {c : ICtx} (hv : IValid c) {Wr : Word → Prop} (hW : ∀ o < 64, Wr (c.ctx + BitVec.ofNat 32 o))
+theorem gS_run {c : ICtx} (hv : IValid c) {Pc Wr : Word → Prop} (hW : ∀ o < 64, Wr (c.ctx + BitVec.ofNat 32 o))
     {off : Nat} {b : Nat} {L : List (Nat × Word)} {t : State} (hI : IS c off L t) (ho : off % 2 = 0)
-    (hseq : seqAt B off (gS b) = true) (hb : b < 16) {Q : State → Prop}
+    (hseq : seqAt B off (gS b) = true) (hb : b < 16) (hr : InRegion Pc c.base off (seqSize (gS b))) {Q : State → Prop}
     (k : ∀ t', IS c (off + seqSize (gS b)) (L ++ [(b, (t.regs 2 >>> 2) + t.regs 2)]) t' →
-      t'.regs 2 = t.regs 2 → t'.regs 4 = t.regs 4 → Reach c.base Wr t' Q) :
-    Reach c.base Wr t Q := by
+      t'.regs 2 = t.regs 2 → t'.regs 4 = t.regs 4 → ReachW c.base Pc Wr t' Q) :
+    ReachW c.base Pc Wr t Q := by
   have hb2 : c.base.toNat % 2 = 0 := by have := hv.base4; omega
   obtain ⟨_, hc, _⟩ := hv.codeC
   have hc4 := hv.ctx4
   have hb' : b % 32 = b := Nat.mod_eq_of_lt (by omega)
-  apply Reach.block hb2 (gS b) off hI.pc ho hseq (by simp [gS, Instr.falls])
+  apply ReachW.block hb2 (gS b) off hI.pc ho hseq (by simp [gS, Instr.falls])
   · simp (config := { decide := true }) [alignedAll, gS, Instr.next, Instr.exec, Instr.exec.memOp, Instr.accesses,
       Access.aligned, MemOp.width, MemOp.isLoad, M0Crypto.Armv6M.State.setReg, M0Crypto.Armv6M.State.setNZC,
       M0Crypto.Armv6M.State.reg, M0Crypto.Proofs.toReg_0, M0Crypto.Proofs.toReg_2, M0Crypto.Proofs.toReg_5,
@@ -242,6 +243,7 @@ theorem gS_run {c : ICtx} (hv : IValid c) {Wr : Word → Prop} (hW : ∀ o < 64,
       M0Crypto.Proofs.toReg_5, hI.r0, hb'] at hy
     rw [hy, ofNat_add_assoc]
     exact hW (b * 4 + q) (by omega)
+  · exact hr
   · have e2 : ∀ r : Reg, r.val ≠ 15 → (execAll (gS b) t).regs r =
         if r = 5 then (t.regs 2 >>> 2) + t.regs 2 else t.regs r := by
       intro r hr
@@ -274,19 +276,19 @@ theorem gS_run {c : ICtx} (hv : IValid c) {Wr : Word → Prop} (hW : ∀ o < 64,
 
 def gP (i a : Nat) : List Instr := [.memImm .ldr 2 1 (BitVec.ofNat 5 i), .memImm .str 2 0 (BitVec.ofNat 5 a)]
 
-theorem gP_run {c : ICtx} (hv : IValid c) {Wr : Word → Prop} (hW : ∀ o < 64, Wr (c.ctx + BitVec.ofNat 32 o))
+theorem gP_run {c : ICtx} (hv : IValid c) {Pc Wr : Word → Prop} (hW : ∀ o < 64, Wr (c.ctx + BitVec.ofNat 32 o))
     {off : Nat} {i a : Nat} {L : List (Nat × Word)} {t : State} (hI : IS c off L t) (ho : off % 2 = 0)
-    (hseq : seqAt B off (gP i a) = true) (hi : i < 8) (ha : a < 16) {Q : State → Prop}
+    (hseq : seqAt B off (gP i a) = true) (hi : i < 8) (ha : a < 16) (hr : InRegion Pc c.base off (seqSize (gP i a))) {Q : State → Prop}
     (k : ∀ t', IS c (off + seqSize (gP i a)) (L ++ [(a, c.kw i)]) t' → t'.regs 2 = c.kw i →
-      t'.regs 4 = t.regs 4 → t'.regs 5 = t.regs 5 → Reach c.base Wr t' Q) :
-    Reach c.base Wr t Q := by
+      t'.regs 4 = t.regs 4 → t'.regs 5 = t.regs 5 → ReachW c.base Pc Wr t' Q) :
+    ReachW c.base Pc Wr t Q := by
   have hb2 : c.base.toNat % 2 = 0 := by have := hv.base4; omega
   obtain ⟨_, hc, _⟩ := hv.codeC
   have hk4 := hv.key4; have hc4 := hv.ctx4
   obtain ⟨hk, _, _⟩ := hv.keyC
   have ha' : a % 32 = a := Nat.mod_eq_of_lt (by omega)
   have hi' : i % 32 = i := Nat.mod_eq_of_lt (by omega)
-  apply Reach.block hb2 (gP i a) off hI.pc ho hseq (by simp [gP, Instr.falls])
+  apply ReachW.block hb2 (gP i a) off hI.pc ho hseq (by simp [gP, Instr.falls])
   · simp (config := { decide := true }) [alignedAll, gP, Instr.next, Instr.exec, Instr.exec.memOp, Instr.accesses,
       Access.aligned, MemOp.width, MemOp.isLoad, M0Crypto.Armv6M.State.setReg, M0Crypto.Armv6M.State.reg,
       M0Crypto.Proofs.toReg_0, M0Crypto.Proofs.toReg_1, M0Crypto.Proofs.toReg_2, hI.r0, hI.r1, ha', hi',
@@ -301,6 +303,7 @@ theorem gP_run {c : ICtx} (hv : IValid c) {Wr : Word → Prop} (hW : ∀ o < 64,
       ha'] at hy
     rw [hy, ofNat_add_assoc]
     exact hW (a * 4 + q) (by omega)
+  · exact hr
   · have e2 : ∀ r : Reg, r.val ≠ 15 → (execAll (gP i a) t).regs r = if r = 2 then c.kw i else t.regs r := by
       intro r hr
       have h15 : (r = 15) = False := eq_false (fun e => hr (by rw [e]; rfl))
@@ -336,18 +339,18 @@ def gZ : List Instr :=
 
 def zL : List (Nat × Word) := [(0, 0#32), (1, 0#32), (2, 0#32), (3, 0#32), (4, 0#32)]
 
-theorem gZ_run {c : ICtx} (hv : IValid c) {Wr : Word → Prop} (hW : ∀ o < 64, Wr (c.ctx + BitVec.ofNat 32 o))
+theorem gZ_run {c : ICtx} (hv : IValid c) {Pc Wr : Word → Prop} (hW : ∀ o < 64, Wr (c.ctx + BitVec.ofNat 32 o))
     {off : Nat} {L : List (Nat × Word)} {t : State} (hI : IS c off L t) (ho : off % 2 = 0)
-    (hseq : seqAt B off gZ = true) {Q : State → Prop}
+    (hseq : seqAt B off gZ = true) (hr : InRegion Pc c.base off (seqSize gZ)) {Q : State → Prop}
     (k : ∀ t', t'.pc = c.base + BitVec.ofNat 32 (off + seqSize gZ) →
       t'.mem = wctx c.ctx c.mP (L ++ zL) →
       (∀ r : Reg, r.val ≠ 1 → r.val ≠ 2 → r.val ≠ 3 → r.val ≠ 15 → t'.regs r = t.regs r) →
-      t'.regs 1 = 0#32 → t'.regs 2 = 0#32 → t'.regs 3 = 0#32 → Reach c.base Wr t' Q) :
-    Reach c.base Wr t Q := by
+      t'.regs 1 = 0#32 → t'.regs 2 = 0#32 → t'.regs 3 = 0#32 → ReachW c.base Pc Wr t' Q) :
+    ReachW c.base Pc Wr t Q := by
   have hb2 : c.base.toNat % 2 = 0 := by have := hv.base4; omega
   obtain ⟨_, hc, _⟩ := hv.codeC
   have hc4 := hv.ctx4
-  apply Reach.block hb2 gZ off hI.pc ho hseq (by simp [gZ, Instr.falls])
+  apply ReachW.block hb2 gZ off hI.pc ho hseq (by simp [gZ, Instr.falls])
   · simp (config := { decide := true }) [alignedAll, gZ, Instr.next, Instr.exec, Instr.exec.memOp, Instr.accesses,
       Access.aligned, MemOp.width, MemOp.isLoad, M0Crypto.Armv6M.State.setReg, M0Crypto.Armv6M.State.setNZ,
       M0Crypto.Armv6M.State.reg, M0Crypto.Proofs.toReg_0, M0Crypto.Proofs.toReg_1, M0Crypto.Proofs.toReg_2,
@@ -363,6 +366,7 @@ theorem gZ_run {c : ICtx} (hv : IValid c) {Wr : Word → Prop} (hW : ∀ o < 64,
       rw [hy]
     · simpa using hW q (by omega)
     all_goals rw [ofNat_add_assoc]; exact hW _ (by omega)
+  · exact hr
   · have e2 : ∀ r : Reg, r.val ≠ 15 → (execAll gZ t).regs r =
         if r = 3 then 0#32 else if r = 1 then 0#32 else if r = 2 then 0#32 else t.regs r := by
       intro r hr
@@ -413,13 +417,13 @@ theorem read32_code_wctx {c : ICtx} (hv : IValid c) (L : List (Nat × Word)) (hl
   apply mP_other c hv _
   simp only [BitVec.toNat_add, BitVec.toNat_ofNat]; omega
 
-theorem gLit_run {c : ICtx} (hv : IValid c) {Wr : Word → Prop}
+theorem gLit_run {c : ICtx} (hv : IValid c) {Pc Wr : Word → Prop}
     {off imm : Nat} {L : List (Nat × Word)} {t : State} (hI : IS c off L t) (ho : off % 4 = 2)
     (hi : instrAt B off = some (.ldrLit 4 (BitVec.ofNat 8 imm))) (himm : imm < 256)
-    (hl : (off + 4) / 4 * 4 + imm * 4 + 4 ≤ Artifacts.Release.size) {Q : State → Prop}
+    (hl : (off + 4) / 4 * 4 + imm * 4 + 4 ≤ Artifacts.Release.size) (hr : Pc (c.base + BitVec.ofNat 32 off)) {Q : State → Prop}
     (k : ∀ t', IS c (off + litSize) L t' → t'.regs 4 = codeWord ((off + 4) / 4 * 4 + imm * 4) →
-      t'.regs 5 = t.regs 5 → t'.regs 2 = t.regs 2 → Reach c.base Wr t' Q) :
-    Reach c.base Wr t Q := by
+      t'.regs 5 = t.regs 5 → t'.regs 2 = t.regs 2 → ReachW c.base Pc Wr t' Q) :
+    ReachW c.base Pc Wr t Q := by
   have hb2 : c.base.toNat % 2 = 0 := by have := hv.base4; omega
   obtain ⟨b1, _, _⟩ := hv.codeC
   have hla : ((t.pc + 4#32) &&& ~~~3#32) + BitVec.ofNat 32 ((BitVec.ofNat 8 imm).toNat * 4) =
@@ -429,9 +433,9 @@ theorem gLit_run {c : ICtx} (hv : IValid c) {Wr : Word → Prop}
   have hacc : (Instr.ldrLit 4 (BitVec.ofNat 8 imm)).accesses t =
       [⟨.read, c.base + BitVec.ofNat 32 ((off + 4) / 4 * 4 + imm * 4), 4⟩] := by
     simp only [Instr.accesses, M0Crypto.Armv6M.State.pc] at hla ⊢; rw [hla]
-  apply Reach.step hb2 off _ hI.pc (by omega) hi (by rw [B_len]; simp [Instr.size]; omega)
+  apply ReachW.step hb2 off _ hI.pc (by omega) hi (by rw [B_len]; simp [Instr.size]; omega)
     (by rw [hacc]; simp [Access.aligned, BitVec.toNat_add]; have := hv.base4; omega) rfl
-    (by intro y ⟨a, ha, hw, _⟩; simp [Instr.accesses] at ha; subst ha; cases hw)
+    (by intro y ⟨a, ha, hw, _⟩; simp [Instr.accesses] at ha; subst ha; cases hw) hr
   have e2 : ∀ r : Reg, r.val ≠ 15 → ((Instr.ldrLit 4 (BitVec.ofNat 8 imm)).next t).regs r =
       if r = 4 then codeWord ((off + 4) / 4 * 4 + imm * 4) else t.regs r := by
     intro r hr
@@ -440,7 +444,7 @@ theorem gLit_run {c : ICtx} (hv : IValid c) {Wr : Word → Prop}
     rw [hla, hI.mem, read32_code_wctx hv L hI.keys _ hl]
   have e' : ∀ r : Reg, r.val ≠ 4 → r.val ≠ 15 → ((Instr.ldrLit 4 (BitVec.ofNat 8 imm)).next t).regs r = t.regs r := by
     intro r h4 h15; rw [e2 r h15]; simp only [show r ≠ 4 from fun e => h4 (by rw [e]; rfl), ite_false]
-  show Reach c.base Wr ((Instr.ldrLit 4 (BitVec.ofNat 8 imm)).next t) Q
+  show ReachW c.base Pc Wr ((Instr.ldrLit 4 (BitVec.ofNat 8 imm)).next t) Q
   apply k
   · exact { pc := by
               have := execAll_pc [Instr.ldrLit 4 (BitVec.ofNat 8 imm)] t (by simp [Instr.falls])
@@ -506,12 +510,12 @@ structure IEntry (c : ICtx) (s : State) : Prop where
   r0 : c.regs0 0 = c.ctx
   r1 : c.regs0 1 = c.key
 
-theorem push_run {c : ICtx} (hv : IValid c) {Wr : Word → Prop}
+theorem push_run {c : ICtx} (hv : IValid c) {Pc Wr : Word → Prop}
     (hWs : ∀ o < 12, Wr (c.sp0 - BitVec.ofNat 32 12 + BitVec.ofNat 32 o)) {s : State} (he : IEntry c s)
-    {Q : State → Prop}
+    (hr : Pc (c.base + BitVec.ofNat 32 entryAt)) {Q : State → Prop}
     (k : ∀ t, IS c ld0At [] t → t.regs 4 = c.regs0 4 → t.regs 5 = c.regs0 5 → t.regs 2 = c.regs0 2 →
-      Reach c.base Wr t Q) :
-    Reach c.base Wr s Q := by
+      ReachW c.base Pc Wr t Q) :
+    ReachW c.base Pc Wr s Q := by
   have hb2 : c.base.toNat % 2 = 0 := by have := hv.base4; omega
   have hpc : s.pc = c.base + BitVec.ofNat 32 entryAt := by
     show s.regs 15 = _; rw [he.regs, he.pc]
@@ -519,7 +523,7 @@ theorem push_run {c : ICtx} (hv : IValid c) {Wr : Word → Prop}
   have hs := toNat_sp12 hv; have := hv.sp4; have := hv.spLo
   have hsp : s.regs 13 - BitVec.ofNat 32 (4 * (bitCount 48#8 + true.toNat)) = c.sp0 - BitVec.ofNat 32 12 := by
     rw [h13, bitCount_48]; rfl
-  apply Reach.step hb2 entryAt (.push 0x30 true) hpc (by decide) (by decide) (by rw [B_len]; decide)
+  apply ReachW.step hb2 entryAt (.push 0x30 true) hpc (by decide) (by decide) (by rw [B_len]; decide)
     (by simp only [Instr.accesses, M0Crypto.Armv6M.State.sp, wordAccesses]
         rw [show (0x30 : BitVec 8) = 48#8 from rfl, hsp]
         simp [Access.aligned, List.range_succ, BitVec.toNat_add, bitCount_48]; omega) rfl
@@ -529,6 +533,7 @@ theorem push_run {c : ICtx} (hv : IValid c) {Wr : Word → Prop}
     simp [List.range_succ, bitCount_48] at ha
     rcases ha with rfl | rfl | rfl <;> simp at hq hy <;> rw [hy] <;>
       (try rw [ofNat_add_assoc]) <;> (try rw [ofNat_add_assoc]) <;> exact hWs _ (by omega)
+  · exact hr
   have e2 : ∀ r : Reg, r.val ≠ 15 → ((Instr.push 0x30 true).next s).regs r =
       if r = 13 then c.sp0 - BitVec.ofNat 32 12 else c.regs0 r := by
     intro r hr
@@ -537,7 +542,7 @@ theorem push_run {c : ICtx} (hv : IValid c) {Wr : Word → Prop}
       show (0x30 : BitVec 8) = 48#8 from rfl, hsp, h15, ite_false, he.regs, he.sp, bitCount_48, Bool.toNat_true]
   have e' : ∀ r : Reg, r.val ≠ 13 → r.val ≠ 15 → ((Instr.push 0x30 true).next s).regs r = c.regs0 r := by
     intro r h13 h15; rw [e2 r h15]; simp only [show r ≠ 13 from fun e => h13 (by rw [e]; rfl), ite_false]
-  show Reach c.base Wr ((Instr.push 0x30 true).next s) Q
+  show ReachW c.base Pc Wr ((Instr.push 0x30 true).next s) Q
   apply k
   · exact { pc := by
               have := execAll_pc [Instr.push 0x30 true] s (by simp [Instr.falls])
@@ -567,14 +572,14 @@ theorem saved_read {c : ICtx} (hv : IValid c) (L : List (Nat × Word)) (hl : ∀
     (by simp only [BitVec.toNat_add, BitVec.toNat_ofNat]; omega) _ _ hl]
   exact Frame.read32_storeWords_same _ _ _ i (by simp; omega) (by simp)
 
-theorem pop_run {c : ICtx} (hv : IValid c) {Wr : Word → Prop} {L : List (Nat × Word)} {t : State}
+theorem pop_run {c : ICtx} (hv : IValid c) {Pc Wr : Word → Prop} {L : List (Nat × Word)} {t : State}
     (hpc : t.pc = c.base + BitVec.ofNat 32 popAt) (hsp : t.regs 13 = c.sp0 - BitVec.ofNat 32 12)
     (hm : t.mem = wctx c.ctx c.mP L) (hl : ∀ p ∈ L, p.1 < 16) (hlr : (c.regs0 14).getLsbD 0 = true)
-    {Q : State → Prop}
+    (hr : Pc (c.base + BitVec.ofNat 32 popAt)) {Q : State → Prop}
     (k : ∀ t', t'.pc = c.regs0 14 &&& ~~~1#32 → t'.regs 13 = c.sp0 → t'.regs 4 = c.regs0 4 →
       t'.regs 5 = c.regs0 5 → (∀ r : Reg, r.val ≠ 4 → r.val ≠ 5 → r.val ≠ 13 → r.val ≠ 15 → t'.regs r = t.regs r) →
-      t'.mem = t.mem → Reach c.base Wr t' Q) :
-    Reach c.base Wr t Q := by
+      t'.mem = t.mem → ReachW c.base Pc Wr t' Q) :
+    ReachW c.base Pc Wr t Q := by
   have hb2 : c.base.toNat % 2 = 0 := by have := hv.base4; omega
   have hs := toNat_sp12 hv; have := hv.sp4; have := hv.spLo
   have sv0 := saved_read hv L hl 0 (by decide)
@@ -591,12 +596,12 @@ theorem pop_run {c : ICtx} (hv : IValid c) {Wr : Word → Prop} {L : List (Nat �
       ite_true, listRegs_48, List.map, M0Crypto.Proofs.toReg_4, M0Crypto.Proofs.toReg_5, bitCount_48, Instr.size]
     congr 4
     rw [hsp]; simp only [Bool.toNat_true]; bv_omega
-  apply Reach.step hb2 popAt (.pop 0x30 true) hpc (by decide) (by decide) (by rw [B_len]; decide)
+  apply ReachW.step hb2 popAt (.pop 0x30 true) hpc (by decide) (by decide) (by rw [B_len]; decide)
     (by simp only [Instr.accesses, M0Crypto.Armv6M.State.sp, wordAccesses, hsp,
           show (0x30 : BitVec 8) = 48#8 from rfl, bitCount_48]
         simp [Access.aligned, List.range_succ, BitVec.toNat_add]; omega) hex
     (by intro y ⟨a, ha, hw, _⟩; simp [Instr.accesses, wordAccesses] at ha
-        obtain ⟨_, _, rfl⟩ := ha; cases hw)
+        obtain ⟨_, _, rfl⟩ := ha; cases hw) hr
   apply k
   · rfl
   · rfl
@@ -634,39 +639,48 @@ theorem init_seq :
     instrAt B ld1At = some (.ldrLit 4 (BitVec.ofNat 8 (litImm ld1At (poolAt + 4)))) := by
   decide
 
+/-- Program counters of `m0c_poly1305_init`. -/
+abbrev InitPc (base : Word) : Word → Prop := M0Crypto.Release.ConstantTime.PCBetween base entryAt (popAt + 2)
+
+theorem initPc_at {base : Word} {off : Nat} (h1 : entryAt ≤ off) (h2 : off < popAt + 2) :
+    InitPc base (base + BitVec.ofNat 32 off) := ⟨off, h1, h2, rfl⟩
+
+theorem initRegion {base : Word} {off n : Nat} (h1 : entryAt ≤ off) (h2 : off + n ≤ popAt + 2) :
+    InRegion (InitPc base) base off n := inRegion_pcBetween h1 h2
+
 /-- `m0c_poly1305_init` from entry to its return: SP and r4-r12, LR restored, r1-r3 zero,
 memory equal to the entry memory with the 12 saved bytes below SP and the 64 context
 bytes replaced as `initL` lists. Every write is in those 76 bytes (`Wr` contains them). -/
-theorem init_run (c : ICtx) (hv : IValid c) {Wr : Word → Prop}
+theorem init_run_w (c : ICtx) (hv : IValid c) {Wr : Word → Prop}
     (hWs : ∀ o < 12, Wr (c.sp0 - BitVec.ofNat 32 12 + BitVec.ofNat 32 o))
     (hWc : ∀ o < 64, Wr (c.ctx + BitVec.ofNat 32 o)) (s : State) (he : IEntry c s)
     (hlr : (c.regs0 14).getLsbD 0 = true) :
-    Reach c.base Wr s fun t => t.pc = c.regs0 14 &&& ~~~1#32 ∧ t.regs 13 = c.sp0 ∧
+    ReachW c.base (InitPc c.base) Wr s fun t => t.pc = c.regs0 14 &&& ~~~1#32 ∧ t.regs 13 = c.sp0 ∧
       (∀ r : Reg, r.val ≠ 1 → r.val ≠ 2 → r.val ≠ 3 → r.val ≠ 13 → r.val ≠ 15 → t.regs r = c.regs0 r) ∧
       t.regs 1 = 0#32 ∧ t.regs 2 = 0#32 ∧ t.regs 3 = 0#32 ∧ t.mem = wctx c.ctx c.mP (initL c) := by
   obtain ⟨q1, q2, q3, q4, q5, q6, q7, q8, q9, q10, q11, q12, l1, l2⟩ := init_seq
-  apply push_run hv hWs he; intro t0 I0 a4 a5 _
-  apply gLit_run hv I0 (by decide) l1 (by decide) (by decide); intro t1 I1 b4 b5 _
+  apply push_run hv hWs he (initPc_at (by decide +kernel) (by decide +kernel)); intro t0 I0 a4 a5 _
+  apply gLit_run hv I0 (by decide) l1 (by decide) (by decide) (initPc_at (by decide +kernel) (by decide +kernel)); intro t1 I1 b4 b5 _
   rw [litImm_target ld0At poolAt (by decide) (by decide), cw_r0] at b4
-  apply gAnd_run hv hWc I1 (by decide) q1 (by decide) (by decide); intro t2 I2 _ c4 c5
-  apply gLit_run hv I2 (by decide) l2 (by decide) (by decide); intro t3 I3 d4 d5 _
+  apply gAnd_run hv hWc I1 (by decide) q1 (by decide) (by decide) (initRegion (by decide +kernel) (by decide +kernel)); intro t2 I2 _ c4 c5
+  apply gLit_run hv I2 (by decide) l2 (by decide) (by decide) (initPc_at (by decide +kernel) (by decide +kernel)); intro t3 I3 d4 d5 _
   rw [show ld0At + litSize + seqSize (gAnd 0 5) = ld1At from rfl,
     litImm_target ld1At (poolAt + 4) (by decide) (by decide), cw_r] at d4
-  apply gAnd_run hv hWc I3 (by decide) q2 (by decide) (by decide); intro t4 I4 e2 e4 e5
-  apply gS_run hv hWc I4 (by decide) q3 (by decide); intro t5 I5 f2 f4
-  apply gAnd_run hv hWc I5 (by decide) q4 (by decide) (by decide); intro t6 I6 g2 g4 g5
-  apply gS_run hv hWc I6 (by decide) q5 (by decide); intro t7 I7 h2 h4
-  apply gAnd_run hv hWc I7 (by decide) q6 (by decide) (by decide); intro t8 I8 i2 i4 i5
-  apply gS_run hv hWc I8 (by decide) q7 (by decide); intro t9 I9 _ _
-  apply gP_run hv hWc I9 (by decide) q8 (by decide) (by decide); intro t10 I10 _ _ _
-  apply gP_run hv hWc I10 (by decide) q9 (by decide) (by decide); intro t11 I11 _ _ _
-  apply gP_run hv hWc I11 (by decide) q10 (by decide) (by decide); intro t12 I12 _ _ _
-  apply gP_run hv hWc I12 (by decide) q11 (by decide) (by decide); intro t13 I13 _ _ _
-  apply gZ_run hv hWc I13 (by decide) q12; intro t14 p14 m14 o14 z1 z2 z3
+  apply gAnd_run hv hWc I3 (by decide) q2 (by decide) (by decide) (initRegion (by decide +kernel) (by decide +kernel)); intro t4 I4 e2 e4 e5
+  apply gS_run hv hWc I4 (by decide) q3 (by decide) (initRegion (by decide +kernel) (by decide +kernel)); intro t5 I5 f2 f4
+  apply gAnd_run hv hWc I5 (by decide) q4 (by decide) (by decide) (initRegion (by decide +kernel) (by decide +kernel)); intro t6 I6 g2 g4 g5
+  apply gS_run hv hWc I6 (by decide) q5 (by decide) (initRegion (by decide +kernel) (by decide +kernel)); intro t7 I7 h2 h4
+  apply gAnd_run hv hWc I7 (by decide) q6 (by decide) (by decide) (initRegion (by decide +kernel) (by decide +kernel)); intro t8 I8 i2 i4 i5
+  apply gS_run hv hWc I8 (by decide) q7 (by decide) (initRegion (by decide +kernel) (by decide +kernel)); intro t9 I9 _ _
+  apply gP_run hv hWc I9 (by decide) q8 (by decide) (by decide) (initRegion (by decide +kernel) (by decide +kernel)); intro t10 I10 _ _ _
+  apply gP_run hv hWc I10 (by decide) q9 (by decide) (by decide) (initRegion (by decide +kernel) (by decide +kernel)); intro t11 I11 _ _ _
+  apply gP_run hv hWc I11 (by decide) q10 (by decide) (by decide) (initRegion (by decide +kernel) (by decide +kernel)); intro t12 I12 _ _ _
+  apply gP_run hv hWc I12 (by decide) q11 (by decide) (by decide) (initRegion (by decide +kernel) (by decide +kernel)); intro t13 I13 _ _ _
+  apply gZ_run hv hWc I13 (by decide) q12 (initRegion (by decide +kernel) (by decide +kernel)); intro t14 p14 m14 o14 z1 z2 z3
   apply pop_run hv p14 (by rw [o14 13 (by decide) (by decide) (by decide) (by decide), I13.sp]) m14
-    (keys_app I13.keys _ (by simp [zL])) hlr
+    (keys_app I13.keys _ (by simp [zL])) hlr (initPc_at (by decide +kernel) (by decide +kernel))
   intro t15 p15 s15 r4 r5 o15 m15
-  apply Reach.done
+  apply ReachS.done
   refine ⟨p15, s15, ?_, ?_, ?_, ?_, ?_⟩
   · intro r h1 h2 h3 h13 h15
     by_cases h4 : r.val = 4
@@ -749,11 +763,16 @@ theorem result_of_reach (c : ICtx) (hv : IValid c) {t : State}
   rw [h7, wctx_other _ c1 _ (by omega) _ _ (initL_keys c), mP_other c hv _ (by omega)]
 
 /-- `m0c_poly1305_init` composed inside a larger run (`Wr` contains the 76 bytes). -/
+theorem init_reach_w (c : ICtx) (hv : IValid c) {Wr : Word → Prop} (hW : ∀ y, IWr c y → Wr y)
+    (s : State) (he : IEntry c s) (hlr : (c.regs0 14).getLsbD 0 = true) :
+    ReachW c.base (InitPc c.base) Wr s (IResult c) :=
+  (init_run_w c hv (fun o ho => hW _ (.inl ⟨o, ho, rfl⟩)) (fun o ho => hW _ (.inr ⟨o, ho, rfl⟩)) s he hlr).mono
+    (fun _ _ h => h) (fun _ h => result_of_reach c hv h)
+
 theorem init_reach (c : ICtx) (hv : IValid c) {Wr : Word → Prop} (hW : ∀ y, IWr c y → Wr y)
     (s : State) (he : IEntry c s) (hlr : (c.regs0 14).getLsbD 0 = true) :
     Reach c.base Wr s (IResult c) :=
-  (init_run c hv (fun o ho => hW _ (.inl ⟨o, ho, rfl⟩)) (fun o ho => hW _ (.inr ⟨o, ho, rfl⟩)) s he hlr).mono
-    (fun _ h => result_of_reach c hv h)
+  (init_reach_w c hv hW s he hlr).toReach
 
 /-- `m0c_poly1305_init`: from an entry state with an odd LR whose target is outside the
 Artifacts.Release.size code bytes, the model's `runUntil` returns in an `IResult` state, and every write of the

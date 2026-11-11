@@ -1,3 +1,4 @@
+import M0Crypto.Release.ReachInv
 import M0Crypto.Release.AeadSetup
 set_option linter.unusedSimpArgs false
 set_option maxRecDepth 100000
@@ -73,17 +74,25 @@ structure CryptPost (c : ACall) (off : Nat) (t u : State) : Prop where
 def CryptWr (c : ACall) (y : Word) : Prop := SWr c.A y ∨ OutR c y
 
 /-- Expose the ChaCha call state while retaining its functional continuation. -/
-theorem crypt_reach_select (c : ACall) (hv : AValid c) (hb : ABuf c) (off : Nat) (i : BitVec 25)
+theorem crypt_reach_select_gen {Pn : Word → Prop} {P : State → Event → Prop} (c : ACall) (hv : AValid c) (hb : ABuf c) (off : Nat) (i : BitVec 25)
     (hseq : seqAt B off crypt = true) (hbl : instrAt B (off + cryptXorOff) = some (.bl i))
     (ht : blTarget (off + cryptXorOff) i = BitVec.ofNat 32 xorOff) (ho : off % 2 = 0) (hox : off + cryptEnd ≤ Artifacts.Release.size)
     (t : State) (tpc : t.pc = c.base + BitVec.ofNat 32 off) (t13 : t.regs 13 = c.A) (thi : Hi c t.mem)
     (tn : read32 t.mem c.A = c.nonce) (tout : ∀ y, ¬ SWr c.A y → t.mem y = c.m0 y)
     (Q : State → Prop)
+    (hrc : InRegion Pn c.base off (seqSize crypt))
+    (hrx : Pn (c.base + BitVec.ofNat 32 (off + cryptXorOff)))
+    (hP : ∀ x ev, RegionWrites Pn (CryptWr c) x ev → P x ev)
+    (hcall : ∀ (xc : Ctx) (u : State), Valid xc → ChaCha20Setup.Entry xc u →
+      (xc.regs0 14).getLsbD 0 = true → xc.base = c.base → xc.out = c.out → xc.len = c.len →
+      xc.ctr = 1#32 → xc.sp0 = c.A → xc.regs0 14 &&& ~~~1#32 = c.base + BitVec.ofNat 32 (off + cryptEnd) →
+      xc.inp = c.inp → xc.key = c.key → xc.nonce = c.nonce →
+      ReachS c.base P u (fun v => v.pc = xc.regs0 14 &&& ~~~1#32 ∧ ChaCha20Xor.Result xc v))
     (hselect : ∀ (xc : Ctx) (u : State), Valid xc → ChaCha20Setup.Entry xc u →
       xc.base = c.base → xc.out = c.out → xc.len = c.len → xc.ctr = 1#32 →
       xc.inp = c.inp → xc.key = c.key → xc.nonce = c.nonce → xc.sp0 = c.A →
-      Reach c.base (CryptWr c) u (CryptPost c off t) → Reach c.base (CryptWr c) u Q) :
-    Reach c.base (CryptWr c) t Q := by
+      ReachS c.base P u (CryptPost c off t) → ReachS c.base P u Q) :
+    ReachS c.base P t Q := by
   have hb2 : c.base.toNat % 2 = 0 := by have := hv.base4; omega
   have hA := hv.A_lo
   have hA' := hv.A_hi
@@ -93,7 +102,7 @@ theorem crypt_reach_select (c : ACall) (hv : AValid c) (hb : ABuf c) (off : Nat)
     rw [cm]; exact write32_other' _ _ _ _ (fun q hq => by
       rw [ofNat_add_assoc]; exact off_ne _ (by omega) (by omega) (by omega))
   rw [H1.out] at c0; rw [H1.inp] at c1; rw [H1.len] at c2; rw [H1.key] at c3
-  apply Reach.block hb2 crypt off tpc ho hseq (by decide)
+  apply ReachS.blockW hP hrc hb2 tpc ho hseq (by decide)
     (by
       have hA4 : c.A.toNat % 8 = 0 := by rw [hv.A_toNat]; have := hv.sp8; have := hv.spLo; omega
       simp [alignedAll, crypt, Instr.accesses, Access.aligned, Instr.next, Instr.exec,
@@ -114,7 +123,7 @@ theorem crypt_reach_select (c : ACall) (hv : AValid c) (hb : ABuf c) (off : Nat)
   generalize hs1 : execAll crypt t = s1 at cm c0 c1 c2 c3 cr H1
   have p1 : s1.pc = c.base + BitVec.ofNat 32 (off + cryptXorOff) := by
     rw [← hs1, execAll_pc _ _ (by decide), tpc, ofNat_add_assoc]; rfl
-  apply Reach.bl hb2 (off + cryptXorOff) xorOff i p1 (by have := cryptXorOff_even; omega) hbl
+  apply ReachS.blW hP hrx hb2 xorOff i p1 (by have := cryptXorOff_even; omega) hbl
     (by have := cryptXorOff_ret; omega) ht
   generalize hu : (s1.setReg 14 ((c.base + BitVec.ofNat 32 (off + cryptXorOff + 4)) ||| 1#32)).setReg 15
     (c.base + BitVec.ofNat 32 xorOff) = u
@@ -153,13 +162,14 @@ theorem crypt_reach_select (c : ACall) (hv : AValid c) (hb : ABuf c) (off : Nat)
     r3 := by show u.regs 3 = _; rw [ur 3 (by decide) (by decide), c3]
     argN := by show read32 u.mem c.A = _; rw [um, cm, rd_wr_0 _ _ _ 4 (by decide) (by decide) (by decide), tn]
     argC := by show read32 u.mem (c.A + 4#32) = _; rw [um, cm]; exact M0Crypto.Armv6M.read32_write32_same _ _ _ }
-  have hrest : Reach c.base (CryptWr c) u (CryptPost c off t) := by
+  have hrest : ReachS c.base P u (CryptPost c off t) := by
     have hlr : (xc.regs0 14).getLsbD 0 = true := by show (u.regs 14).getLsbD 0 = true; rw [u14]; exact lr_odd _
-    have wr : ∀ y, ChaCha20Xor.WrOk xc y → CryptWr c y := by
-      rintro y (⟨o, ho, rfl⟩ | ⟨_, hy⟩)
-      · exact .inl (swr_lo c.A o ho)
-      · exact .inr hy
-    apply ((ChaCha20Xor.xor_reach xc xv u xe hlr).monoW wr).mono
+    have hretE : xc.regs0 14 &&& ~~~1#32 = c.base + BitVec.ofNat 32 (off + cryptEnd) := by
+      show u.regs 14 &&& ~~~1#32 = _
+      have hset : off + cryptXorOff + 4 = off + cryptEnd := by have := cryptXorOff_ret; omega
+      rw [u14, lr_mask _ (even_off c.base hv.base4 (off + cryptXorOff + 4)
+        (by have := cryptXorOff_even; omega)), hset]
+    apply (hcall xc u xv xe hlr rfl rfl rfl rfl rfl hretE rfl rfl rfl).mono (fun _ _ h => h)
     rintro v ⟨vpc, hr⟩
     have hok : M0Crypto.Spec.Aead.counterOk xc.ctr.toNat xc.len.toNat = true := by
       show M0Crypto.Spec.Aead.counterOk (1#32 : Word).toNat c.len.toNat = true
@@ -180,7 +190,7 @@ theorem crypt_reach_select (c : ACall) (hv : AValid c) (hb : ABuf c) (off : Nat)
       apply List.ext_getElem?
       intro j
       by_cases hj : j < c.len.toNat
-      · rw [ChaCha20Output.bytesAt_get _ _ _ _ hj]
+      · rw [Frame.bytesAt_get _ _ _ _ hj]
         have hS : ChaCha20Xor.OutS xc (c.out + BitVec.ofNat 32 j) := fun o ho =>
           ne_of_disj outD.1 outD.2.1 outD.2.2 hj ho
         rw [hr.mem _ hS, Ctx.oidx, show xc.out = c.out from rfl, sub_off _ _ (by have := c.len.isLt; omega),
@@ -197,6 +207,48 @@ theorem crypt_reach_select (c : ACall) (hv : AValid c) (hb : ABuf c) (off : Nat)
       show u.mem y = _
       rw [um, cm, write32_other' _ _ _ _ (fun q hq e => h2 q hq (by rw [e, ofNat_add_assoc]))]
   exact hselect xc u xv xe rfl rfl rfl rfl rfl rfl rfl rfl hrest
+
+
+/-- Expose the ChaCha call state while retaining its functional continuation. -/
+theorem crypt_reach_select_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (hb : ABuf c) (off : Nat) (i : BitVec 25)
+    (hseq : seqAt B off crypt = true) (hbl : instrAt B (off + cryptXorOff) = some (.bl i))
+    (ht : blTarget (off + cryptXorOff) i = BitVec.ofNat 32 xorOff) (ho : off % 2 = 0) (hox : off + cryptEnd ≤ Artifacts.Release.size)
+    (t : State) (tpc : t.pc = c.base + BitVec.ofNat 32 off) (t13 : t.regs 13 = c.A) (thi : Hi c t.mem)
+    (tn : read32 t.mem c.A = c.nonce) (tout : ∀ y, ¬ SWr c.A y → t.mem y = c.m0 y)
+    (Q : State → Prop)
+    (hrc : InRegion Pc c.base off (seqSize crypt))
+    (hrx : Pc (c.base + BitVec.ofNat 32 (off + cryptXorOff)))
+    (hPc : ∀ pc, ChaCha20Policy.ChaPc c.base pc → Pc pc)
+    (hselect : ∀ (xc : Ctx) (u : State), Valid xc → ChaCha20Setup.Entry xc u →
+      xc.base = c.base → xc.out = c.out → xc.len = c.len → xc.ctr = 1#32 →
+      xc.inp = c.inp → xc.key = c.key → xc.nonce = c.nonce → xc.sp0 = c.A →
+      ReachW c.base Pc (CryptWr c) u (CryptPost c off t) → ReachW c.base Pc (CryptWr c) u Q) :
+    ReachW c.base Pc (CryptWr c) t Q :=
+  crypt_reach_select_gen c hv hb off i hseq hbl ht ho hox t tpc t13 thi tn tout Q hrc hrx (fun _ _ h => h)
+    (fun xc u xv xe hlr hbase hout hlen hctr hsp _ _ _ _ => by
+      have wr : ∀ y, ChaCha20Xor.WrOk xc y → CryptWr c y := by
+        rintro y (⟨o, ho, rfl⟩ | ⟨_, hy⟩)
+        · have : xc.fp = c.A - BitVec.ofNat 32 176 := by simp [Ctx.fp, hsp, ChaCha20Layout.chStackBytes_eq]
+          rw [this]; exact .inl (swr_lo c.A o ho)
+        · exact .inr (by simpa only [Ctx.oidx, OutR, hout, hlen] using hy)
+      have h := (ChaCha20Xor.xor_reach_w xc xv (fun pc h => hPc pc (hbase ▸ h)) u xe hlr).monoW wr
+      rw [hbase] at h; exact h)
+    hselect
+
+theorem crypt_reach_select (c : ACall) (hv : AValid c) (hb : ABuf c) (off : Nat) (i : BitVec 25)
+    (hseq : seqAt B off crypt = true) (hbl : instrAt B (off + cryptXorOff) = some (.bl i))
+    (ht : blTarget (off + cryptXorOff) i = BitVec.ofNat 32 xorOff) (ho : off % 2 = 0) (hox : off + cryptEnd ≤ Artifacts.Release.size)
+    (t : State) (tpc : t.pc = c.base + BitVec.ofNat 32 off) (t13 : t.regs 13 = c.A) (thi : Hi c t.mem)
+    (tn : read32 t.mem c.A = c.nonce) (tout : ∀ y, ¬ SWr c.A y → t.mem y = c.m0 y)
+    (Q : State → Prop)
+    (hselect : ∀ (xc : Ctx) (u : State), Valid xc → ChaCha20Setup.Entry xc u →
+      xc.base = c.base → xc.out = c.out → xc.len = c.len → xc.ctr = 1#32 →
+      xc.inp = c.inp → xc.key = c.key → xc.nonce = c.nonce → xc.sp0 = c.A →
+      Reach c.base (CryptWr c) u (CryptPost c off t) → Reach c.base (CryptWr c) u Q) :
+    Reach c.base (CryptWr c) t Q :=
+  (crypt_reach_select_w (Pc := fun _ => True) c hv hb off i hseq hbl ht ho hox t tpc t13 thi tn tout Q
+    (fun _ _ => trivial) trivial (fun _ _ => trivial)
+    (fun xc u a b c1 c2 c3 c4 c5 c6 c7 c8 hr => (hselect xc u a b c1 c2 c3 c4 c5 c6 c7 c8 hr.toReach).toReachW)).toReach
 
 /-- The encryption call reaches a valid ChaCha entry with the caller's
 buffer and length, and retains a continuation to its functional postcondition. -/
@@ -215,14 +267,26 @@ theorem crypt_reaches_chacha (c : ACall) (hv : AValid c) (hb : ABuf c) (off : Na
   intro xc u hv' he hb' ho' hl hc hi hk hn hs hr
   exact Reach.done ⟨xc, hv', he, hb', ho', hl, hc, hi, hk, hn, hs, hr⟩
 
+theorem crypt_reach_narrow_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (hb : ABuf c) (off : Nat) (i : BitVec 25)
+    (hseq : seqAt B off crypt = true) (hbl : instrAt B (off + cryptXorOff) = some (.bl i))
+    (ht : blTarget (off + cryptXorOff) i = BitVec.ofNat 32 xorOff) (ho : off % 2 = 0) (hox : off + cryptEnd ≤ Artifacts.Release.size)
+    (t : State) (tpc : t.pc = c.base + BitVec.ofNat 32 off) (t13 : t.regs 13 = c.A) (thi : Hi c t.mem)
+    (tn : read32 t.mem c.A = c.nonce) (tout : ∀ y, ¬ SWr c.A y → t.mem y = c.m0 y)
+    (hrc : InRegion Pc c.base off (seqSize crypt))
+    (hrx : Pc (c.base + BitVec.ofNat 32 (off + cryptXorOff)))
+    (hPc : ∀ pc, ChaCha20Policy.ChaPc c.base pc → Pc pc) :
+    ReachW c.base Pc (CryptWr c) t (CryptPost c off t) :=
+  crypt_reach_select_w c hv hb off i hseq hbl ht ho hox t tpc t13 thi tn tout _ hrc hrx hPc
+    (fun _ _ _ _ _ _ _ _ _ _ _ _ hrest => hrest)
+
 theorem crypt_reach_narrow (c : ACall) (hv : AValid c) (hb : ABuf c) (off : Nat) (i : BitVec 25)
     (hseq : seqAt B off crypt = true) (hbl : instrAt B (off + cryptXorOff) = some (.bl i))
     (ht : blTarget (off + cryptXorOff) i = BitVec.ofNat 32 xorOff) (ho : off % 2 = 0) (hox : off + cryptEnd ≤ Artifacts.Release.size)
     (t : State) (tpc : t.pc = c.base + BitVec.ofNat 32 off) (t13 : t.regs 13 = c.A) (thi : Hi c t.mem)
     (tn : read32 t.mem c.A = c.nonce) (tout : ∀ y, ¬ SWr c.A y → t.mem y = c.m0 y) :
-    Reach c.base (CryptWr c) t (CryptPost c off t) := by
-  exact crypt_reach_select c hv hb off i hseq hbl ht ho hox t tpc t13 thi tn tout _
-    (fun _ _ _ _ _ _ _ _ _ _ _ _ hrest => hrest)
+    Reach c.base (CryptWr c) t (CryptPost c off t) :=
+  (crypt_reach_narrow_w (Pc := fun _ => True) c hv hb off i hseq hbl ht ho hox t tpc t13 thi tn tout
+    (fun _ _ => trivial) trivial (fun _ _ => trivial)).toReach
 
 theorem crypt_reach (c : ACall) (hv : AValid c) (hb : ABuf c) (off : Nat) (i : BitVec 25)
     (hseq : seqAt B off crypt = true) (hbl : instrAt B (off + cryptXorOff) = some (.bl i))
@@ -231,6 +295,18 @@ theorem crypt_reach (c : ACall) (hv : AValid c) (hb : ABuf c) (off : Nat) (i : B
     (tn : read32 t.mem c.A = c.nonce) (tout : ∀ y, ¬ SWr c.A y → t.mem y = c.m0 y) :
     Reach c.base (AWr c) t (CryptPost c off t) :=
   (crypt_reach_narrow c hv hb off i hseq hbl ht ho hox t tpc t13 thi tn tout).monoW
+    (fun _ h => h.elim Or.inl (fun h' => Or.inr (Or.inl h')))
+
+theorem crypt_reach_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (hb : ABuf c) (off : Nat) (i : BitVec 25)
+    (hseq : seqAt B off crypt = true) (hbl : instrAt B (off + cryptXorOff) = some (.bl i))
+    (ht : blTarget (off + cryptXorOff) i = BitVec.ofNat 32 xorOff) (ho : off % 2 = 0) (hox : off + cryptEnd ≤ Artifacts.Release.size)
+    (t : State) (tpc : t.pc = c.base + BitVec.ofNat 32 off) (t13 : t.regs 13 = c.A) (thi : Hi c t.mem)
+    (tn : read32 t.mem c.A = c.nonce) (tout : ∀ y, ¬ SWr c.A y → t.mem y = c.m0 y)
+    (hrc : InRegion Pc c.base off (seqSize crypt))
+    (hrx : Pc (c.base + BitVec.ofNat 32 (off + cryptXorOff)))
+    (hPc : ∀ pc, ChaCha20Policy.ChaPc c.base pc → Pc pc) :
+    ReachW c.base Pc (AWr c) t (CryptPost c off t) :=
+  (crypt_reach_narrow_w c hv hb off i hseq hbl ht ho hox t tpc t13 thi tn tout hrc hrx hPc).monoW
     (fun _ h => h.elim Or.inl (fun h' => Or.inr (Or.inl h')))
 
 end M0Crypto.Release.Aead

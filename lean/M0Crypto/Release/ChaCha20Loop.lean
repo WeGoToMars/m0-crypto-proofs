@@ -30,9 +30,6 @@ theorem b_at : instrAt B loopBOff = some (.b (brImm11 loopBOff droundOff)) := by
 
 theorem B_len : B.length < 2 ^ 32 := by rw [Artifacts.Release.bytes_length]; decide
 
-theorem sub_flags (x y : Word) : (M0Crypto.Armv6M.addWithCarry x (~~~y) true).1 = x - y :=
-  M0Crypto.Release.sub_flags x y
-
 /-- The decrement: r1 = r12 = r12 - 1 and Z = (r12 - 1 = 0); r0, r2-r11, SP, LR, memory unchanged. -/
 theorem dec_effect (t : State) :
     let t' := execAll dec t
@@ -121,7 +118,8 @@ theorem ofNat_sub_one (k : Nat) (hk : k + 1 < 2 ^ 32) :
 `161 n - 1` steps to offset `postOff` and applies `inner_block` `n` times to the view. -/
 /-- Every event is before the output instructions in the release layout. -/
 def TraceBeforeOutput (base : Word) (tr : List Event) : Prop :=
-  ∀ e ∈ tr, ∃ off < ChaCha20Layout.achOff, e.pc = base + BitVec.ofNat 32 off
+  ∀ e ∈ tr, ∃ off, ChaCha20Layout.bpreOff ≤ off ∧ off < ChaCha20Layout.achOff ∧
+    e.pc = base + BitVec.ofNat 32 off
 
 /-- A double-round body stays within the pre-output instruction range. -/
 theorem body_before_output (base : Word) (s : State)
@@ -129,7 +127,9 @@ theorem body_before_output (base : Word) (s : State)
     TraceBeforeOutput base (traceAll body s) := by
   intro e he
   obtain ⟨off, hoff, hp⟩ := traceAll_pc_offset body s body_falls e he
-  refine ⟨droundOff + off, ?_, ?_⟩
+  refine ⟨droundOff + off, ?_, ?_, ?_⟩
+  · have hbound : ChaCha20Layout.bpreOff ≤ droundOff := by decide +kernel
+    omega
   · have hbound : droundOff + seqSize body ≤ ChaCha20Layout.achOff := by decide +kernel
     omega
   · rw [hp, hpc, ofNat_add_assoc]
@@ -221,7 +221,7 @@ theorem loop_bounded {base : Word} (hb : base.toNat % 4 = 0) : ∀ (n : Nat), 1 
         · exact body_before_output base s hpc e he
         · simp only [List.mem_singleton] at he
           subst e
-          exact ⟨beqOff, by decide +kernel, pc2⟩
+          exact ⟨beqOff, by decide +kernel, by decide +kernel, pc2⟩
       · apply AccessesIn.append (body_accesses s)
         exact AccessesIn.cons_noacc (by simp [Instr.accesses]) (AccessesIn.nil _ _)
     · -- continue: beq not taken, then b back to `droundOff`
@@ -273,9 +273,9 @@ theorem loop_bounded {base : Word} (hb : base.toNat % 4 = 0) : ∀ (n : Nat), 1 
         rcases List.mem_append.mp he with he | he
         · exact body_before_output base s hpc e he
         · rcases List.mem_cons.mp he with rfl | he
-          · exact ⟨beqOff, by decide +kernel, pc2⟩
+          · exact ⟨beqOff, by decide +kernel, by decide +kernel, pc2⟩
           · rcases List.mem_cons.mp he with rfl | he
-            · exact ⟨loopBOff, by decide +kernel, pc3⟩
+            · exact ⟨loopBOff, by decide +kernel, by decide +kernel, pc3⟩
             · exact hbound' e he
       · apply AccessesIn.append (body_accesses s)
         apply AccessesIn.cons_noacc (by simp [Instr.accesses])

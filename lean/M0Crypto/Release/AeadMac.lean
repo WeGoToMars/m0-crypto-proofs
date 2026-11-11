@@ -1,4 +1,5 @@
 import M0Crypto.Release.AeadCall
+import M0Crypto.Release.ReachSteps
 set_option linter.unusedSimpArgs false
 set_option maxRecDepth 100000
 set_option maxHeartbeats 4000000
@@ -135,30 +136,33 @@ theorem even_off (base : Word) (hb : base.toNat % 4 = 0) (k : Nat) (hk : k % 2 =
 
 /-- **Whole blocks.** From `m` to `m + macCOff`: the accumulator absorbs the
 `16 * (n / 16)` leading bytes with pad 1. -/
-theorem mac_head (base A d n : Word) (M : Mem) (m : Nat) (i1 i2 : BitVec 25) (hat : MacAt m i1 i2)
-    (hm : m % 2 = 0) (hmx : m + macSize ≤ Artifacts.Release.size) (he : MacEnv base A d n M) (s : State)
+theorem mac_head {Pc : Word → Prop} (base A d n : Word) (M : Mem) (m : Nat) (i1 i2 : BitVec 25) (hat : MacAt m i1 i2)
+    (hm : m % 2 = 0) (hmx : m + macSize ≤ Artifacts.Release.size) (hrg : InRegion Pc base m macSize)
+    (hblk : ∀ pc, Poly1305Blocks.BlkPc base pc → Pc pc) (he : MacEnv base A d n M) (s : State)
     (hpc : s.pc = base + BitVec.ofNat 32 m) (h13 : s.regs 13 = A) (h4 : s.regs 4 = d)
     (h5 : s.regs 5 = n) (hmem : s.mem = M)
     (hk : keyAtOK M (A + 8#32)) (hh : accAt M (A + 8#32) < 5 * 2 ^ 128) :
-    Reach base (MacWr A) s (MacMid base A d n M m s) := by
+    ReachW base Pc (MacWr A) s (MacMid base A d n M m s) := by
   obtain ⟨sA, bA, sB, bl1, -, -, -, -, -, -, -, t1, -⟩ := hat
   have hb2 : base.toNat % 2 = 0 := by have := he.base4; omega
   obtain ⟨a2, az, am, ar⟩ := macA_effect s
-  apply Reach.block hb2 macA m hpc hm sA (by decide) (by simp [alignedAll, macA, Instr.accesses])
+  apply ReachW.block hb2 macA m hpc hm sA (by decide) (by simp [alignedAll, macA, Instr.accesses])
     (by intro e he' y ⟨a, ha, _⟩; simp [traceAll, macA, Instr.accesses] at he'; subst he'; simp at ha)
+    (hrg.prefix (by decide))
   generalize hs1 : execAll macA s = s1 at a2 az am ar
   have p1 : s1.pc = base + BitVec.ofNat 32 (m + macBr0Off) := by
     rw [← hs1, execAll_pc _ _ (by decide), hpc, ofNat_add_assoc]; rfl
-  apply Reach.bcond hb2 (m + macBr0Off) (m + macCOff) 0 (brImm8 (m + macBr0Off) (m + macCOff)) p1
+  apply ReachW.bcond hb2 (m + macBr0Off) (m + macCOff) 0 (brImm8 (m + macBr0Off) (m + macCOff)) p1
     (by have := macBr0Off_even; omega) bA (by have := macBr0Off_fits; omega)
     (by have := macBr0Off_le
         rw [brImm8_shift, BitVec.add_assoc, macBr0_disp, ← BitVec.ofNat_add]
         congr 1 <;> omega)
+    (hrg.at (by decide))
   · -- no whole block
     intro hz
     have hz' : s.regs 5 >>> 4 = 0#32 := by simpa [condPassed, az] using hz
     have hn : n.toNat / 16 = 0 := by rw [← lsr4, ← h5, hz']; rfl
-    apply Reach.done
+    apply ReachS.done
     refine ⟨by rw [M0Crypto.Armv6M.State.pc, setReg_eq], by rw [setReg_ne _ _ _ _ (by decide), ar _ (by decide) (by decide), h13],
       by rw [setReg_ne _ _ _ _ (by decide), ar _ (by decide) (by decide), h4],
       by rw [setReg_ne _ _ _ _ (by decide), ar _ (by decide) (by decide), h5],
@@ -175,17 +179,18 @@ theorem mac_head (base A d n : Word) (M : Mem) (m : Nat) (i1 i2 : BitVec 25) (ha
     have r2 : ∀ r : Reg, r.val ≠ 15 → s2.regs r = s1.regs r := fun r h => by
       rw [← hs2, setReg_ne _ _ _ _ (by rintro rfl; exact h rfl)]
     obtain ⟨b0, b1, b3, bm, br⟩ := macB_effect s2
-    apply Reach.block hb2 macB (m + macBOff) p2 (by have := macBOff_even; omega) sB (by decide)
+    apply ReachW.block hb2 macB (m + macBOff) p2 (by have := macBOff_even; omega) sB (by decide)
       (by simp [alignedAll, macB, Instr.accesses])
       (by
         intro e he' y ⟨a, ha, _⟩
         simp [traceAll, macB] at he'
         rcases he' with rfl | rfl | rfl <;> simp [Instr.accesses] at ha)
+      (hrg.sub (by decide))
     generalize hs3 : execAll macB s2 = s3 at b0 b1 b3 bm br
     have p3 : s3.pc = base + BitVec.ofNat 32 (m + macBlOff) := by
       rw [← hs3, execAll_pc _ _ (by decide), p2, ofNat_add_assoc]; rfl
-    apply Reach.bl hb2 (m + macBlOff) blocksOff i1 p3 (by have := macBlOff_even; omega) bl1
-      (by have := macBlOff_fits; omega) t1
+    apply ReachW.bl hb2 (m + macBlOff) blocksOff i1 p3 (by have := macBlOff_even; omega) bl1
+      (by have := macBlOff_fits; omega) t1 (hrg.at (by decide))
     generalize hu : (s3.setReg 14 ((base + BitVec.ofNat 32 (m + macBlOff + 4)) ||| 1#32)).setReg 15
       (base + BitVec.ofNat 32 blocksOff) = u
     have ur : ∀ r : Reg, r.val ≠ 14 → r.val ≠ 15 → u.regs r = s3.regs r := fun r a b => by
@@ -218,10 +223,11 @@ theorem mac_head (base A d n : Word) (M : Mem) (m : Nat) (i1 i2 : BitVec 25) (ha
       by show u.regs 13 = A; rw [us 13 (by decide) (by decide) (by decide) (by decide) (by decide), h13],
       u0, u1, u2, u3⟩
     have hlr : (c.regs0 14).getLsbD 0 = true := by show (u.regs 14).getLsbD 0 = true; rw [u14]; exact lr_odd _
-    apply Reach.bind
-    apply ((Poly1305Blocks.blocks_reach c hv u hen hlr).monoW (bwr_mac A c rfl rfl)).mono
+    apply ReachS.bind
+    apply ((((Poly1305Blocks.blocks_reach_w c hv u hen hlr).monoW (bwr_mac A c rfl rfl)).monoPc hblk)).mono
+      (fun _ _ h => h)
     intro t ht
-    apply Reach.done
+    apply ReachS.done
     have hret : t.pc = base + BitVec.ofNat 32 (m + macCOff) := by
       have hcm : m + macBlOff + 4 = m + macCOff := by have := macBlOff_ret; omega
       have hke : (m + macBlOff + 4) % 2 = 0 := by have := macBlOff_even; omega

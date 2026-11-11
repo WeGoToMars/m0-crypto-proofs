@@ -1,5 +1,6 @@
 import M0Crypto.Release.Frame
 import M0Crypto.Release.ChaCha20Layout
+import M0Crypto.Release.ChaCha20Policy
 
 set_option linter.unusedSimpArgs false
 
@@ -31,12 +32,16 @@ theorem fp_toNat {c : Ctx} (hv : Valid c) : c.fp.toNat = c.sp0.toNat - chStackBy
 theorem fp4 {c : Ctx} (hv : Valid c) : c.fp.toNat % 4 = 0 := by
   have := hv.sp8; have := ChaCha20Layout.chStackBytes_eq; rw [fp_toNat hv]; omega
 
-/-- The epilogue from `epiOff` restores r4-r11 and SP and returns to the saved LR. -/
-theorem ret (c : Ctx) (hv : Valid c) (Wr : Word → Prop) (s : State)
+/-- The epilogue from `epiOff` restores r4-r11 and SP and returns to the saved LR, with every
+access made from the back region of the artifact. -/
+theorem ret_S {Pc : Word → Prop} (c : Ctx) (hv : Valid c) (Wr : Word → Prop)
+    (allowed : Word → Kind → Word → Prop) (hA : ChaCha20Policy.Admits (ChaCha20Policy.BackPc c.base) Wr allowed)
+    (hPc : ∀ pc, ChaCha20Policy.ChaPc c.base pc → Pc pc)
+    (s : State)
     (hpc : s.pc = c.base + BitVec.ofNat 32 epiOff) (hsp : s.regs 13 = c.fp)
     (hsv : ∀ i < 9, read32 s.mem (slot c.fp (slotSaved + i)) = saved c.regs0 i)
     (hlr : (c.regs0 14).getLsbD 0 = true) :
-    Reach c.base Wr s fun t => t.pc = c.regs0 14 &&& ~~~1#32 ∧ t.regs 13 = c.sp0 ∧
+    ReachS c.base (ChaCha20Policy.EvP Pc allowed) s fun t => t.pc = c.regs0 14 &&& ~~~1#32 ∧ t.regs 13 = c.sp0 ∧
       (∀ r : Reg, 4 ≤ r.val → r.val < 12 → t.regs r = c.regs0 r) ∧
       (∀ r : Reg, r.val < 4 ∨ r.val = 12 → t.regs r = s.regs r) ∧ t.mem = s.mem := by
   have hb2 : c.base.toNat % 2 = 0 := by have := hv.base4; omega
@@ -49,7 +54,7 @@ theorem ret (c : Ctx) (hv : Valid c) (Wr : Word → Prop) (s : State)
   have sv3 := sv 3 (by omega); have sv4 := sv 4 (by omega); have sv5 := sv 5 (by omega)
   have sv6 := sv 6 (by omega); have sv7 := sv 7 (by omega); have sv8 := sv 8 (by omega)
   simp only [saved, Nat.mul_zero, Nat.add_zero, Nat.mul_one] at sv0 sv1 sv2 sv3 sv4 sv5 sv6 sv7 sv8
-  apply Reach.block hb2 epi epiOff hpc (by decide) epi_at (by decide)
+  refine ChaCha20Policy.backBlockP hA hPc hb2 epi epiOff hpc (by decide) epi_at (by decide) ?_ ?_ (by decide +kernel) (by decide +kernel) ?_
   · simp [alignedAll, epi, Instr.next, Instr.exec, Instr.accesses, M0Crypto.Armv6M.State.setReg,
       M0Crypto.Armv6M.State.sp, bitCount_f0, listRegs_f0, wordAccesses, List.range_succ, Access.aligned,
       hsp, BitVec.toNat_add, M0Crypto.Armv6M.State.pc]
@@ -100,12 +105,12 @@ theorem ret (c : Ctx) (hv : Valid c) (Wr : Word → Prop) (s : State)
   have hex' := hex
   simp only [Instr.exec, M0Crypto.Armv6M.State.sp, hsp1, hm, sv8, hlr, ite_true, Except.ok.injEq, ChaCha20Layout.chStackBytes_eq, Nat.reduceSub] at hex'
   subst hex'
-  apply Reach.step hb2 popOff _ t15 (by decide) pop_at (by rw [B_len]; decide)
+  apply ChaCha20Policy.backStepP hA hPc hb2 popOff _ t15 (by decide) pop_at (by rw [B_len]; decide)
     (by simp [Instr.accesses, wordAccesses, List.range_succ, Access.aligned, bitCount_f0,
           M0Crypto.Armv6M.State.sp, t13, BitVec.toNat_add]; exact ⟨fun _ _ => by omega, by omega⟩)
     hex (by intro y ⟨a, ha, hw, _⟩; simp [Instr.accesses, wordAccesses] at ha
-            obtain ⟨_, _, rfl⟩ := ha; cases hw)
-  apply Reach.done
+            obtain ⟨_, _, rfl⟩ := ha; cases hw) (by decide +kernel) (by decide +kernel)
+  apply ReachS.done
   generalize hF : (((loadRegs (t.setReg 15 (t.pc + BitVec.ofNat 32 (Instr.pop 240 true).size)) (t.regs 13)
       (List.map LowReg.toReg (listRegs 240))).setReg 13 (t.regs 13 + BitVec.ofNat 32 (4 * (bitCount 240 + true.toNat)))).setReg
       15 (c.regs0 14 &&& ~~~1#32)) = F
@@ -142,11 +147,40 @@ theorem ret (c : Ctx) (hv : Valid c) (Wr : Word → Prop) (s : State)
     rw [qF, q]
     simp only [n4, n5, n6, n7, n8, n9, n10, n11, n13, n15, ite_false]
 
-/-! ## The memory after the prologue -/
+theorem ret_events (c : Ctx) (hv : Valid c) (Wr : Word → Prop)
+    (allowed : Word → Kind → Word → Prop) (hA : ChaCha20Policy.Admits (ChaCha20Policy.BackPc c.base) Wr allowed)
+    (s : State)
+    (hpc : s.pc = c.base + BitVec.ofNat 32 epiOff) (hsp : s.regs 13 = c.fp)
+    (hsv : ∀ i < 9, read32 s.mem (slot c.fp (slotSaved + i)) = saved c.regs0 i)
+    (hlr : (c.regs0 14).getLsbD 0 = true) :
+    ConstantTime.ReachEvents c.base allowed s fun t => t.pc = c.regs0 14 &&& ~~~1#32 ∧ t.regs 13 = c.sp0 ∧
+      (∀ r : Reg, 4 ≤ r.val → r.val < 12 → t.regs r = c.regs0 r) ∧
+      (∀ r : Reg, r.val < 4 ∨ r.val = 12 → t.regs r = s.regs r) ∧ t.mem = s.mem :=
+  ChaCha20Policy.ofEvP (ret_S (Pc := fun _ => True) c hv Wr allowed hA (fun _ _ => trivial) s hpc hsp hsv hlr)
 
-theorem read32_storeWords_same (m : Mem) : ∀ (a : Word) (vs : List Word) (i : Nat) (hi : i < vs.length),
-    vs.length ≤ 2 ^ 28 → read32 (storeWords m a vs) (a + BitVec.ofNat 32 (4 * i)) = vs[i] :=
-  Frame.read32_storeWords_same m
+/-- The epilogue from `epiOff` restores r4-r11 and SP and returns to the saved LR, with every
+executed program counter in `Pc`. -/
+theorem ret_w {Pc : Word → Prop} (c : Ctx) (hv : Valid c) (Wr : Word → Prop)
+    (hPc : ∀ pc, ChaCha20Policy.ChaPc c.base pc → Pc pc) (s : State)
+    (hpc : s.pc = c.base + BitVec.ofNat 32 epiOff) (hsp : s.regs 13 = c.fp)
+    (hsv : ∀ i < 9, read32 s.mem (slot c.fp (slotSaved + i)) = saved c.regs0 i)
+    (hlr : (c.regs0 14).getLsbD 0 = true) :
+    ReachW c.base Pc Wr s fun t => t.pc = c.regs0 14 &&& ~~~1#32 ∧ t.regs 13 = c.sp0 ∧
+      (∀ r : Reg, 4 ≤ r.val → r.val < 12 → t.regs r = c.regs0 r) ∧
+      (∀ r : Reg, r.val < 4 ∨ r.val = 12 → t.regs r = s.regs r) ∧ t.mem = s.mem :=
+  ChaCha20Policy.ofEvPW (ret_S c hv Wr _ (ChaCha20Policy.admits_writeOnly _ Wr) hPc s hpc hsp hsv hlr)
+
+/-- The epilogue from `epiOff` restores r4-r11 and SP and returns to the saved LR. -/
+theorem ret (c : Ctx) (hv : Valid c) (Wr : Word → Prop) (s : State)
+    (hpc : s.pc = c.base + BitVec.ofNat 32 epiOff) (hsp : s.regs 13 = c.fp)
+    (hsv : ∀ i < 9, read32 s.mem (slot c.fp (slotSaved + i)) = saved c.regs0 i)
+    (hlr : (c.regs0 14).getLsbD 0 = true) :
+    Reach c.base Wr s fun t => t.pc = c.regs0 14 &&& ~~~1#32 ∧ t.regs 13 = c.sp0 ∧
+      (∀ r : Reg, 4 ≤ r.val → r.val < 12 → t.regs r = c.regs0 r) ∧
+      (∀ r : Reg, r.val < 4 ∨ r.val = 12 → t.regs r = s.regs r) ∧ t.mem = s.mem :=
+  (ret_w (Pc := fun _ => True) c hv Wr (fun _ _ => trivial) s hpc hsp hsv hlr).toReach
+
+/-! ## The memory after the prologue -/
 
 theorem mP_other (c : Ctx) (y : Word) (hy : ∀ k < 36, y ≠ c.sp0 - BitVec.ofNat 32 36 + BitVec.ofNat 32 k) :
     c.mP y = c.m0 y := by

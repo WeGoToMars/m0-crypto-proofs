@@ -12,14 +12,14 @@ attribute [local simp] M0Crypto.Proofs.toReg_0 M0Crypto.Proofs.toReg_1 M0Crypto.
 
 theorem popSize_eq : seqSize [.pop 0xf0 true] = 2 := by decide
 
-theorem pop_reach (c : ACall) (hv : AValid c) (Wr : Word → Prop) (off : Nat)
+theorem pop_reach_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (Wr : Word → Prop) (off : Nat)
     (hat : instrAt B off = some (.pop 0xf0 true)) (ho : off % 2 = 0)
     (hx : off + seqSize [.pop 0xf0 true] ≤ Artifacts.Release.size) (s : State)
     (hp : s.pc = c.base + BitVec.ofNat 32 off) (hs : s.regs 13 = (c.sp0 - 20#32))
     (hsv : ∀ j < 5, read32 s.mem (slot (c.sp0 - 20#32) j) =
       [c.regs0 4, c.regs0 5, c.regs0 6, c.regs0 7, c.regs0 14].getD j 0#32)
-    (hlr : (c.regs0 14).getLsbD 0 = true) :
-    Reach c.base Wr s fun t => t.pc = c.regs0 14 &&& ~~~1#32 ∧ t.regs 13 = c.sp0 ∧
+    (hlr : (c.regs0 14).getLsbD 0 = true) (hrp : Pc (c.base + BitVec.ofNat 32 off)) :
+    ReachW c.base Pc Wr s fun t => t.pc = c.regs0 14 &&& ~~~1#32 ∧ t.regs 13 = c.sp0 ∧
       (∀ r : Reg, 4 ≤ r.val → r.val < 8 → t.regs r = c.regs0 r) ∧
       (∀ r : Reg, (r.val < 4 ∨ 8 ≤ r.val) → r.val ≠ 13 → r.val ≠ 15 → t.regs r = s.regs r) ∧ t.mem = s.mem := by
   have sv0 := hsv 0 (by decide); have sv1 := hsv 1 (by decide)
@@ -35,7 +35,7 @@ theorem pop_reach (c : ACall) (hv : AValid c) (Wr : Word → Prop) (off : Nat)
   have hex' := hex
   simp only [Instr.exec, M0Crypto.Armv6M.State.sp, hsp1, sv4, hlr, ite_true, Except.ok.injEq] at hex'
   subst hex'
-  apply Reach.step hb2 off _ hp ho hat
+  apply ReachW.stepR hrp hb2 _ hp ho hat
     (by rw [B_len]; have := popSize_eq; show off + 2 ≤ _; omega)
     (by
       have := hv.sp8; have := hv.spLo
@@ -44,7 +44,7 @@ theorem pop_reach (c : ACall) (hv : AValid c) (Wr : Word → Prop) (off : Nat)
           M0Crypto.Armv6M.State.sp, hs, BitVec.toNat_add, BitVec.toNat_sub]; constructor <;> omega)
     hex (by intro y ⟨a, ha, hw, _⟩; simp [Instr.accesses, wordAccesses] at ha
             obtain ⟨_, _, rfl⟩ := ha; cases hw)
-  apply Reach.done
+  apply ReachS.done
   generalize hF : (((loadRegs (s.setReg 15 (s.pc + BitVec.ofNat 32 (Instr.pop 240 true).size)) (s.regs 13)
       (List.map M0Crypto.Armv6M.LowReg.toReg (listRegs 240))).setReg 13
       (s.regs 13 + BitVec.ofNat 32 (4 * (bitCount 240 + true.toNat)))).setReg
@@ -129,21 +129,23 @@ theorem epi_effect (dec : Bool) (s : State) :
   all_goals have hr : v = 1 ∨ v = 2 ∨ v = 3 := by omega
   all_goals rcases hr with rfl | rfl | rfl <;> rfl
 
-theorem epilogue_reach (c : ACall) (hv : AValid c) (Wr : Word → Prop) (dec : Bool) (off : Nat)
+theorem epilogue_reach_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (Wr : Word → Prop) (dec : Bool) (off : Nat)
     (hseq : seqAt B off (epilogue dec) = true)
     (hpop : instrAt B (off + seqSize (epilogue dec)) = some (.pop 0xf0 true))
     (ho : off % 2 = 0)
     (hx : off + seqSize (epilogue dec) + seqSize [.pop 0xf0 true] ≤ Artifacts.Release.size) (s : State)
     (hp : s.pc = c.base + BitVec.ofNat 32 off) (hs : s.regs 13 = c.A) (hh : Hi c s.mem)
     (hr : ∀ r : Reg, 8 ≤ r.val → r.val < 12 → s.regs r = c.regs0 r)
-    (hlr : (c.regs0 14).getLsbD 0 = true) :
-    Reach c.base Wr s (fun t => RetPost c (if dec then s.regs 4 else 0#32) t ∧ t.mem = s.mem) := by
+    (hlr : (c.regs0 14).getLsbD 0 = true)
+    (hrE : InRegion Pc c.base off (seqSize (epilogue dec)))
+    (hrp : Pc (c.base + BitVec.ofNat 32 (off + seqSize (epilogue dec)))) :
+    ReachW c.base Pc Wr s (fun t => RetPost c (if dec then s.regs 4 else 0#32) t ∧ t.mem = s.mem) := by
   have hf : (epilogue dec).all Instr.falls = true := by cases dec <;> decide
   have he := epilogue_size dec
   obtain ⟨em, es, e0, ec, er⟩ := epi_effect dec s
-  apply Reach.block (by have := hv.base4; omega) (epilogue dec) off hp ho hseq hf
+  apply ReachW.blockR hrE (by have := hv.base4; omega) hp ho hseq hf
     (by cases dec <;> simp [epilogue, epiE, epiD, alignedAll, Instr.accesses])
-    (ChaCha20Block.noWrites _ _ (by cases dec <;> decide) _)
+    (WritesTo.of_noWritesMem _ _ (by cases dec <;> decide) _)
   generalize hu : execAll (epilogue dec) s = u at em es e0 ec er
   have up : u.pc = c.base + BitVec.ofNat 32 (off + seqSize (epilogue dec)) := by
     rw [← hu, execAll_pc _ _ hf, hp, ofNat_add_assoc]
@@ -155,7 +157,7 @@ theorem epilogue_reach (c : ACall) (hv : AValid c) (Wr : Word → Prop) (dec : B
     rw [em, hb, slot, ofNat_add_assoc]
     have h := hh.saved j hj
     rcases (by omega : j = 0 ∨ j = 1 ∨ j = 2 ∨ j = 3 ∨ j = 4) with rfl | rfl | rfl | rfl | rfl <;> exact h
-  apply (pop_reach c hv Wr (off + seqSize (epilogue dec)) hpop (by omega) hx u up us saved hlr).mono
+  apply (pop_reach_w c hv Wr (off + seqSize (epilogue dec)) hpop (by omega) hx u up us saved hlr hrp).mono (fun _ _ h => h)
   rintro t ⟨tp, ts, tc, tr, tm⟩
   refine ⟨⟨tp, ts, ?_, ?_, ?_⟩, tm.trans em⟩
   · intro r a b
@@ -165,5 +167,18 @@ theorem epilogue_reach (c : ACall) (hv : AValid c) (Wr : Word → Prop) (dec : B
   · rw [tr 0 (.inl (by decide)) (by decide) (by decide), e0]
   · intro r a b
     rw [tr r (.inl b) (by omega) (by omega), ec r a b]
+
+
+theorem epilogue_reach (c : ACall) (hv : AValid c) (Wr : Word → Prop) (dec : Bool) (off : Nat)
+    (hseq : seqAt B off (epilogue dec) = true)
+    (hpop : instrAt B (off + seqSize (epilogue dec)) = some (.pop 0xf0 true))
+    (ho : off % 2 = 0)
+    (hx : off + seqSize (epilogue dec) + seqSize [.pop 0xf0 true] ≤ Artifacts.Release.size) (s : State)
+    (hp : s.pc = c.base + BitVec.ofNat 32 off) (hs : s.regs 13 = c.A) (hh : Hi c s.mem)
+    (hr : ∀ r : Reg, 8 ≤ r.val → r.val < 12 → s.regs r = c.regs0 r)
+    (hlr : (c.regs0 14).getLsbD 0 = true) :
+    Reach c.base Wr s (fun t => RetPost c (if dec then s.regs 4 else 0#32) t ∧ t.mem = s.mem) :=
+  (epilogue_reach_w (Pc := fun _ => True) c hv Wr dec off hseq hpop ho hx s hp hs hh hr hlr
+    (fun _ _ => trivial) trivial).toReach
 
 end M0Crypto.Release.Aead

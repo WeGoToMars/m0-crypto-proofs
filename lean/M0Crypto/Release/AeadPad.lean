@@ -1,4 +1,5 @@
 import M0Crypto.Release.AeadLoop
+import M0Crypto.Release.ReachSteps
 set_option linter.unusedSimpArgs false
 set_option maxRecDepth 100000
 set_option maxHeartbeats 4000000
@@ -143,35 +144,38 @@ theorem macD_al : SpBlock macD (fun q => q.2 % 4 = 0) :=
   (spBlock_of_B (ok := fun q => q.2 % 4 == 0) (by decide)).mono (fun q hq => by simpa using hq)
 
 /-- **Partial block.** From `m + macCOff` to `m + macSize`. -/
-theorem mac_tail (base A d n : Word) (M : Mem) (m : Nat) (i1 i2 : BitVec 25) (hat : MacAt m i1 i2)
-    (hm : m % 2 = 0) (hmx : m + macSize ≤ Artifacts.Release.size) (he : MacEnv base A d n M) (s t : State)
+theorem mac_tail {Pc : Word → Prop} (base A d n : Word) (M : Mem) (m : Nat) (i1 i2 : BitVec 25) (hat : MacAt m i1 i2)
+    (hm : m % 2 = 0) (hmx : m + macSize ≤ Artifacts.Release.size) (hrg : InRegion Pc base m macSize)
+    (hblk : ∀ pc, Poly1305Blocks.BlkPc base pc → Pc pc) (he : MacEnv base A d n M) (s t : State)
     (ht : MacMid base A d n M m s t) (hk : keyAtOK M (A + 8#32)) :
-    Reach base (MacWr A) t (MacPost base A d n M m s) := by
+    ReachW base Pc (MacWr A) t (MacPost base A d n M m s) := by
   obtain ⟨-, -, -, -, sC, bC, sD, sL, bL, sE, bl2, -, t2⟩ := hat
   have hb2 : base.toNat % 2 = 0 := by have := he.base4; omega
   have hN := n.isLt
   obtain ⟨c6, cz, cm, cr⟩ := macC_effect t
-  apply Reach.block hb2 macC (m + macCOff) ht.pc (by have := macCOff_even; omega) sC (by decide) (by simp [alignedAll, macC, Instr.accesses])
+  apply ReachW.block hb2 macC (m + macCOff) ht.pc (by have := macCOff_even; omega) sC (by decide) (by simp [alignedAll, macC, Instr.accesses])
     (by
       intro e he' y ⟨a, ha, _⟩
       simp [traceAll, macC] at he'
       rcases he' with rfl | rfl <;> simp [Instr.accesses] at ha)
+    (hrg.sub (by decide))
   generalize hs1 : execAll macC t = s1 at c6 cz cm cr
   have p1 : s1.pc = base + BitVec.ofNat 32 (m + macBr1Off) := by
     rw [← hs1, execAll_pc _ _ (by decide), ht.pc, ofNat_add_assoc]; rfl
   rw [ht.r5, and15] at c6 cz
-  apply Reach.bcond hb2 (m + macBr1Off) (m + macSize) 0 (brImm8 (m + macBr1Off) (m + macSize)) p1
+  apply ReachW.bcond hb2 (m + macBr1Off) (m + macSize) 0 (brImm8 (m + macBr1Off) (m + macSize)) p1
     (by have := macBr1Off_even; omega) bC
     (by have := macBr1Off_fits; omega)
     (by have := macBr1Off_le
         rw [brImm8_shift, BitVec.add_assoc, macBr1_disp, ← BitVec.ofNat_add]
         congr 1 <;> omega)
+    (hrg.at (by decide))
   · -- `n % 16 = 0`: nothing more to absorb
     intro hz
     have hz' : BitVec.ofNat 32 (n.toNat % 16) = 0#32 := by simpa [condPassed, cz] using hz
     have hr : n.toNat % 16 = 0 := by
       have := congrArg BitVec.toNat hz'; simp at this; omega
-    apply Reach.done
+    apply ReachS.done
     refine ⟨by rw [M0Crypto.Armv6M.State.pc, setReg_eq],
       by rw [setReg_ne _ _ _ _ (by decide), cr _ (by decide) (by decide), ht.sp],
       fun r a b => by
@@ -194,7 +198,7 @@ theorem mac_tail (base A d n : Word) (M : Mem) (m : Nat) (i1 i2 : BitVec 25) (ha
     have s2m : s2.mem = t.mem := by rw [← hs2, setReg_mem, cm]
     have s213 : s2.regs 13 = A := by rw [r2 13 (by decide), cr 13 (by decide) (by decide), ht.sp]
     obtain ⟨d4, d1, d2, dm, dr⟩ := macD_effect s2
-    apply Reach.block hb2 macD (m + macDOff) p2 (by have := macDOff_even; omega) sD (by decide)
+    apply ReachW.block hb2 macD (m + macDOff) p2 (by have := macDOff_even; omega) sD (by decide)
       (alignedAll_sp macD s2 macD_al (by rw [s213]; have := he.a8; omega))
       (by
         intro e he' y hy
@@ -202,6 +206,7 @@ theorem mac_tail (base A d n : Word) (M : Mem) (m : Nat) (i1 i2 : BitVec 25) (ha
         rw [s213]
         refine .inr (.inr ⟨o - 72, by omega, ?_⟩)
         rw [show (72#32 : Word) = BitVec.ofNat 32 72 from rfl, ofNat_add_assoc]; congr 2; omega)
+      (hrg.sub (by decide))
     generalize hs3 : execAll macD s2 = s3 at d4 d1 d2 dm dr
     have p3 : s3.pc = base + BitVec.ofNat 32 (m + macLOff) := by
       rw [← hs3, execAll_pc _ _ (by decide), p2, ofNat_add_assoc]; rfl
@@ -220,13 +225,13 @@ theorem mac_tail (base A d n : Word) (M : Mem) (m : Nat) (i1 i2 : BitVec 25) (ha
     have hR3 : ∀ q : Reg, 7 ≤ q.val → q.val < 12 → s3.regs q = s.regs q := fun q a b => by
       rw [dr q (by omega) (by omega) (by omega) (by omega) (by omega), r2 q (by omega),
         cr q (by omega) (by omega), ht.hi q a b]
-    apply Reach.bind
-    apply (mac_loop base A dq s3.mem s.regs m rem sL bL he.base4 hm hmx hr16
+    apply ReachS.bind
+    apply (mac_loop base A dq s3.mem s.regs m rem sL bL he.base4 hm hmx hr16 hrg
       (fun j hj => outBlk_of (src_out j hj)) rem 0 (by omega) (by omega) s3 p3 d1 d2 h4
       (by rw [dr 6 (by decide) (by decide) (by decide) (by decide) (by decide), r2 6 (by decide), c6])
       (by rw [dr 13 (by decide) (by decide) (by decide) (by decide) (by decide), s213]) hR3
       (fun j hj => by simp only [Nat.not_lt_zero, if_false]; rw [dm]; exact z0 j hj)
-      (fun y _ => rfl)).mono
+      (fun y _ => rfl)).mono (fun _ _ h => h)
     rintro v ⟨vpc, v1, v13, vR, vblk, vout⟩
     -- memory facts at the loop exit
     have vO : ∀ y, OutBlk A y → v.mem y = t.mem y := fun y hy => by rw [vout y hy, s3out y hy]
@@ -236,17 +241,18 @@ theorem mac_tail (base A d n : Word) (M : Mem) (m : Nat) (i1 i2 : BitVec 25) (ha
       blk_bytes A dq s3.mem M v.mem rem (by omega) vblk (fun j hj => by
         rw [s3out _ (outBlk_of (src_out j hj)), ht.frame _ (src_out j hj)])
     obtain ⟨e0, e2, e3, em, er⟩ := macE_effect v
-    apply Reach.block hb2 macE (m + macEOff) vpc (by have := macEOff_even; omega) sE (by decide)
+    apply ReachW.block hb2 macE (m + macEOff) vpc (by have := macEOff_even; omega) sE (by decide)
       (by simp [alignedAll, macE, Instr.accesses])
       (by
         intro e he' y ⟨a, ha, _⟩
         simp [traceAll, macE] at he'
         rcases he' with rfl | rfl | rfl <;> simp [Instr.accesses] at ha)
+      (hrg.sub (by decide))
     generalize hw : execAll macE v = w at e0 e2 e3 em er
     have pw : w.pc = base + BitVec.ofNat 32 (m + macBl2Off) := by
       rw [← hw, execAll_pc _ _ (by decide), vpc, ofNat_add_assoc]; rfl
-    apply Reach.bl hb2 (m + macBl2Off) blocksOff i2 pw (by have := macBl2Off_even; omega) bl2
-      (by have := macBl2Off_fits; omega) t2
+    apply ReachW.bl hb2 (m + macBl2Off) blocksOff i2 pw (by have := macBl2Off_even; omega) bl2
+      (by have := macBl2Off_fits; omega) t2 (hrg.at (by decide))
     generalize hx : (w.setReg 14 ((base + BitVec.ofNat 32 (m + macBl2Off + 4)) ||| 1#32)).setReg 15
       (base + BitVec.ofNat 32 blocksOff) = x
     have xr : ∀ r : Reg, r.val ≠ 14 → r.val ≠ 15 → x.regs r = w.regs r := fun r a b => by
@@ -276,7 +282,8 @@ theorem mac_tail (base A d n : Word) (M : Mem) (m : Nat) (i1 i2 : BitVec 25) (ha
       (he.codeAt_of xM)
     have hen : BEntry c x := ⟨rfl, rfl, x15, x13, x0, x1, x2, x3⟩
     have hlr : (c.regs0 14).getLsbD 0 = true := by show (x.regs 14).getLsbD 0 = true; rw [x14]; exact lr_odd _
-    apply ((Poly1305Blocks.blocks_reach c hv x hen hlr).monoW (bwr_mac A c rfl rfl)).mono
+    apply (((Poly1305Blocks.blocks_reach_w c hv x hen hlr).monoW (bwr_mac A c rfl rfl)).monoPc hblk).mono
+      (fun _ _ h => h)
     intro t' ht'
     have xacc : accAt x.mem (A + 8#32) = accAt t.mem (A + 8#32) := by
       rw [xm]; exact he.acc_out vO
@@ -302,16 +309,30 @@ theorem mac_tail (base A d n : Word) (M : Mem) (m : Nat) (i1 i2 : BitVec 25) (ha
         Poly1305Spec.polyBlocks_append _ _ _ (n.toNat / 16) _ _ (bytesAt_length _ _ _)]
 
 /-- **`MAC_PADDED`.** From `m` to `m + macSize`: the accumulator absorbs `msg ++ pad16 msg`
+for the `n` bytes at `d`, with pad 1, writing only `MacWr A`. Region-tracking form. -/
+theorem mac_padded_w {Pc : Word → Prop} (base A d n : Word) (M : Mem) (m : Nat) (i1 i2 : BitVec 25)
+    (hat : MacAt m i1 i2)
+    (hm : m % 2 = 0) (hmx : m + macSize ≤ Artifacts.Release.size) (hrg : InRegion Pc base m macSize)
+    (hblk : ∀ pc, Poly1305Blocks.BlkPc base pc → Pc pc) (he : MacEnv base A d n M) (s : State)
+    (hpc : s.pc = base + BitVec.ofNat 32 m) (h13 : s.regs 13 = A) (h4 : s.regs 4 = d)
+    (h5 : s.regs 5 = n) (hmem : s.mem = M)
+    (hk : keyAtOK M (A + 8#32)) (hh : accAt M (A + 8#32) < 5 * 2 ^ 128) :
+    ReachW base Pc (MacWr A) s (MacPost base A d n M m s) := by
+  apply ReachS.bind
+  apply (mac_head base A d n M m i1 i2 hat hm hmx hrg hblk he s hpc h13 h4 h5 hmem hk hh).mono
+    (fun _ _ h => h)
+  intro t ht
+  exact mac_tail base A d n M m i1 i2 hat hm hmx hrg hblk he s t ht hk
+
+/-- **`MAC_PADDED`.** From `m` to `m + macSize`: the accumulator absorbs `msg ++ pad16 msg`
 for the `n` bytes at `d`, with pad 1, writing only `MacWr A`. -/
 theorem mac_padded (base A d n : Word) (M : Mem) (m : Nat) (i1 i2 : BitVec 25) (hat : MacAt m i1 i2)
     (hm : m % 2 = 0) (hmx : m + macSize ≤ Artifacts.Release.size) (he : MacEnv base A d n M) (s : State)
     (hpc : s.pc = base + BitVec.ofNat 32 m) (h13 : s.regs 13 = A) (h4 : s.regs 4 = d)
     (h5 : s.regs 5 = n) (hmem : s.mem = M)
     (hk : keyAtOK M (A + 8#32)) (hh : accAt M (A + 8#32) < 5 * 2 ^ 128) :
-    Reach base (MacWr A) s (MacPost base A d n M m s) := by
-  apply Reach.bind
-  apply (mac_head base A d n M m i1 i2 hat hm hmx he s hpc h13 h4 h5 hmem hk hh).mono
-  intro t ht
-  exact mac_tail base A d n M m i1 i2 hat hm hmx he s t ht hk
+    Reach base (MacWr A) s (MacPost base A d n M m s) :=
+  (mac_padded_w (Pc := fun _ => True) base A d n M m i1 i2 hat hm hmx (fun _ _ => trivial)
+    (fun _ _ => trivial) he s hpc h13 h4 h5 hmem hk hh).toReach
 
 end M0Crypto.Release.Aead

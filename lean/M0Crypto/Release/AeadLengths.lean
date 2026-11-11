@@ -46,7 +46,7 @@ theorem bytesAt_le64 (m : Mem) (a w : Word) (h0 : read32 m a = w)
   apply List.ext_getElem?
   intro j
   by_cases hj : j < 8
-  · rw [ChaCha20Output.bytesAt_get _ _ _ _ hj, Poly1305Spec.leBytes_get _ _ _ hj]
+  · rw [Frame.bytesAt_get _ _ _ _ hj, Poly1305Spec.leBytes_get _ _ _ hj]
     congr 1
     by_cases h4 : j < 4
     · rw [byte_of_read32 m a j h4, h0]
@@ -130,14 +130,16 @@ structure LengthPost (c : ACall) (off : Nat) (ti : Mem) (msg : List M0Crypto.Spe
   frame : ∀ y, ¬ MacWr c.A y → t.mem y = s.mem y
   inv : PInv c.A ti (msg ++ lengthBlock c) t.mem
 
-theorem lengths_reach (c : ACall) (hv : AValid c) (off : Nat) (i : BitVec 25)
+theorem lengths_reach_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (off : Nat) (i : BitVec 25)
     (hseq : seqAt B off lengths = true) (hbl : instrAt B (off + seqSize lengths) = some (.bl i))
     (ht : blTarget (off + seqSize lengths) i = BitVec.ofNat 32 blocksOff)
     (ho : off % 2 = 0) (hox : off + seqSize lengths + blSize ≤ Artifacts.Release.size)
     (s : State) (hpc : s.pc = c.base + BitVec.ofNat 32 off) (h13 : s.regs 13 = c.A)
     (hh : Hi c s.mem) (hc : CodeAt s.mem c.base B) (ti : Mem) (msg : List M0Crypto.Spec.ChaCha20.Byte)
-    (hp : PInv c.A ti msg s.mem) :
-    Reach c.base (MacWr c.A) s (LengthPost c off ti msg s) := by
+    (hp : PInv c.A ti msg s.mem)
+    (hrg : InRegion Pc c.base off (seqSize lengths + blSize))
+    (hblk : ∀ pc, Poly1305Blocks.BlkPc c.base pc → Pc pc) :
+    ReachW c.base Pc (MacWr c.A) s (LengthPost c off ti msg s) := by
   have hb2 : c.base.toNat % 2 = 0 := by have := hv.base4; omega
   have he : MacEnv c.base c.A c.base 0#32 s.mem := hv.macEnv
     (disj_mono (hv.win hv.codeS 0 320 _ (by rw [hv.lo]; omega) (by decide)) (by decide)) hc
@@ -146,7 +148,7 @@ theorem lengths_reach (c : ACall) (hv : AValid c) (off : Nat) (i : BitVec 25)
   have hB := blSize_eq
   rw [h13, hh.alen, hh.len] at em
   rw [h13] at e0 e1
-  apply Reach.block hb2 lengths off hpc ho hseq (by decide)
+  apply ReachW.blockR (is := lengths) (hrg.prefix (by decide)) hb2 hpc ho hseq (by decide)
     (alignedAll_sp _ _ (sp_al (by decide)) (by rw [h13]; have := he.a8; omega))
     (by
       intro e he' y hy
@@ -163,7 +165,7 @@ theorem lengths_reach (c : ACall) (hv : AValid c) (off : Nat) (i : BitVec 25)
   generalize hu : execAll lengths s = u at em e0 e1 e2 e3 er
   have upc : u.pc = c.base + BitVec.ofNat 32 (off + seqSize lengths) := by
     rw [← hu, execAll_pc _ _ (by decide), hpc, ofNat_add_assoc]
-  apply Reach.bl hb2 (off + seqSize lengths) blocksOff i upc (by omega) hbl (by omega) ht
+  apply ReachW.blR (off := off + seqSize lengths) (hrg.at (a := seqSize lengths) (by decide)) hb2 blocksOff i upc (by omega) hbl (by omega) ht
   generalize hx : (u.setReg 14 ((c.base + BitVec.ofNat 32 (off + seqSize lengths + 4)) ||| 1#32)).setReg 15
     (c.base + BitVec.ofNat 32 blocksOff) = x
   have xr : ∀ r : Reg, r.val ≠ 14 → r.val ≠ 15 → x.regs r = u.regs r := fun r a b => by
@@ -194,7 +196,7 @@ theorem lengths_reach (c : ACall) (hv : AValid c) (off : Nat) (i : BitVec 25)
     by change x.regs 0 = c.A + 8#32; rw [xr 0 (by decide) (by decide), e0], by change x.regs 1 = c.A + 72#32; rw [xr 1 (by decide) (by decide), e1],
     by change x.regs 2 = 1#32; rw [xr 2 (by decide) (by decide), e2], by change x.regs 3 = 1#32; rw [xr 3 (by decide) (by decide), e3]⟩
   have hlr : (bc.regs0 14).getLsbD 0 = true := by show (x.regs 14).getLsbD 0 = true; rw [x14]; exact lr_odd _
-  apply ((Poly1305Blocks.blocks_reach bc bv x be hlr).monoW (bwr_mac c.A bc rfl rfl)).mono
+  apply ((((Poly1305Blocks.blocks_reach_w bc bv x be hlr).monoW (bwr_mac c.A bc rfl rfl)).monoPc hblk)).mono (fun _ _ h => h)
   intro t ht'
   have tf : ∀ y, ¬ MacWr c.A y → t.mem y = s.mem y := fun y hy => by
     rw [Poly1305Blocks.result_frame bc bv x t be hlr ht' y (fun h => hy (bwr_mac c.A bc rfl rfl y h))]
@@ -218,5 +220,16 @@ theorem lengths_reach (c : ACall) (hv : AValid c) (off : Nat) (i : BitVec 25)
       exact (Poly1305Spec.polyBlocks_append _ _ _ (msg.length / 16) msg _ (by have := hp.len; omega)).symm
     · have := hp.len
       simp only [List.length_append, lengthBlock, Poly1305Spec.leBytes_length]; omega
+
+theorem lengths_reach (c : ACall) (hv : AValid c) (off : Nat) (i : BitVec 25)
+    (hseq : seqAt B off lengths = true) (hbl : instrAt B (off + seqSize lengths) = some (.bl i))
+    (ht : blTarget (off + seqSize lengths) i = BitVec.ofNat 32 blocksOff)
+    (ho : off % 2 = 0) (hox : off + seqSize lengths + blSize ≤ Artifacts.Release.size)
+    (s : State) (hpc : s.pc = c.base + BitVec.ofNat 32 off) (h13 : s.regs 13 = c.A)
+    (hh : Hi c s.mem) (hc : CodeAt s.mem c.base B) (ti : Mem) (msg : List M0Crypto.Spec.ChaCha20.Byte)
+    (hp : PInv c.A ti msg s.mem) :
+    Reach c.base (MacWr c.A) s (LengthPost c off ti msg s) :=
+  (lengths_reach_w (Pc := fun _ => True) c hv off i hseq hbl ht ho hox s hpc h13 hh hc ti msg hp
+    (fun _ _ => trivial) (fun _ _ => trivial)).toReach
 
 end M0Crypto.Release.Aead

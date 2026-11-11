@@ -41,9 +41,9 @@ theorem clrL_effect (s : State) :
     (by simp [clrL, Instr.dsts, Fin.ext_iff, MemOp.isLoad, h1, h2])⟩ <;>
     simp [clrL, execAll, Instr.next, Instr.exec, M0Crypto.Armv6M.State.setReg, M0Crypto.Armv6M.State.setNZ,
       M0Crypto.Armv6M.State.setNZCV, M0Crypto.Armv6M.State.reg,
-      Instr.exec.memOp, addFlags, ChaCha20Output.add_flags, ChaCha20Loop.sub_flags, ChaCha20Loop.sub_flags (s.regs 2) 1#32]
+      Instr.exec.memOp, addFlags, M0Crypto.Release.add_flags, M0Crypto.Release.sub_flags, M0Crypto.Release.sub_flags (s.regs 2) 1#32]
 
-  all_goals rw [show (4294967294#32 : Word) = ~~~1#32 from rfl, ChaCha20Loop.sub_flags]
+  all_goals rw [show (4294967294#32 : Word) = ~~~1#32 from rfl, M0Crypto.Release.sub_flags]
 
 theorem clrA_size : seqSize clrA = 6 := by decide
 
@@ -51,17 +51,18 @@ theorem clrL_size : seqSize clrL = 6 := by decide
 
 theorem se_fb : (((brImm8 (seqSize clrL) 0) ++ 0#1).signExtend 32 : Word) = -(BitVec.ofNat 32 (seqSize clrL + 4)) := by decide +kernel
 
-theorem clear_loop (base A : Word) (R : Reg → Word) (M : Mem) (off : Nat)
+theorem clear_loop_w {Pc : Word → Prop} (base A : Word) (R : Reg → Word) (M : Mem) (off : Nat)
     (hsq : seqAt B off clrL = true) (hbr : instrAt B (off + seqSize clrL) = some (.bcond 1 (brImm8 (off + seqSize clrL) off)))
     (hb : base.toNat % 4 = 0) (ha : A.toNat % 4 = 0) (ho : off % 2 = 0)
-    (hx : off + seqSize clrL + brSize ≤ Artifacts.Release.size) :
+    (hx : off + seqSize clrL + brSize ≤ Artifacts.Release.size)
+    (hrL : InRegion Pc base off (seqSize clrL)) (hrb : Pc (base + BitVec.ofNat 32 (off + seqSize clrL))) :
     ∀ rem k, k + rem = 24 → k < 24 → ∀ s : State,
       s.pc = base + BitVec.ofNat 32 off → s.regs 0 = 0#32 →
       s.regs 1 = A + BitVec.ofNat 32 (8 + 4*k) → s.regs 2 = BitVec.ofNat 32 rem →
       (∀ r : Reg, 3 ≤ r.val → r.val ≠ 15 → s.regs r = R r) →
       (∀ o < 4*k, s.mem (A + BitVec.ofNat 32 (8 + o)) = 0#8) →
       (∀ y, ¬ ClearWr A y → s.mem y = M y) →
-      Reach base (ClearWr A) s (fun t => t.pc = base + BitVec.ofNat 32 (off + seqSize clrL + brSize) ∧
+      ReachW base Pc (ClearWr A) s (fun t => t.pc = base + BitVec.ofNat 32 (off + seqSize clrL + brSize) ∧
         (∀ r : Reg, 3 ≤ r.val → r.val ≠ 15 → t.regs r = R r) ∧
         (∀ o < 96, t.mem (A + BitVec.ofNat 32 (8 + o)) = 0#8) ∧
         (∀ y, ¬ ClearWr A y → t.mem y = M y))
@@ -71,7 +72,7 @@ theorem clear_loop (base A : Word) (R : Reg → Word) (M : Mem) (off : Nat)
     have hLs := clrL_size
     have hBs := brSize_eq
     obtain ⟨em, e1, e2, ez, er⟩ := clrL_effect s
-    apply Reach.block hb2 clrL off hpc ho hsq (by decide)
+    apply ReachW.blockR hrL hb2 hpc ho hsq (by decide)
       (by
         simp [alignedAll, clrL, Instr.accesses, Access.aligned, MemOp.width, MemOp.isLoad, h1,
           BitVec.toNat_add, BitVec.toNat_ofNat, M0Crypto.Armv6M.State.reg]
@@ -110,11 +111,11 @@ theorem clear_loop (base A : Word) (R : Reg → Word) (M : Mem) (off : Nat)
       constructor
       · intro e; have := congrArg BitVec.toNat e; simp at this; omega
       · intro e; rw [e]
-    apply Reach.bcond hb2 (off + seqSize clrL) off 1 (brImm8 (off + seqSize clrL) off) tp (by omega) hbr (by omega)
+    apply ReachW.bcondR hrb hb2 off 1 (brImm8 (off + seqSize clrL) off) tp (by omega) hbr (by omega)
       (by rw [brImm8_base, se_fb]; exact back_target off (seqSize clrL))
     · intro hn
       have hr : rem ≠ 0 := by simpa [condPassed, zflag] using hn
-      apply clear_loop base A R M off hsq hbr hb ha ho hx rem (k+1) (by omega) (by omega) (t.setReg 15 (base + BitVec.ofNat 32 off))
+      apply clear_loop_w base A R M off hsq hbr hb ha ho hx hrL hrb rem (k+1) (by omega) (by omega) (t.setReg 15 (base + BitVec.ofNat 32 off))
         (by rw [M0Crypto.Armv6M.State.pc, setReg_eq])
         (by rw [setReg_ne _ _ _ _ (by decide), er 0 (by decide) (by decide) (by decide), h0])
         (by rw [setReg_ne _ _ _ _ (by decide)]; exact t1)
@@ -123,7 +124,7 @@ theorem clear_loop (base A : Word) (R : Reg → Word) (M : Mem) (off : Nat)
           rw [setReg_ne _ _ _ _ (by rintro rfl; exact b rfl), er r (by omega) (by omega) b, hR r a b]) tz tm
     · intro heq
       have hr : rem = 0 := by simpa [condPassed, zflag] using heq
-      apply Reach.done
+      apply ReachS.done
       refine ⟨by rw [M0Crypto.Armv6M.State.pc, setReg_eq, brSize_eq],
         fun r a b => by rw [setReg_ne _ _ _ _ (by rintro rfl; exact b rfl), er r (by omega) (by omega) b, hR r a b],
         ?_, tm⟩
@@ -136,23 +137,36 @@ structure ClearPost (base A : Word) (off : Nat) (s t : State) : Prop where
   zero : ∀ o < 96, t.mem (A + BitVec.ofNat 32 (8+o)) = 0#8
   frame : ∀ y, ¬ ClearWr A y → t.mem y = s.mem y
 
+theorem clear_reach_w {Pc : Word → Prop} (base A : Word) (off : Nat)
+    (hA : seqAt B off clrA = true) (hL : seqAt B (off + seqSize clrA) clrL = true)
+    (hbr : instrAt B (off + seqSize clrA + seqSize clrL) = some (.bcond 1 (brImm8 (off + seqSize clrA + seqSize clrL) (off + seqSize clrA))))
+    (hb : base.toNat % 4 = 0) (ha : A.toNat % 4 = 0) (ho : off % 2 = 0)
+    (hx : off + seqSize clrA + seqSize clrL + brSize ≤ Artifacts.Release.size)
+    (s : State) (hp : s.pc = base + BitVec.ofNat 32 off) (hs : s.regs 13 = A)
+    (hrA : InRegion Pc base off (seqSize clrA))
+    (hrL : InRegion Pc base (off + seqSize clrA) (seqSize clrL))
+    (hrb : Pc (base + BitVec.ofNat 32 (off + seqSize clrA + seqSize clrL))) :
+    ReachW base Pc (ClearWr A) s (ClearPost base A off s) := by
+  obtain ⟨e0, e1, e2, em, er⟩ := clrA_effect s
+  have hAs := clrA_size
+  apply ReachW.blockR hrA (by omega) hp ho hA (by decide)
+    (by simp [alignedAll, clrA, Instr.accesses]) (WritesTo.of_noWritesMem _ _ (by decide) _)
+  generalize hu : execAll clrA s = u at e0 e1 e2 em er
+  have up : u.pc = base + BitVec.ofNat 32 (off + seqSize clrA) := by
+    rw [← hu, execAll_pc _ _ (by decide), hp, ofNat_add_assoc]
+  apply (clear_loop_w base A s.regs s.mem (off + seqSize clrA) hL hbr hb ha (by omega) hx hrL hrb
+    24 0 rfl (by decide) u up e0 (by simpa [hs] using e1) e2 er
+    (by intro o ho'; omega) (by intro y _; rw [em])).mono (fun _ _ h => h)
+  rintro t ⟨tp, tr, tz, tm⟩
+  exact ⟨tp, tr, tz, tm⟩
+
 theorem clear_reach (base A : Word) (off : Nat)
     (hA : seqAt B off clrA = true) (hL : seqAt B (off + seqSize clrA) clrL = true)
     (hbr : instrAt B (off + seqSize clrA + seqSize clrL) = some (.bcond 1 (brImm8 (off + seqSize clrA + seqSize clrL) (off + seqSize clrA))))
     (hb : base.toNat % 4 = 0) (ha : A.toNat % 4 = 0) (ho : off % 2 = 0)
     (hx : off + seqSize clrA + seqSize clrL + brSize ≤ Artifacts.Release.size)
     (s : State) (hp : s.pc = base + BitVec.ofNat 32 off) (hs : s.regs 13 = A) :
-    Reach base (ClearWr A) s (ClearPost base A off s) := by
-  obtain ⟨e0, e1, e2, em, er⟩ := clrA_effect s
-  have hAs := clrA_size
-  apply Reach.block (by omega) clrA off hp ho hA (by decide)
-    (by simp [alignedAll, clrA, Instr.accesses]) (ChaCha20Block.noWrites _ _ (by decide) _)
-  generalize hu : execAll clrA s = u at e0 e1 e2 em er
-  have up : u.pc = base + BitVec.ofNat 32 (off + seqSize clrA) := by
-    rw [← hu, execAll_pc _ _ (by decide), hp, ofNat_add_assoc]
-  apply (clear_loop base A s.regs s.mem (off + seqSize clrA) hL hbr hb ha (by omega) hx
-    24 0 rfl (by decide) u up e0 (by simpa [hs] using e1) e2 er
-    (by intro o ho'; omega) (by intro y _; rw [em])).mono
-  rintro t ⟨tp, tr, tz, tm⟩
-  exact ⟨tp, tr, tz, tm⟩
+    Reach base (ClearWr A) s (ClearPost base A off s) :=
+  (clear_reach_w (Pc := fun _ => True) base A off hA hL hbr hb ha ho hx s hp hs
+    (fun _ _ => trivial) (fun _ _ => trivial) trivial).toReach
 end M0Crypto.Release.Aead

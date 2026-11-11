@@ -1,4 +1,5 @@
 import M0Crypto.Release.AeadTail
+import M0Crypto.Release.ReachSteps
 set_option linter.unusedSimpArgs false
 set_option maxRecDepth 100000
 set_option maxHeartbeats 4000000
@@ -48,23 +49,23 @@ theorem back_target (a k : Nat) :
 theorem se_fa : (((brImm8 macBr2Off macLOff) ++ 0#1).signExtend 32 : BitVec 32) = -(BitVec.ofNat 32 (seqSize macL + 4)) := by decide +kernel
 
 /-- **Copy loop.** -/
-theorem mac_loop (base A dq : Word) (M0 : Mem) (R : Reg → Word) (m rem : Nat)
+theorem mac_loop {Pc : Word → Prop} (base A dq : Word) (M0 : Mem) (R : Reg → Word) (m rem : Nat)
     (hseq : seqAt B (m + macLOff) macL = true) (hbr : instrAt B (m + macBr2Off) = some (.bcond 1 (brImm8 (m + macBr2Off) (m + macLOff))))
     (hb : base.toNat % 4 = 0) (hm : m % 2 = 0) (hmx : m + macSize ≤ Artifacts.Release.size) (hr : rem < 16)
-    (hdq : ∀ j < rem, OutBlk A (dq + BitVec.ofNat 32 j)) :
+    (hrg : InRegion Pc base m macSize) (hdq : ∀ j < rem, OutBlk A (dq + BitVec.ofNat 32 j)) :
     ∀ r k, k + r = rem → k < rem → ∀ u : State,
       u.pc = base + BitVec.ofNat 32 (m + macLOff) → u.regs 1 = A + 72#32 → u.regs 2 = BitVec.ofNat 32 k →
       u.regs 4 = dq → u.regs 6 = BitVec.ofNat 32 rem → u.regs 13 = A →
       (∀ q : Reg, 7 ≤ q.val → q.val < 12 → u.regs q = R q) →
       BlkHas A dq M0 k u.mem → (∀ y, OutBlk A y → u.mem y = M0 y) →
-      Reach base (MacWr A) u (fun v => v.pc = base + BitVec.ofNat 32 (m + macEOff) ∧ v.regs 1 = A + 72#32 ∧
+      ReachW base Pc (MacWr A) u (fun v => v.pc = base + BitVec.ofNat 32 (m + macEOff) ∧ v.regs 1 = A + 72#32 ∧
         v.regs 13 = A ∧ (∀ q : Reg, 7 ≤ q.val → q.val < 12 → v.regs q = R q) ∧
         BlkHas A dq M0 rem v.mem ∧ (∀ y, OutBlk A y → v.mem y = M0 y))
   | 0, k, h, hk, _, _, _, _, _, _, _, _, _, _ => absurd hk (by omega)
   | r + 1, k, h, hk, u, hpc, h1, h2, h4, h6, h13, hR, hblk, hout => by
     have hb2 : base.toNat % 2 = 0 := by omega
     obtain ⟨lm, l2, lz, lr⟩ := macL_effect u
-    apply Reach.block hb2 macL (m + macLOff) hpc (by have := macLOff_even; omega) hseq (by decide)
+    apply ReachW.block hb2 macL (m + macLOff) hpc (by have := macLOff_even; omega) hseq (by decide)
       (by simp [alignedAll, macL, Instr.accesses, Access.aligned, MemOp.width, MemOp.isLoad, Nat.mod_one])
       (by
         intro e he' y ⟨a, ha, hw, q, hq, hy⟩
@@ -82,6 +83,7 @@ theorem mac_loop (base A dq : Word) (M0 : Mem) (R : Reg → Word) (m rem : Nat)
             execAll_regs_other [.memReg .ldrb 0 4 2] u 1 (by decide) (by decide),
           show ((Instr.memReg MemOp.ldrb 0 4 2).next u).regs 2 = u.regs 2 from
             execAll_regs_other [.memReg .ldrb 0 4 2] u 2 (by decide) (by decide), h1, h2])
+      (hrg.sub (by decide))
     generalize hv : execAll macL u = v at lm l2 lz lr
     have vpc : v.pc = base + BitVec.ofNat 32 (m + macBr2Off) := by
       rw [← hv, execAll_pc _ _ (by decide), hpc, ofNat_add_assoc]; rfl
@@ -107,13 +109,14 @@ theorem mac_loop (base A dq : Word) (M0 : Mem) (R : Reg → Word) (m rem : Nat)
     have vz : v.z = decide (k + 1 = rem) := by
       rw [lz, h2, h6]; exact loop_flag k rem (by omega) hr
     have vr : ∀ q : Reg, q.val ≠ 0 → q.val ≠ 2 → q.val ≠ 15 → v.regs q = u.regs q := lr
-    apply Reach.bcond hb2 (m + macBr2Off) (m + macLOff) 1 (brImm8 (m + macBr2Off) (m + macLOff)) vpc (by have := macBr2Off_even; omega) hbr
+    apply ReachW.bcond hb2 (m + macBr2Off) (m + macLOff) 1 (brImm8 (m + macBr2Off) (m + macLOff)) vpc (by have := macBr2Off_even; omega) hbr
       (by have := macBr2Off_fits; omega)
       (by rw [brImm8_shift, se_fa, show m + macBr2Off = (m + macLOff) + seqSize macL by have := macBr2Off_back; omega]
           exact back_target _ (seqSize macL))
+      (hrg.at (by decide))
     · intro hne
       have hk1 : k + 1 ≠ rem := by simpa [condPassed, vz] using hne
-      apply mac_loop base A dq M0 R m rem hseq hbr hb hm hmx hr hdq r (k + 1) (by omega) (by omega)
+      apply mac_loop base A dq M0 R m rem hseq hbr hb hm hmx hr hrg hdq r (k + 1) (by omega) (by omega)
         _ (by rw [M0Crypto.Armv6M.State.pc, setReg_eq])
       all_goals first
         | (rw [setReg_ne _ _ _ _ (by decide)]; first
@@ -130,7 +133,7 @@ theorem mac_loop (base A dq : Word) (M0 : Mem) (R : Reg → Word) (m rem : Nat)
     · intro heq
       have hk1 : k + 1 = rem := by simpa [condPassed, vz] using heq
       have hf : m + macBr2Off + 2 = m + macEOff := by have := macBr2Off_fall; omega
-      apply Reach.done
+      apply ReachS.done
       refine ⟨by rw [M0Crypto.Armv6M.State.pc, setReg_eq, hf],
         by rw [setReg_ne _ _ _ _ (by decide), vr 1 (by decide) (by decide) (by decide), h1],
         by rw [setReg_ne _ _ _ _ (by decide), vr 13 (by decide) (by decide) (by decide), h13],

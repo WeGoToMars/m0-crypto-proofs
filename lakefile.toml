@@ -1,5 +1,5 @@
 name = "m0crypto"
-version = "0.1.0"
+version = "0.2.0"
 defaultTargets = ["M0Crypto"]
 
 [[lean_lib]]

@@ -1,5 +1,6 @@
 import M0Crypto.Release.Poly1305BlocksCode
 import M0Crypto.Thumb.SeqScan
+import M0Crypto.Release.ReachSteps
 
 set_option linter.unusedSimpArgs false
 set_option maxRecDepth 100000
@@ -34,5 +35,9 @@ theorem body_falls : body.all Instr.falls = true := by cbv
 theorem prologue_at : seqAt B entryAt prologue = true := by simp only [seqAt_eq_scan]; cbv
 theorem setup_at : seqAt B setupAt setup = true := by simp only [seqAt_eq_scan]; cbv
 theorem epilogue_at : seqAt B epilogueAt epilogue = true := by simp only [seqAt_eq_scan]; cbv
+
+/-- Program counters of `poly1305_blocks`. -/
+abbrev BlkPc (base : M0Crypto.Armv6M.Word) : M0Crypto.Armv6M.Word → Prop :=
+  M0Crypto.Release.ConstantTime.PCBetween base entryAt (popAt + 2)
 
 end M0Crypto.Release.Poly1305Blocks

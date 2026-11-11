@@ -3,7 +3,7 @@ import M0Crypto.Release.Poly1305FinishReturn
 import M0Crypto.Release.Poly1305FinishCheck
 set_option linter.unusedSimpArgs false
 set_option maxRecDepth 100000
-set_option maxHeartbeats 1000000
+set_option maxHeartbeats 2000000
 namespace M0Crypto.Release.Poly1305Finish
 open M0Crypto.Armv6M (Word Reg State Mem read32 slot)
 open M0Crypto.Thumb
@@ -40,8 +40,10 @@ theorem middle_pc (s : State) :
   rw [middle, execAll_pc _ _ (by decide), execAll_pc _ _ (by decide), execAll_pc _ _ calc_falls,
     ofNat_add_assoc, ofNat_add_assoc, Nat.add_assoc]
 
-theorem header_run (c : FCtx) (hv : FValid c) (s : State) (he : FEntry c s) :
-    Reach c.base c.Wr s (fun t => t = execAll header s) := by
+theorem header_run_p (c : FCtx) (hv : FValid c) (s : State) (he : FEntry c s) :
+    ReachS c.base (FPol c) s (fun t => t = execAll header s) := by
+  have hsubH := pc_sub_fin c.base entryAt (seqSize header) (by decide) (by decide)
+  have hneH := pc_ne_emit c.base entryAt (seqSize header) (by decide) (by decide) (by decide)
   have hs : s.regs 13 = c.sp0 := by rw [he.regs, he.sp]
   have hp : s.pc = c.base + BitVec.ofNat 32 entryAt := by show s.regs 15 = _; rw [he.regs, he.pc]
   have hfp4 := fp4 c hv
@@ -50,7 +52,7 @@ theorem header_run (c : FCtx) (hv : FValid c) (s : State) (he : FEntry c s) :
     rw [hs, Frame.bitCount_f0]; rfl
   have hsp' : s.regs 13 - BitVec.ofNat 32 (4 * (bitCount 240#8 + 1)) = c.fp := by
     rw [bc240, hs]; rfl
-  apply Reach.block (by have := hv.base4; omega) header entryAt hp (by decide) segments_at.1 (by decide)
+  apply ReachS.blockW (fpol_of_region c (fun pc h => hsubH pc h) (fun pc h => hneH pc h)) (inRegion_pcBetween (by decide) (by decide)) (by have := hv.base4; omega) hp (by decide) segments_at.1 (by decide)
   · simp (config := { decide := true }) [alignedAll, header, Instr.accesses, wordAccesses,
       M0Crypto.Armv6M.State.sp, hsp, hsp', bc240, Frame.bitCount_f0, List.range_succ, Access.aligned,
       BitVec.toNat_add, hs]
@@ -67,27 +69,43 @@ theorem header_run (c : FCtx) (hv : FValid c) (s : State) (he : FEntry c s) :
     refine ⟨4*j+k, by omega, ?_⟩
     rw [hy, hs, ofNat_add_assoc]
     rfl
-  · exact Reach.done rfl
+  · exact ReachS.done rfl
 
-theorem middle_run (c : FCtx) (hv : FValid c) (s : State)
+
+theorem middle_run_p (c : FCtx) (hv : FValid c) (s : State)
     (hp : s.pc = c.base + BitVec.ofNat 32 arithAt) (hsp : s.regs 13 = c.fp)
     (hc : s.regs 7 = c.ctx) (ht : s.regs 12 = c.tag) :
-    Reach c.base c.Wr s (fun t => t = middle s) := by
+    ReachS c.base (FPol c) s (fun t => t = middle s) := by
   have hb2 : c.base.toNat % 2 = 0 := by have := hv.base4; omega
-  apply Reach.block hb2 arithmetic arithAt hp (by decide) segments_at.2.1 calc_falls
+  apply ReachS.blockW (fpol_of_region c (pc_sub_fin c.base arithAt (seqSize arithmetic) (by decide) (by decide))
+      (pc_ne_emit c.base arithAt (seqSize arithmetic) (by decide) (by decide) (by decide))) (inRegion_pcBetween (by decide) (by decide))
+    hb2 hp (by decide) segments_at.2.1 calc_falls
     (Poly1305Blocks.stable_aligned _ _ calc_stable (by rw [hsp]; exact fp4 c hv)
       (by rw [hc]; exact hv.ctx4)) (WritesTo.of_noWritesMem _ _ calc_noW c.Wr)
   have ap : (execAll arithmetic s).pc = c.base + BitVec.ofNat 32 emitAt := by
     rw [execAll_pc _ _ calc_falls, hp, ofNat_add_assoc]; rfl
-  apply Reach.block hb2 emit emitAt ap (by decide) segments_at.2.2.1 (by decide) (emit_aligned _)
+  apply ReachS.blockW (Wr := InFrame c.tag 4) (fpol_of_emit c) (inRegion_pcBetween (by decide) (by decide))
+    hb2 ap (by decide) segments_at.2.2.1 (by decide) (emit_aligned _)
   · exact WritesTo.of_writesIn (emit_writes (execAll arithmetic s)) (fun o ho => by
       rw [arithmetic_regs _ 12 (by decide) (by decide), ht]
-      exact Or.inr ⟨o, ho, rfl⟩)
+      exact ⟨o, ho, rfl⟩)
   have ep : (execAll emit (execAll arithmetic s)).pc = c.base + BitVec.ofNat 32 clearAt := by
     rw [execAll_pc _ _ (by decide), ap, ofNat_add_assoc]; rfl
-  apply Reach.block hb2 clear clearAt ep (by decide) segments_at.2.2.2.1 (by decide)
+  apply ReachS.blockW (fpol_of_region c (pc_sub_fin c.base clearAt (seqSize clear) (by decide) (by decide))
+      (pc_ne_emit c.base clearAt (seqSize clear) (by decide) (by decide) (by decide))) (inRegion_pcBetween (by decide) (by decide))
+    hb2 ep (by decide) segments_at.2.2.2.1 (by decide)
     (by simp [alignedAll, clear, Instr.accesses]) (WritesTo.of_noWritesMem _ _ (by decide) c.Wr)
-  exact Reach.done rfl
+  exact ReachS.done rfl
+
+theorem header_run (c : FCtx) (hv : FValid c) (s : State) (he : FEntry c s) :
+    ReachW c.base (FinPc c.base) c.Wr s (fun t => t = execAll header s) :=
+  (header_run_p c hv s he).mono (fun _ _ h => h.1) (fun _ h => h)
+
+theorem middle_run (c : FCtx) (hv : FValid c) (s : State)
+    (hp : s.pc = c.base + BitVec.ofNat 32 arithAt) (hsp : s.regs 13 = c.fp)
+    (hc : s.regs 7 = c.ctx) (ht : s.regs 12 = c.tag) :
+    ReachW c.base (FinPc c.base) c.Wr s (fun t => t = middle s) :=
+  (middle_run_p c hv s hp hsp hc ht).mono (fun _ _ h => h.1) (fun _ h => h)
 
 /-- The saved AAPCS words survive tag publication, including tag/context aliasing. -/
 theorem middle_saved (c : FCtx) (hv : FValid c) (s : State) (hm : s.mem = c.mP) (ht : s.regs 12 = c.tag)
@@ -119,11 +137,12 @@ structure FResult (c : FCtx) (s t : State) : Prop where
 theorem header_falls : header.all Instr.falls = true := by decide
 attribute [local irreducible] header arithmetic emit clear middle tagState
 
-/-- Composable execution theorem for the complete finish function. -/
-theorem finish_reach (c : FCtx) (hv : FValid c) (s : State) (he : FEntry c s)
-    (hlr : (c.regs0 14).getLsbD 0 = true) : Reach c.base c.Wr s (fun t => FResult c s t) := by
-  apply Reach.bind
-  apply (header_run c hv s he).mono
+/-- Composable execution theorem for the complete finish function, under the tag-emit policy. -/
+theorem finish_reach_p (c : FCtx) (hv : FValid c) (s : State) (he : FEntry c s)
+    (hlr : (c.regs0 14).getLsbD 0 = true) :
+    ReachS c.base (FPol c) s (fun t => FResult c s t) := by
+  apply ReachS.bind
+  apply (header_run_p c hv s he).mono (fun _ _ h => h)
   intro u hu
   have effect := header_effect c s he
   rw [← hu] at effect
@@ -131,15 +150,16 @@ theorem finish_reach (c : FCtx) (hv : FValid c) (s : State) (he : FEntry c s)
     rw [hu, execAll_pc _ _ header_falls]
     have hp : s.pc = c.base + BitVec.ofNat 32 entryAt := by show s.regs 15 = _; rw [he.regs, he.pc]
     rw [hp, ofNat_add_assoc]; rfl
-  apply Reach.bind
-  apply (middle_run c hv u up effect.2.2.2.1 effect.2.1 effect.2.2.1).mono
+  apply ReachS.bind
+  apply (middle_run_p c hv u up effect.2.2.2.1 effect.2.1 effect.2.2.1).mono (fun _ _ h => h)
   intro v hveq
   have hsum : arithAt + (seqSize arithmetic + seqSize emit + seqSize clear) = popAt := by
     simp only [popAt, clearAt, emitAt]; omega
   have vp : v.pc = c.base + BitVec.ofNat 32 popAt := by
     rw [hveq, middle_pc, up, ofNat_add_assoc, hsum]
   have vs : v.regs 13 = c.fp := by rw [hveq, middle_regs _ 13 (by decide) (by decide) (by decide), effect.2.2.2.1]
-  apply (pop_ret c hv v vp vs (by rw [hveq]; exact middle_saved c hv u effect.1 effect.2.2.1) hlr).mono
+  apply (pop_ret_p c hv v vp vs (by rw [hveq]; exact middle_saved c hv u effect.1 effect.2.2.1) hlr).mono
+    (fun _ _ h => h)
   intro t h
   refine ⟨h.1, h.2.1, ?_, ?_, ?_⟩
   · intro r hlo hhi
@@ -155,4 +175,15 @@ theorem finish_reach (c : FCtx) (hv : FValid c) (s : State) (he : FEntry c s)
   · rw [h.2.2.2.2, hveq, middle_mem, hu]
     unfold tagState
     rfl
+
+/-- Composable execution theorem for the complete finish function. -/
+theorem finish_reach_w (c : FCtx) (hv : FValid c) (s : State) (he : FEntry c s)
+    (hlr : (c.regs0 14).getLsbD 0 = true) :
+    ReachW c.base (FinPc c.base) c.Wr s (fun t => FResult c s t) :=
+  (finish_reach_p c hv s he hlr).mono (fun _ _ h => h.1) (fun _ h => h)
+
+/-- Composable execution theorem for the complete finish function. -/
+theorem finish_reach (c : FCtx) (hv : FValid c) (s : State) (he : FEntry c s)
+    (hlr : (c.regs0 14).getLsbD 0 = true) : Reach c.base c.Wr s (fun t => FResult c s t) :=
+  (finish_reach_w c hv s he hlr).toReach
 end M0Crypto.Release.Poly1305Finish

@@ -94,12 +94,12 @@ structure BResult (c : BCtx) (s t : State) : Prop where
   scratch : ∀ r : Reg, r.val < 4 ∨ r.val = 12 ∨ r.val = 14 → t.regs r = (afterBlocks c s).regs r
   mem : t.mem = (afterBlocks c s).mem
 
-theorem blocks_reach (c : BCtx) (hv : BValid c) (s : State) (he : BEntry c s)
+theorem blocks_reach_w (c : BCtx) (hv : BValid c) (s : State) (he : BEntry c s)
     (hlr : (c.regs0 14).getLsbD 0 = true) :
-    Reach c.base c.Wr s (BResult c s) := by
+    ReachW c.base (BlkPc c.base) c.Wr s (BResult c s) := by
   have hb2 : c.base.toNat % 2 = 0 := by have := hv.base4; omega
-  apply Reach.bind
-  apply (prologue_run c hv s he).mono
+  apply ReachS.bind
+  apply (prologue_run c hv s he).mono (fun _ _ h => h)
   intro p hp; subst p
   let p := execAll prologue s
   obtain ⟨pm, ps, p0, p1, p2, p3, pz⟩ := prologue_effect c s he
@@ -110,16 +110,17 @@ theorem blocks_reach (c : BCtx) (hv : BValid c) (s : State) (he : BEntry c s)
     rw [entrypc, ofNat_add_assoc]; rfl
   change p.z = (c.count == 0#32) at pz
   have pmS : Saved c p.mem := by rw [pm]; exact mP_saved c hv
-  apply Reach.bcond hb2 enterBrAt setupAt 1 (brImm8 enterBrAt setupAt) pp (by decide) (by decide) (by decide) (by decide)
+  apply ReachW.bcond hb2 enterBrAt setupAt 1 (brImm8 enterBrAt setupAt) pp (by decide) (by decide) (by decide) (by decide)
+    ⟨enterBrAt, by decide +kernel, by decide +kernel, rfl⟩
   · intro hn
     have cn : c.count ≠ 0#32 := by simpa [condPassed, pz] using hn
     let q := p.setReg 15 (c.base + BitVec.ofNat 32 setupAt)
     have qs : q.regs 13 = c.fp := ps
     have q0 : q.regs 0 = c.ctx := p0
     have q2 : q.regs 2 = c.count := p2
-    apply Reach.bind
+    apply ReachS.bind
     apply (setup_run hv.base4 q rfl (by rw [qs]; exact fp4 hv) (by rw [q0]; exact hv.ctx4)
-      (fun o ho => Or.inl ⟨o, Nat.lt_of_lt_of_le ho belowPadBytes_le_fp, by rw [qs]⟩)).mono
+      (fun o ho => Or.inl ⟨o, Nat.lt_of_lt_of_le ho belowPadBytes_le_fp, by rw [qs]⟩)).mono (fun _ _ h => h)
     intro u hu; subst u
     let u := execAll setup q
     obtain ⟨u7, u12, us, um⟩ := setup_effect q
@@ -131,28 +132,28 @@ theorem blocks_reach (c : BCtx) (hv : BValid c) (s : State) (he : BEntry c s)
     have uc : read32 u.mem (slot (u.regs 13) slotCount) = BitVec.ofNat 32 c.count.toNat := by
       rw [us, um, M0Crypto.Armv6M.read32_write32_same, q2, BitVec.ofNat_toNat, BitVec.setWidth_eq]
     have uS : Saved c u.mem := setup_saved c q qs pmS
-    apply Reach.bind
-    apply (loop_run hv.base4 c.count.toNat (by have := c.count.isLt; have hz := cn; bv_omega)
+    apply ReachS.bind
+    apply (loop_run_w hv.base4 c.count.toNat (by have := c.count.isLt; have hz := cn; bv_omega)
       c.count.isLt u up (by rw [us']; exact fp4 hv) (by rw [u7']; exact hv.ctx4) uc
-      (fun o ho => Or.inl ⟨o, Nat.lt_of_lt_of_le ho belowPadBytes_le_fp, by rw [us']⟩)).mono
+      (fun o ho => Or.inl ⟨o, Nat.lt_of_lt_of_le ho belowPadBytes_le_fp, by rw [us']⟩)).mono (fun _ _ h => h)
     intro v hv'
     obtain ⟨veq, vp, v7, v12, vs, _⟩ := hv'
     have vs' : v.regs 13 = c.fp := vs.trans us'
     have v7' : v.regs 7 = c.ctx := v7.trans u7'
     have vS : Saved c v.mem := by rw [veq]; exact loop_saved c _ u us' uS
-    apply Reach.bind
+    apply ReachS.bind
     apply ((publish_run hv.base4 v vp (by rw [vs']; exact fp4 hv) (by rw [v7']; exact hv.ctx4)).monoW
       (by
         intro y hy
         have hfw : frameWords ≤ 16 := by decide
         rcases hy with ⟨o, ho, heq⟩ | h
         · exact .inl ⟨o, by omega, by rw [vs'] at heq; exact heq⟩
-        · exact .inr ⟨cn, by simpa [v7'] using h⟩)).mono
+        · exact .inr ⟨cn, by simpa [v7'] using h⟩)).mono (fun _ _ h => h)
     intro w hw; subst w
     have wp : (execAll publish v).pc = c.base + BitVec.ofNat 32 epilogueAt := by
       rw [execAll_pc _ _ (by decide), vp, ofNat_add_assoc]; exact pc_congr (by decide +kernel)
-    apply (blocks_ret c hv c.Wr _ wp ((publish_effect v).2.2.trans vs')
-      (publish_saved c hv v vs' v7' vS) hlr).mono
+    apply (blocks_ret_w c hv c.Wr _ wp ((publish_effect v).2.2.trans vs')
+      (publish_saved c hv v vs' v7' vS) hlr).mono (fun _ _ h => h)
     intro t ht
     refine ⟨ht.1, ht.2.1, ht.2.2.1, ?_, ?_⟩
     · intro r hr
@@ -167,10 +168,11 @@ theorem blocks_reach (c : BCtx) (hv : BValid c) (s : State) (he : BEntry c s)
   · intro hz
     have cz : c.count = 0#32 := by simpa [condPassed, pz] using hz
     let q := p.setReg 15 (c.base + BitVec.ofNat 32 retBrAt)
-    apply Reach.b hb2 retBrAt epilogueAt (brImm11 retBrAt epilogueAt) (by rfl)
+    apply ReachW.b hb2 retBrAt epilogueAt (brImm11 retBrAt epilogueAt) (by rfl)
       (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel)
+      ⟨retBrAt, by decide +kernel, by decide +kernel, rfl⟩
     let u := q.setReg 15 (c.base + BitVec.ofNat 32 epilogueAt)
-    apply (blocks_ret c hv c.Wr u rfl ps pmS hlr).mono
+    apply (blocks_ret_w c hv c.Wr u rfl ps pmS hlr).mono (fun _ _ h => h)
     intro t ht
     refine ⟨ht.1, ht.2.1, ht.2.2.1, ?_, ?_⟩
     · intro r hr
@@ -183,6 +185,11 @@ theorem blocks_reach (c : BCtx) (hv : BValid c) (s : State) (he : BEntry c s)
       rw [setReg_regs_ne _ 15 r _ hr15, setReg_regs_ne _ 15 r _ hr15]
     · rw [ht.2.2.2.2, afterBlocks, ite_eq_left cz]
       rfl
+
+theorem blocks_reach (c : BCtx) (hv : BValid c) (s : State) (he : BEntry c s)
+    (hlr : (c.regs0 14).getLsbD 0 = true) :
+    Reach c.base c.Wr s (BResult c s) :=
+  (blocks_reach_w c hv s he hlr).toReach
 
 /-- Whole-function execution of the linked bytes. For every 32-bit block count,
 including zero, execution returns with AAPCS registers restored. Each write is in

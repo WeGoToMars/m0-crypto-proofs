@@ -1,6 +1,7 @@
 import M0Crypto.Release.Poly1305MacDefs
 import M0Crypto.Release.Layout
 import M0Crypto.Release.Poly1305Spec
+import M0Crypto.Release.ReachSteps
 
 set_option linter.unusedSimpArgs false
 set_option maxRecDepth 100000
@@ -127,24 +128,25 @@ theorem mac_size (h : Reg) (k : Nat) : seqSize (mac h k) = 40 := by simp [mac, s
 
 /-- One `MAC h, [r7 + 4w]`: `r1:r0 += h * word w of the context` (mod 2^64); r7-r14, SP and
 memory unchanged. -/
-theorem mac_run {base ctx : Word} (hb : base.toNat % 4 = 0) (hc : ctx.toNat % 4 = 0) {Wr : Word → Prop} {t : State} {off : Nat} {h : Reg} {w : Nat}
+theorem mac_run_w {base ctx : Word} (hb : base.toNat % 4 = 0) (hc : ctx.toNat % 4 = 0) {Pc Wr : Word → Prop} {t : State} {off : Nat} {h : Reg} {w : Nat}
     (hw : w < 15) (hseq : seqAt B off (mac h (2 * w)) = true) (ho : off % 2 = 0)
-    (hpc : t.pc = base + BitVec.ofNat 32 off) (h7 : t.regs 7 = ctx) {Q : State → Prop}
+    (hpc : t.pc = base + BitVec.ofNat 32 off) (h7 : t.regs 7 = ctx) (hr : InRegion Pc base off (seqSize (mac h (2 * w)))) {Q : State → Prop}
     (k : ∀ t', t'.pc = base + BitVec.ofNat 32 (off + 40) → t'.mem = t.mem →
       (∀ r : Reg, 7 ≤ r.val → r.val ≠ 15 → t'.regs r = t.regs r) →
       v64 t' = (v64 t + (t.regs h).toNat * (read32 t.mem (ctx + BitVec.ofNat 32 (4 * w))).toNat) % 2 ^ 64 →
-      Reach base Wr t' Q) :
-    Reach base Wr t Q := by
+      ReachW base Pc Wr t' Q) :
+    ReachW base Pc Wr t Q := by
   have hb2 : base.toNat % 2 = 0 := by omega
   have h2w : (BitVec.ofNat 5 (2 * w)).toNat = 2 * w := by simp; omega
   have h2w1 : (BitVec.ofNat 5 (2 * w + 1)).toNat = 2 * w + 1 := by simp; omega
-  apply Reach.block hb2 (mac h (2 * w)) off hpc ho hseq (mac_falls h _)
+  apply ReachW.block hb2 (mac h (2 * w)) off hpc ho hseq (mac_falls h _)
   · simp (config := { decide := true }) [alignedAll, mac, Instr.next, Instr.exec, Instr.exec.memOp, Instr.accesses,
       Access.aligned, MemOp.width, MemOp.isLoad, M0Crypto.Armv6M.State.setReg, M0Crypto.Armv6M.State.setNZC,
       M0Crypto.Armv6M.State.setNZ, M0Crypto.Armv6M.State.reg, M0Crypto.Proofs.toReg_3, M0Crypto.Proofs.toReg_4,
       M0Crypto.Proofs.toReg_5, M0Crypto.Proofs.toReg_6, M0Crypto.Proofs.toReg_7, h2w, h2w1, h7, BitVec.toNat_add]
     omega
   · exact WritesTo.of_noWritesMem _ _ (mac_noW h _) Wr
+  · exact hr
   · apply k
     · rw [execAll_pc _ _ (mac_falls h _), mac_size, hpc, ofNat_add_assoc]
     · exact execAll_mem _ _ (mac_noW h _)
@@ -159,28 +161,41 @@ theorem mac_run {base ctx : Word} (hb : base.toNat % 4 = 0) (hc : ctx.toNat % 4 
       rw [← ofNat_add_assoc, show (BitVec.ofNat 32 2) = 2#32 from rfl, read16_pair]
 
 
+theorem mac_run {base ctx : Word} (hb : base.toNat % 4 = 0) (hc : ctx.toNat % 4 = 0) {Wr : Word → Prop} {t : State} {off : Nat} {h : Reg} {w : Nat}
+    (hw : w < 15) (hseq : seqAt B off (mac h (2 * w)) = true) (ho : off % 2 = 0)
+    (hpc : t.pc = base + BitVec.ofNat 32 off) (h7 : t.regs 7 = ctx) {Q : State → Prop}
+    (k : ∀ t', t'.pc = base + BitVec.ofNat 32 (off + 40) → t'.mem = t.mem →
+      (∀ r : Reg, 7 ≤ r.val → r.val ≠ 15 → t'.regs r = t.regs r) →
+      v64 t' = (v64 t + (t.regs h).toNat * (read32 t.mem (ctx + BitVec.ofNat 32 (4 * w))).toNat) % 2 ^ 64 →
+      Reach base Wr t' Q) :
+    Reach base Wr t Q :=
+  (mac_run_w (Pc := fun _ => True) hb hc hw hseq ho hpc h7 (fun _ _ => trivial)
+    (fun t' a b c d => (k t' a b c d).toReachW)).toReach
+
+
 /-! ## `NARROW`: `r1:r0 += (lr * word j) mod 2^32` -/
 
 theorem narrow_falls (j : Nat) : (narrow j).all Instr.falls = true := by simp [narrow, Instr.falls]
 theorem narrow_noW (j : Nat) : (narrow j).all (!·.writesMem) = true := by
   simp [narrow, Instr.writesMem, MemOp.isLoad]
 
-theorem narrow_run {base ctx : Word} (hb : base.toNat % 4 = 0) (hc : ctx.toNat % 4 = 0)
-    {Wr : Word → Prop} {t : State} {off : Nat} {j : Nat} (hj : j < 16) (hseq : seqAt B off (narrow j) = true)
-    (ho : off % 2 = 0) (hpc : t.pc = base + BitVec.ofNat 32 off) (h7 : t.regs 7 = ctx) {Q : State → Prop}
+theorem narrow_run_w {base ctx : Word} (hb : base.toNat % 4 = 0) (hc : ctx.toNat % 4 = 0)
+    {Pc Wr : Word → Prop} {t : State} {off : Nat} {j : Nat} (hj : j < 16) (hseq : seqAt B off (narrow j) = true)
+    (ho : off % 2 = 0) (hpc : t.pc = base + BitVec.ofNat 32 off) (h7 : t.regs 7 = ctx) (hr : InRegion Pc base off (seqSize (narrow j))) {Q : State → Prop}
     (k : ∀ t', t'.pc = base + BitVec.ofNat 32 (off + 12) → t'.mem = t.mem →
       (∀ r : Reg, 7 ≤ r.val → r.val ≠ 15 → t'.regs r = t.regs r) →
       v64 t' = (v64 t + (t.regs 14).toNat * (read32 t.mem (ctx + BitVec.ofNat 32 (4 * j))).toNat % 2 ^ 32) %
-        2 ^ 64 → Reach base Wr t' Q) :
-    Reach base Wr t Q := by
+        2 ^ 64 → ReachW base Pc Wr t' Q) :
+    ReachW base Pc Wr t Q := by
   have hb2 : base.toNat % 2 = 0 := by omega
   have hj' : j % 32 = j := Nat.mod_eq_of_lt (by omega)
-  apply Reach.block hb2 (narrow j) off hpc ho hseq (narrow_falls j)
+  apply ReachW.block hb2 (narrow j) off hpc ho hseq (narrow_falls j)
   · simp (config := { decide := true }) [alignedAll, narrow, Instr.next, Instr.exec, Instr.exec.memOp,
       Instr.accesses, Access.aligned, MemOp.width, MemOp.isLoad, M0Crypto.Armv6M.State.setReg,
       M0Crypto.Armv6M.State.reg, M0Crypto.Proofs.toReg_7, hj', h7, BitVec.toNat_add]
     omega
   · exact WritesTo.of_noWritesMem _ _ (narrow_noW j) Wr
+  · exact hr
   · apply k
     · rw [execAll_pc _ _ (narrow_falls j), hpc, ofNat_add_assoc]; rfl
     · exact execAll_mem _ _ (narrow_noW j)
@@ -201,31 +216,44 @@ theorem narrow_run {base ctx : Word} (hb : base.toNat % 4 = 0) (hc : ctx.toNat %
       rw [e5, e0, BitVec.toNat_mul, Nat.mul_comm (read32 t.mem _).toNat]
       simp only [Nat.zero_mul, Nat.add_zero]
 
+theorem narrow_run {base ctx : Word} (hb : base.toNat % 4 = 0) (hc : ctx.toNat % 4 = 0)
+    {Wr : Word → Prop} {t : State} {off : Nat} {j : Nat} (hj : j < 16) (hseq : seqAt B off (narrow j) = true)
+    (ho : off % 2 = 0) (hpc : t.pc = base + BitVec.ofNat 32 off) (h7 : t.regs 7 = ctx) {Q : State → Prop}
+    (k : ∀ t', t'.pc = base + BitVec.ofNat 32 (off + 12) → t'.mem = t.mem →
+      (∀ r : Reg, 7 ≤ r.val → r.val ≠ 15 → t'.regs r = t.regs r) →
+      v64 t' = (v64 t + (t.regs 14).toNat * (read32 t.mem (ctx + BitVec.ofNat 32 (4 * j))).toNat % 2 ^ 32) %
+        2 ^ 64 → Reach base Wr t' Q) :
+    Reach base Wr t Q :=
+  (narrow_run_w (Pc := fun _ => True) hb hc hj hseq ho hpc h7 (fun _ _ => trivial)
+    (fun t' a b c d => (k t' a b c d).toReachW)).toReach
+
+
 /-! ## Column end: `str r0, [sp, #4j]; movs r0, r1; movs r1, #0` -/
 
 theorem colend_falls (j : Nat) : (colend j).all Instr.falls = true := by simp [colend, Instr.falls]
 
-theorem colend_run {base : Word} (hb : base.toNat % 4 = 0) {Wr : Word → Prop} {t : State} {off : Nat}
+theorem colend_run_w {base : Word} (hb : base.toNat % 4 = 0) {Pc Wr : Word → Prop} {t : State} {off : Nat}
     {j : Nat} (hj : j < Poly1305Blocks.frameWords) (hseq : seqAt B off (colend j) = true) (ho : off % 2 = 0)
     (hpc : t.pc = base + BitVec.ofNat 32 off) (hsp4 : (t.regs 13).toNat % 4 = 0)
-    (hW : ∀ o < Poly1305Blocks.frameBytes, Wr (t.regs 13 + BitVec.ofNat 32 o)) {Q : State → Prop}
+    (hW : ∀ o < Poly1305Blocks.frameBytes, Wr (t.regs 13 + BitVec.ofNat 32 o)) (hr : InRegion Pc base off (seqSize (colend j))) {Q : State → Prop}
     (k : ∀ t', t'.pc = base + BitVec.ofNat 32 (off + 6) →
       t'.mem = write32 t.mem (slot (t.regs 13) j) (t.regs 0) →
       (∀ r : Reg, 2 ≤ r.val → r.val ≠ 15 → t'.regs r = t.regs r) →
-      v64 t' = v64 t / 2 ^ 32 → Reach base Wr t' Q) :
-    Reach base Wr t Q := by
+      v64 t' = v64 t / 2 ^ 32 → ReachW base Pc Wr t' Q) :
+    ReachW base Pc Wr t Q := by
   have hb2 : base.toNat % 2 = 0 := by omega
   have hfw256 : Poly1305Blocks.frameWords ≤ 256 := by decide
   have hj' : j % 256 = j := Nat.mod_eq_of_lt (Nat.lt_of_lt_of_le hj hfw256)
   have hfw : frameWB Poly1305Blocks.frameWords (colend j) = true := by
     simp [frameWB, colend, Instr.writesMem, Instr.dsts, hj', hj]
-  apply Reach.block hb2 (colend j) off hpc ho hseq (colend_falls j)
+  apply ReachW.block hb2 (colend j) off hpc ho hseq (colend_falls j)
   · simp [alignedAll, colend, Instr.accesses, Access.aligned, M0Crypto.Armv6M.State.sp, hj',
       BitVec.toNat_add]
     omega
   · intro e he y hy
     obtain ⟨o, ho, rfl⟩ := frameWB_writes _ t hfw e he y hy
     exact hW o (by simp only [Poly1305Blocks.frameBytes]; exact ho)
+  · exact hr
   · apply k
     · rw [execAll_pc _ _ (colend_falls j), hpc, ofNat_add_assoc]; rfl
     · simp [execAll, colend, Instr.next, Instr.exec, M0Crypto.Armv6M.State.sp, M0Crypto.Armv6M.State.reg,
@@ -243,5 +271,18 @@ theorem colend_run {base : Word} (hb : base.toNat % 4 = 0) {Wr : Word → Prop} 
       have := (t.regs 0).isLt
       simp
       omega
+
+theorem colend_run {base : Word} (hb : base.toNat % 4 = 0) {Wr : Word → Prop} {t : State} {off : Nat}
+    {j : Nat} (hj : j < Poly1305Blocks.frameWords) (hseq : seqAt B off (colend j) = true) (ho : off % 2 = 0)
+    (hpc : t.pc = base + BitVec.ofNat 32 off) (hsp4 : (t.regs 13).toNat % 4 = 0)
+    (hW : ∀ o < Poly1305Blocks.frameBytes, Wr (t.regs 13 + BitVec.ofNat 32 o)) {Q : State → Prop}
+    (k : ∀ t', t'.pc = base + BitVec.ofNat 32 (off + 6) →
+      t'.mem = write32 t.mem (slot (t.regs 13) j) (t.regs 0) →
+      (∀ r : Reg, 2 ≤ r.val → r.val ≠ 15 → t'.regs r = t.regs r) →
+      v64 t' = v64 t / 2 ^ 32 → Reach base Wr t' Q) :
+    Reach base Wr t Q :=
+  (colend_run_w (Pc := fun _ => True) hb hj hseq ho hpc hsp4 hW (fun _ _ => trivial)
+    (fun t' a b c d => (k t' a b c d).toReachW)).toReach
+
 
 end M0Crypto.Release.Poly1305Mac

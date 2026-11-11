@@ -66,7 +66,7 @@ theorem bytesAt_congr {m1 m2 : Mem} {a : Word} {n : Nat} (h : ∀ j < n, m1 (a +
   apply List.ext_getElem?
   intro j
   by_cases hj : j < n
-  · rw [ChaCha20Output.bytesAt_get _ _ _ _ hj, ChaCha20Output.bytesAt_get _ _ _ _ hj, h j hj]
+  · rw [Frame.bytesAt_get _ _ _ _ hj, Frame.bytesAt_get _ _ _ _ hj, h j hj]
   · rw [List.getElem?_eq_none (by rw [bytesAt_length]; omega), List.getElem?_eq_none (by rw [bytesAt_length]; omega)]
 
 theorem add_toNat_sub (a y : Word) : a + BitVec.ofNat 32 (y - a).toNat = y := by
@@ -101,14 +101,24 @@ structure XPost (c : ACall) (e : Nat) (u : State) : Prop where
   high : Hi c u.mem
   out : ∀ y, ¬ SWr c.A y → u.mem y = c.m0 y
 
-theorem key_reach (c : ACall) (hv : AValid c) (e : Nat) (i : BitVec 25)
+theorem key_reach_gen {Pn : Word → Prop} {P : State → Event → Prop} (c : ACall) (hv : AValid c) (e : Nat)
+    (i : BitVec 25)
     (hbl : instrAt B (e + proXorOff) = some (.bl i)) (ht : blTarget (e + proXorOff) i = BitVec.ofNat 32 xorOff)
-    (he : e % 2 = 0) (hex : e + copyOff ≤ Artifacts.Release.size) (p : State) (hp : ProPost c e p) :
-    Reach c.base (SWr c.A) p (XPost c e) := by
+    (he : e % 2 = 0) (hex : e + copyOff ≤ Artifacts.Release.size) (p : State) (hp : ProPost c e p)
+    (hpro : Pn (c.base + BitVec.ofNat 32 (e + proXorOff)))
+    (hP : ∀ x ev, RegionWrites Pn (SWr c.A) x ev → P x ev)
+    (hcall : ∀ (xc : Ctx) (u : State), Valid xc → ChaCha20Setup.Entry xc u →
+      (xc.regs0 14).getLsbD 0 = true → xc.base = c.base → xc.sp0 = c.A → xc.out = c.A + 8#32 →
+      xc.len = 64#32 → xc.ctr = 0#32 →
+      xc.regs0 14 &&& ~~~1#32 = c.base + BitVec.ofNat 32 (e + copyOff) →
+      xc.inp = c.A + 8#32 → xc.key = c.key → xc.nonce = c.nonce →
+      ReachS c.base P u (fun t => t.pc = xc.regs0 14 &&& ~~~1#32 ∧ ChaCha20Xor.Result xc t)) :
+    ReachS c.base P p (XPost c e) := by
   have hb2 : c.base.toNat % 2 = 0 := by have := hv.base4; omega
   have hret : e + proXorOff + 4 = e + copyOff := by have := proXorOff_ret; omega
-  apply Reach.bl hb2 (e + proXorOff) xorOff i hp.pc (by have := proXorOff_even; omega) hbl
+  refine ReachS.bl hb2 (e + proXorOff) xorOff i hp.pc (by have := proXorOff_even; omega) hbl
     (by have := proXorOff_ret; omega) ht
+    (hP _ _ ⟨by rw [hp.pc]; exact hpro, fun y hy => absurd hy (writes_nil y)⟩) ?_
   generalize hu : (p.setReg 14 ((c.base + BitVec.ofNat 32 (e + proXorOff + 4)) ||| 1#32)).setReg 15
     (c.base + BitVec.ofNat 32 xorOff) = u
   have ur : ∀ r : Reg, r.val ≠ 14 → r.val ≠ 15 → u.regs r = p.regs r := fun r a b => by
@@ -158,14 +168,10 @@ theorem key_reach (c : ACall) (hv : AValid c) (e : Nat) (i : BitVec 25)
     argN := by show read32 u.mem c.A = _; rw [um, hp.nonce]
     argC := by show read32 u.mem (c.A + 4#32) = _; rw [um, hp.ctr] }
   have hlr : (xc.regs0 14).getLsbD 0 = true := by show (u.regs 14).getLsbD 0 = true; rw [u14]; exact lr_odd _
-  have wr : ∀ y, ChaCha20Xor.WrOk xc y → SWr c.A y := by
-    rintro y (⟨o, ho, rfl⟩ | ⟨_, hy⟩)
-    · exact swr_lo c.A o ho
-    · have hy' : (y - (c.A + 8#32)).toNat < 64 := hy
-      have e1 : c.A + BitVec.ofNat 32 (8 + (y - (c.A + 8#32)).toNat) = y := by
-        rw [← ofNat_add_assoc]; exact add_toNat_sub _ _
-      rw [← e1]; exact swr_A _ _ (by omega)
-  apply ((ChaCha20Xor.xor_reach xc xv u xe hlr).monoW wr).mono
+  have hretE : xc.regs0 14 &&& ~~~1#32 = c.base + BitVec.ofNat 32 (e + copyOff) := by
+    show u.regs 14 &&& ~~~1#32 = _
+    rw [u14, lr_mask _ (even_off c.base hv.base4 (e + proXorOff + 4) (by have := proXorOff_even; omega)), hret]
+  apply (hcall xc u xv xe hlr rfl rfl rfl rfl rfl hretE rfl rfl rfl).mono (fun _ _ h => h)
   rintro t ⟨tpc, hr⟩
   have hok : M0Crypto.Spec.Aead.counterOk xc.ctr.toNat xc.len.toNat = true := by
     show M0Crypto.Spec.Aead.counterOk (0#32 : Word).toNat (64#32 : Word).toNat = true; decide
@@ -201,7 +207,7 @@ theorem key_reach (c : ACall) (hv : AValid c) (e : Nat) (i : BitVec 25)
     rw [kB, nB]
     apply chacha20_zero _ _ _ (bytesAt_length _ _ _) _ j hj
     intro i hi
-    have := ChaCha20Output.bytesAt_get u.mem (c.A + 8#32) 64 i hi
+    have := Frame.bytesAt_get u.mem (c.A + 8#32) 64 i hi
     rw [List.getElem?_eq_getElem (by rw [bytesAt_length]; exact hi)] at this
     have e := Option.some.inj this
     show (Ctx.bytesAt u.mem (c.A + 8#32) (64#32 : Word).toNat)[i] = _
@@ -214,5 +220,30 @@ theorem key_reach (c : ACall) (hv : AValid c) (e : Nat) (i : BitVec 25)
   · intro y hy
     rw [tm y (fun o ho e => hy (e ▸ swr_lo c.A o ho)) (fun j hj e => hy (e ▸ swr_A c.A _ (by omega))),
       hp.out y (swr_of_hi hy)]
+
+theorem key_reach_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (e : Nat) (i : BitVec 25)
+    (hbl : instrAt B (e + proXorOff) = some (.bl i)) (ht : blTarget (e + proXorOff) i = BitVec.ofNat 32 xorOff)
+    (he : e % 2 = 0) (hex : e + copyOff ≤ Artifacts.Release.size) (p : State) (hp : ProPost c e p)
+    (hpro : Pc (c.base + BitVec.ofNat 32 (e + proXorOff)))
+    (hPc : ∀ pc, ChaCha20Policy.ChaPc c.base pc → Pc pc) :
+    ReachW c.base Pc (SWr c.A) p (XPost c e) :=
+  key_reach_gen c hv e i hbl ht he hex p hp hpro (fun _ _ h => h) fun xc u xv xe hlr hbase hsp hout hlen _ _ _ _ _ => by
+    have wr : ∀ y, ChaCha20Xor.WrOk xc y → SWr c.A y := by
+      rintro y (⟨o, ho, rfl⟩ | ⟨_, hy⟩)
+      · have : xc.fp = c.A - BitVec.ofNat 32 176 := by simp [Ctx.fp, hsp, ChaCha20Layout.chStackBytes_eq]
+        rw [this]; exact swr_lo c.A o ho
+      · have hy' : (y - (c.A + 8#32)).toNat < 64 := by
+          have := hy; simp only [Ctx.oidx, hout, hlen] at this; exact this
+        have e1 : c.A + BitVec.ofNat 32 (8 + (y - (c.A + 8#32)).toNat) = y := by
+          rw [← ofNat_add_assoc]; exact add_toNat_sub _ _
+        rw [← e1]; exact swr_A _ _ (by omega)
+    have h := (ChaCha20Xor.xor_reach_w xc xv (fun pc h => hPc pc (hbase ▸ h)) u xe hlr).monoW wr
+    rw [hbase] at h; exact h
+
+theorem key_reach (c : ACall) (hv : AValid c) (e : Nat) (i : BitVec 25)
+    (hbl : instrAt B (e + proXorOff) = some (.bl i)) (ht : blTarget (e + proXorOff) i = BitVec.ofNat 32 xorOff)
+    (he : e % 2 = 0) (hex : e + copyOff ≤ Artifacts.Release.size) (p : State) (hp : ProPost c e p) :
+    Reach c.base (SWr c.A) p (XPost c e) :=
+  (key_reach_w (Pc := fun _ => True) c hv e i hbl ht he hex p hp trivial (fun _ _ => trivial)).toReach
 
 end M0Crypto.Release.Aead

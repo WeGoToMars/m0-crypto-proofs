@@ -1783,3 +1783,77 @@ M0Crypto.Release.ChaCha20Xor.clear_accesses : ∀ (t : M0Crypto.Armv6M.State),
       (List.range M0Crypto.Release.ChaCha20Layout.chFrameWords)
 M0Crypto.Release.ChaCha20Xor.clear_aligned : ∀ (t : M0Crypto.Armv6M.State),
   BitVec.toNat (t.regs 13) % 4 = 0 → M0Crypto.Thumb.alignedAll M0Crypto.Release.ChaCha20Xor.clr t = Bool.true
+M0Crypto.Release.ConstantTime.aligned_chunk_write_pc : ∀ (t : M0Crypto.Armv6M.State) (i : Nat)
+  (e : M0Crypto.Thumb.Event),
+  e ∈ M0Crypto.Thumb.traceAll (M0Crypto.Release.ChaCha20Output.ach i) t →
+    ∀ (y : M0Crypto.Armv6M.Word),
+      M0Crypto.Thumb.Writes e.accesses y →
+        e.pc = t.pc + BitVec.ofNat 32 (M0Crypto.Thumb.seqSize (M0Crypto.Release.ChaCha20Output.ach i).dropLast)
+M0Crypto.Release.ConstantTime.aligned_chunk_read_addresses : ∀ (t : M0Crypto.Armv6M.State) (i : Nat),
+  i < 16 →
+    ∀ (e : M0Crypto.Thumb.Event),
+      e ∈ M0Crypto.Thumb.traceAll (M0Crypto.Release.ChaCha20Output.ach i) t →
+        ∀ (y : M0Crypto.Armv6M.Word),
+          M0Crypto.Release.Reads e.accesses y →
+            ∃ q,
+              q < 4 ∧
+                (y = t.regs 13 + BitVec.ofNat 32 (4 * (M0Crypto.Release.ChaCha20Layout.slotX + i)) + BitVec.ofNat 32 q ∨
+                  y =
+                      t.regs 13 + BitVec.ofNat 32 (4 * (M0Crypto.Release.ChaCha20Layout.slotJ + i)) +
+                        BitVec.ofNat 32 q ∨
+                    y = t.regs 2 + BitVec.ofNat 32 (4 * i) + BitVec.ofNat 32 q)
+M0Crypto.Release.ConstantTime.aligned_chunk_policy : ∀ (c : M0Crypto.Release.Frame.Ctx),
+  M0Crypto.Release.Frame.Valid c →
+    ∀ (k i : Nat) (t : M0Crypto.Armv6M.State),
+      i < 16 →
+        t.regs 3 = c.out + BitVec.ofNat 32 (64 * k) →
+          64 * k + 4 * i + 4 ≤ BitVec.toNat c.len →
+            ∀ (allowed : M0Crypto.Armv6M.Word → M0Crypto.Thumb.Kind → M0Crypto.Armv6M.Word → Prop),
+              (∀ (y : M0Crypto.Armv6M.Word),
+                  c.oidx y < BitVec.toNat c.len →
+                    allowed
+                      (t.pc + BitVec.ofNat 32 (M0Crypto.Thumb.seqSize (M0Crypto.Release.ChaCha20Output.ach i).dropLast))
+                      M0Crypto.Thumb.Kind.write y) →
+                (∀ (pc : M0Crypto.Armv6M.Word) (q : Nat),
+                    q < 4 →
+                      allowed pc M0Crypto.Thumb.Kind.read
+                          (t.regs 13 + BitVec.ofNat 32 (4 * (M0Crypto.Release.ChaCha20Layout.slotX + i)) +
+                            BitVec.ofNat 32 q) ∧
+                        allowed pc M0Crypto.Thumb.Kind.read
+                            (t.regs 13 + BitVec.ofNat 32 (4 * (M0Crypto.Release.ChaCha20Layout.slotJ + i)) +
+                              BitVec.ofNat 32 q) ∧
+                          allowed pc M0Crypto.Thumb.Kind.read
+                            (t.regs 2 + BitVec.ofNat 32 (4 * i) + BitVec.ofNat 32 q)) →
+                  M0Crypto.Release.ConstantTime.EventAccessesTo allowed
+                    (M0Crypto.Thumb.traceAll (M0Crypto.Release.ChaCha20Output.ach i) t)
+M0Crypto.Release.ConstantTime.chacha20_code_stack_disjoint : ∀ (c : M0Crypto.Release.Frame.Ctx),
+  M0Crypto.Release.Frame.Valid c →
+    M0Crypto.Release.Frame.Disj c.base M0Crypto.Artifacts.Release.bytes.length
+      (c.sp0 - BitVec.ofNat 32 M0Crypto.Release.ConstantTime.chacha20Env.win.below)
+      (M0Crypto.Release.ConstantTime.chacha20Env.win.below + M0Crypto.Release.ConstantTime.chacha20Env.win.above)
+M0Crypto.Release.ConstantTime.aead_code_stack_disjoint : ∀ (c : M0Crypto.Release.Aead.ACall),
+  M0Crypto.Release.Aead.AValid c →
+    M0Crypto.Release.Frame.Disj c.base M0Crypto.Artifacts.Release.bytes.length
+      (c.sp0 - BitVec.ofNat 32 M0Crypto.Release.ConstantTime.encryptEnv.win.below)
+      (M0Crypto.Release.ConstantTime.encryptEnv.win.below + M0Crypto.Release.ConstantTime.encryptEnv.win.above)
+M0Crypto.Release.ConstantTime.chacha20_code_no_wrap : ∀ (c : M0Crypto.Release.Frame.Ctx),
+  M0Crypto.Release.Frame.Valid c → BitVec.toNat c.base + M0Crypto.Artifacts.Release.bytes.length ≤ 2 ^ 32
+M0Crypto.Release.ConstantTime.aead_code_no_wrap : ∀ (c : M0Crypto.Release.Aead.ACall),
+  M0Crypto.Release.Aead.AValid c → BitVec.toNat c.base + M0Crypto.Artifacts.Release.bytes.length ≤ 2 ^ 32
+M0Crypto.Release.ConstantTime.chacha20_result_stack_window : ∀ (c : M0Crypto.Release.Frame.Ctx)
+  (s : M0Crypto.Armv6M.State),
+  M0Crypto.Release.ChaCha20Xor.Result c s →
+    M0Crypto.Release.TraceSpec.InStackWindow c.sp0 M0Crypto.Release.ConstantTime.chacha20Env.win.below (s.regs 13)
+M0Crypto.Release.ConstantTime.aead_result_stack_window : ∀ (c : M0Crypto.Release.Aead.ACall)
+  (result : M0Crypto.Armv6M.Word) (s : M0Crypto.Armv6M.State),
+  M0Crypto.Release.Aead.RetPost c result s →
+    M0Crypto.Release.TraceSpec.InStackWindow c.sp0 M0Crypto.Release.ConstantTime.encryptEnv.win.below (s.regs 13)
+M0Crypto.Release.ChaCha20Xor.xor_constant_time : M0Crypto.Release.TraceSpec.ChaCha20XorConstantTime
+M0Crypto.Release.ChaCha20Xor.xor_reads : M0Crypto.Release.TraceSpec.ChaCha20XorReads
+M0Crypto.Release.ChaCha20Xor.xor_stack : M0Crypto.Release.TraceSpec.ChaCha20XorStack
+M0Crypto.Release.Aead.encrypt_constant_time : M0Crypto.Release.TraceSpec.AeadEncryptConstantTime
+M0Crypto.Release.Aead.encrypt_reads : M0Crypto.Release.TraceSpec.AeadEncryptReads
+M0Crypto.Release.Aead.encrypt_stack : M0Crypto.Release.TraceSpec.AeadEncryptStack
+M0Crypto.Release.Aead.decrypt_constant_time : M0Crypto.Release.TraceSpec.AeadDecryptConstantTime
+M0Crypto.Release.Aead.decrypt_reads : M0Crypto.Release.TraceSpec.AeadDecryptReads
+M0Crypto.Release.Aead.decrypt_stack : M0Crypto.Release.TraceSpec.AeadDecryptStack

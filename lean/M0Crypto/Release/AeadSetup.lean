@@ -97,17 +97,20 @@ structure SetupPost (c : ACall) (e : Nat) (ic : Poly1305Init.ICtx) (t : State) :
   high : Hi c t.mem
   out : ∀ y, ¬ SWr c.A y → t.mem y = c.m0 y
 
-theorem setup_reach (c : ACall) (hv : AValid c) (e : Nat) (i : BitVec 25)
+theorem setup_reach_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (e : Nat) (i : BitVec 25)
     (hseq : seqAt B (e + copyOff) copy = true) (hbl : instrAt B (e + initCallOff) = some (.bl i))
     (ht : blTarget (e + initCallOff) i = BitVec.ofNat 32 initOff) (he : e % 2 = 0) (hex : e + setupEnd ≤ Artifacts.Release.size)
-    (u : State) (hu : XPost c e u) :
-    Reach c.base (SWr c.A) u (fun t => ∃ ic, SetupPost c e ic t) := by
+    (u : State) (hu : XPost c e u)
+    (hrc : InRegion Pc c.base (e + copyOff) (seqSize copy))
+    (hrb : Pc (c.base + BitVec.ofNat 32 (e + initCallOff)))
+    (hPi : ∀ pc, Poly1305Init.InitPc c.base pc → Pc pc) :
+    ReachW c.base Pc (SWr c.A) u (fun t => ∃ ic, SetupPost c e ic t) := by
   have hb2 : c.base.toNat % 2 = 0 := by have := hv.base4; omega
   have hA := hv.A_lo
   have hA' := hv.A_hi
   have hA4 : c.A.toNat % 8 = 0 := by rw [hv.A_toNat]; have := hv.sp8; have := hv.spLo; omega
   have aoff : ∀ k < 160, (c.A + BitVec.ofNat 32 k).toNat = c.A.toNat + k := hv.A_off
-  apply Reach.block hb2 copy (e + copyOff) hu.pc (by have := copyOff_even; omega) hseq (by decide)
+  apply ReachW.blockR hrc hb2 hu.pc (by have := copyOff_even; omega) hseq (by decide)
     (by
       simp [alignedAll, copy, Instr.accesses, wordAccesses, Access.aligned, Instr.next, Instr.exec, loadRegs,
         M0Crypto.Armv6M.State.setReg, M0Crypto.Armv6M.State.sp, M0Crypto.Armv6M.State.reg, lr3c, bc3c,
@@ -138,7 +141,7 @@ theorem setup_reach (c : ACall) (hv : AValid c) (e : Nat) (i : BitVec 25)
         rw [ofNat_add_assoc, ofNat_add_assoc]; simp [ws] at hi; exact hy _ (by omega) (by omega)),
       storeWords_other _ _ _ _ (fun i q hi hq => by
         rw [ofNat_add_assoc, ofNat_add_assoc]; simp [ws] at hi; exact hy _ (by omega) (by omega))]
-  apply Reach.bl hb2 (e + initCallOff) initOff i vpc (by have := initCallOff_even; omega) hbl
+  apply ReachW.blR hrb hb2 initOff i vpc (by have := initCallOff_even; omega) hbl
     (by have := initCallOff_ret; omega) ht
   generalize hw : (v.setReg 14 ((c.base + BitVec.ofNat 32 (e + initCallOff + 4)) ||| 1#32)).setReg 15
     (c.base + BitVec.ofNat 32 initOff) = w
@@ -186,7 +189,7 @@ theorem setup_reach (c : ACall) (hv : AValid c) (e : Nat) (i : BitVec 25)
     rintro y (⟨o, ho, rfl⟩ | ⟨o, ho, rfl⟩)
     · exact swr_sub hA hA' 12 o (by omega) (by omega)
     · show SWr c.A (c.A + 8#32 + BitVec.ofNat 32 o); rw [ofNat_add_assoc]; exact swr_A _ _ (by omega)
-  apply (Poly1305Init.init_reach ic iv iw w ie hlr).mono
+  apply ((Poly1305Init.init_reach_w ic iv iw w ie hlr).monoPc hPi).mono (fun _ _ h => h)
   intro t ht
   refine ⟨ic, ?_⟩
   have niw : ∀ o < 160, (o < 8 ∨ 72 ≤ o) → ¬ Poly1305Init.IWr ic (c.A + BitVec.ofNat 32 o) := by
@@ -214,7 +217,7 @@ theorem setup_reach (c : ACall) (hv : AValid c) (e : Nat) (i : BitVec 25)
     apply List.ext_getElem?
     intro j
     by_cases hj : j < 32
-    · rw [ChaCha20Output.bytesAt_get _ _ _ _ hj, wm, ofNat_add_assoc, vblk j hj]
+    · rw [Frame.bytesAt_get _ _ _ _ hj, wm, ofNat_add_assoc, vblk j hj]
       simp only [M0Crypto.Spec.Aead.polyKey, List.getElem?_take, hj, ite_true]
       rw [List.getElem!_eq_getElem?_getD, List.getElem?_eq_getElem (by rw [ChaCha20Spec.block_length']; omega)]
       rfl
@@ -229,6 +232,25 @@ theorem setup_reach (c : ACall) (hv : AValid c) (e : Nat) (i : BitVec 25)
     show w.mem y = _
     rw [wm, vo y (fun o a b e => hy (e ▸ swr_A _ o (by omega))), hu.out y hy]
 
+/-- **`AEAD_SETUP`** from function entry at `e`, tracking the program-counter region `Pc`. -/
+theorem aead_setup_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (e : Nat) (i0 i1 : BitVec 25)
+    (hpro : seqAt B e pro = true) (hb0 : instrAt B (e + proXorOff) = some (.bl i0))
+    (ht0 : blTarget (e + proXorOff) i0 = BitVec.ofNat 32 xorOff) (hcp : seqAt B (e + copyOff) copy = true)
+    (hb1 : instrAt B (e + initCallOff) = some (.bl i1))
+    (ht1 : blTarget (e + initCallOff) i1 = BitVec.ofNat 32 initOff)
+    (he : e % 2 = 0) (hex : e + setupEnd ≤ Artifacts.Release.size) (s : State) (h : AEntry c e s)
+    (hrp : InRegion Pc c.base e (seqSize pro))
+    (hrx : Pc (c.base + BitVec.ofNat 32 (e + proXorOff)))
+    (hrc : InRegion Pc c.base (e + copyOff) (seqSize copy))
+    (hrb : Pc (c.base + BitVec.ofNat 32 (e + initCallOff)))
+    (hPc : ∀ pc, ChaCha20Policy.ChaPc c.base pc → Pc pc)
+    (hPi : ∀ pc, Poly1305Init.InitPc c.base pc → Pc pc) :
+    ReachW c.base Pc (SWr c.A) s (fun t => ∃ ic, SetupPost c e ic t) :=
+  pro_reach_w c hv e hpro he s h hrp fun p hp =>
+    ReachS.bind ((key_reach_w c hv e i0 hb0 ht0 he
+        (by have := copyOff_end; have := initCallOff_ret; omega) p hp hrx hPc).mono (fun _ _ h => h)
+      fun u hu => setup_reach_w c hv e i1 hcp hb1 ht1 he hex u hu hrc hrb hPi)
+
 /-- **`AEAD_SETUP`** from function entry at `e` (encrypt or decrypt): the one-time key is
 block 0 of ChaCha20 (RFC 8439 §2.6), copied to `BLK` and loaded into the Poly1305 context. -/
 theorem aead_setup (c : ACall) (hv : AValid c) (e : Nat) (i0 i1 : BitVec 25)
@@ -238,9 +260,7 @@ theorem aead_setup (c : ACall) (hv : AValid c) (e : Nat) (i0 i1 : BitVec 25)
     (ht1 : blTarget (e + initCallOff) i1 = BitVec.ofNat 32 initOff)
     (he : e % 2 = 0) (hex : e + setupEnd ≤ Artifacts.Release.size) (s : State) (h : AEntry c e s) :
     Reach c.base (SWr c.A) s (fun t => ∃ ic, SetupPost c e ic t) :=
-  pro_reach c hv e hpro he s h fun p hp =>
-    Reach.bind ((key_reach c hv e i0 hb0 ht0 he
-        (by have := copyOff_end; have := initCallOff_ret; omega) p hp).mono
-      fun u hu => setup_reach c hv e i1 hcp hb1 ht1 he hex u hu)
+  (aead_setup_w (Pc := fun _ => True) c hv e i0 i1 hpro hb0 ht0 hcp hb1 ht1 he hex s h
+    (fun _ _ => trivial) trivial (fun _ _ => trivial) trivial (fun _ _ => trivial) (fun _ _ => trivial)).toReach
 
 end M0Crypto.Release.Aead

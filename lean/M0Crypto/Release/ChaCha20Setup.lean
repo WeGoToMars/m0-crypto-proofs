@@ -22,8 +22,6 @@ set_option maxRecDepth 100000
 /-! ## Prologue (`fnStart` - `cmpOff`) -/
 
 theorem pro_at : seqAt B fnStart pro = true := by decide
-theorem listRegs_f0 : listRegs 0xf0 = [4, 5, 6, 7] := by decide
-theorem bitCount_f0 : bitCount 0xf0 = 4 := by decide
 theorem bitCount_240 : bitCount 240#8 = 4 := by decide
 
 /-- Entry state of a call described by `c` (AAPCS: r0-r3 = out, in, len, key;
@@ -123,12 +121,6 @@ theorem berr_at : instrAt B berrOff = some (.b (brImm11 berrOff errOff)) := by d
 theorem bne_next : bneOff + 2 = b0Off := by decide
 theorem bcc_next : bccOff + 2 = berrOff := by decide
 
-theorem sub_flags (x y : Word) : (M0Crypto.Armv6M.addWithCarry x (~~~y) true).1 = x - y := by
-  apply BitVec.eq_of_toNat_eq
-  simp only [M0Crypto.Armv6M.addWithCarry, BitVec.toNat_ofNat, BitVec.toNat_not, BitVec.toNat_sub,
-    Bool.toNat_true]
-  omega
-
 theorem counterOk_iff (ctr len : Word) (h : len ≠ 0) :
     M0Crypto.Spec.Aead.counterOk ctr.toNat len.toNat = true ↔
       ctr.toNat + ((len - 1#32) >>> 6).toNat < 2 ^ 32 := by
@@ -162,20 +154,24 @@ structure Acc (c : Ctx) (t : State) : Prop where
   ok : M0Crypto.Spec.Aead.counterOk c.ctr.toNat c.len.toNat = true
   argN : read32 c.m0 c.sp0 = c.nonce
 
-theorem checks (c : Ctx) (hv : Valid c) (Wr : Word → Prop) (hW : ∀ o < chStackBytes, Wr (c.fp + BitVec.ofNat 32 o))
+/-- The prologue and the two entry checks, with every access made from the front region of the
+artifact. -/
+theorem checks_S {Pc : Word → Prop} (c : Ctx) (hv : Valid c) (Wr : Word → Prop) (hW : ∀ o < chStackBytes, Wr (c.fp + BitVec.ofNat 32 o))
+    (allowed : Word → Kind → Word → Prop) (hA : ChaCha20Policy.Admits (ChaCha20Policy.FrontPc c.base) Wr allowed)
+    (hPc : ∀ pc, ChaCha20Policy.ChaPc c.base pc → Pc pc)
     (s : State) (h : Entry c s) (Q : State → Prop)
     (k0 : ∀ t, t.pc = c.base + BitVec.ofNat 32 zOff → t.regs 13 = c.fp → t.mem = c.mP → c.len = 0 →
-      Reach c.base Wr t Q)
+      ReachS c.base (ChaCha20Policy.EvP Pc allowed) t Q)
     (kerr : ∀ t, t.pc = c.base + BitVec.ofNat 32 errOff → t.regs 13 = c.fp → t.mem = c.mP → c.len ≠ 0 →
-      M0Crypto.Spec.Aead.counterOk c.ctr.toNat c.len.toNat = false → Reach c.base Wr t Q)
-    (kacc : ∀ t, Acc c t → Reach c.base Wr t Q) : Reach c.base Wr s Q := by
+      M0Crypto.Spec.Aead.counterOk c.ctr.toNat c.len.toNat = false → ReachS c.base (ChaCha20Policy.EvP Pc allowed) t Q)
+    (kacc : ∀ t, Acc c t → ReachS c.base (ChaCha20Policy.EvP Pc allowed) t Q) : ReachS c.base (ChaCha20Policy.EvP Pc allowed) s Q := by
   have sSB := ChaCha20Layout.chStackBytes_eq
   have hb2 : c.base.toNat % 2 = 0 := by have := hv.base4; omega
   have hpc0 : s.pc = c.base + BitVec.ofNat 32 fnStart := by
     show s.regs 15 = _; rw [h.regs, h.pc]; simp [fnStart, Artifacts.Release.chacha20_xor]
   obtain ⟨p13, pm, pr⟩ := pro_effect c s h
-  apply Reach.block hb2 pro fnStart hpc0 (by decide) pro_at (by decide) ?_ (fun e he y hy => by obtain ⟨o, ho, rfl⟩ := pro_frame c hv s h e he y hy; exact hW o ho)
-  rotate_left
+  refine ChaCha20Policy.frontBlockP hA hPc hb2 pro fnStart hpc0 (by decide) pro_at (by decide) ?_
+    (fun e he y hy => by obtain ⟨o, ho, rfl⟩ := pro_frame c hv s h e he y hy; exact hW o ho) (by decide) ?_
   · simp [alignedAll, pro, Instr.next, Instr.exec, Instr.accesses, M0Crypto.Armv6M.State.setReg,
       M0Crypto.Armv6M.State.sp, bitCount_f0, listRegs_f0, wordAccesses, List.range_succ, Access.aligned,
       h.regs, h.sp, BitVec.toNat_sub, BitVec.toNat_add]
@@ -187,8 +183,9 @@ theorem checks (c : Ctx) (hv : Valid c) (Wr : Word → Prop) (hW : ∀ o < chSta
   have pc0 : t0.pc = c.base + BitVec.ofNat 32 cmpOff := by
     rw [← ht0, execAll_pc pro s (by decide), hpc0, ofNat_add_assoc]; rfl
   -- cmp r2, #0
-  apply Reach.block hb2 [.cmpImm 2 0] cmpOff pc0 (by decide) (by decide) (by decide)
+  apply ChaCha20Policy.frontBlockP hA hPc hb2 [.cmpImm 2 0] cmpOff pc0 (by decide) (by decide) (by decide)
     (by simp [alignedAll, Instr.accesses]) (by intro e he y ⟨a, ha, _⟩; simp [traceAll, Instr.accesses] at he; subst he; simp at ha)
+    (by decide)
   generalize ht1 : execAll [.cmpImm 2 0] t0 = t1
   have r1 : ∀ r : Reg, r.val ≠ 15 → t1.regs r = t0.regs r := fun r hr => by
     rw [← ht1]; exact execAll_regs_other _ _ r hr (by simp [Instr.dsts])
@@ -202,7 +199,7 @@ theorem checks (c : Ctx) (hv : Valid c) (Wr : Word → Prop) (hW : ∀ o < chSta
       M0Crypto.Armv6M.State.setNZ, M0Crypto.Armv6M.State.reg, M0Crypto.Proofs.toReg_2, e2]
     simp (config := { decide := true }) only [ite_false, sub_flags]
     simp
-  apply Reach.bcond hb2 bneOff chkOff 1 (brImm8 bneOff chkOff) pc1 (by decide) bne_at (by decide) (by decide +kernel)
+  apply ChaCha20Policy.evBcond hb2 bneOff chkOff 1 (brImm8 bneOff chkOff) pc1 (by decide) bne_at (by decide) (by decide +kernel) (hr := ChaCha20Policy.chaAt hPc (by decide +kernel))
   · intro hz
     simp only [condPassed, Bool.not_eq_true'] at hz
     rw [z1] at hz
@@ -220,11 +217,12 @@ theorem checks (c : Ctx) (hv : Valid c) (Wr : Word → Prop) (hW : ∀ o < chSta
       rw [ChaCha20Return.mP_above c hv 4 (by have := hv.outF; have := hv.codeF; simp only [Disj] at *; rw [fp_toNat hv] at *; omega)]
       exact h.argC
     have hcs := ChaCha20Layout.chStackWords_eq
-    apply Reach.block hb2 chk chkOff pc2 (by decide) chk_at (by decide)
+    apply ChaCha20Policy.frontBlockP hA hPc hb2 chk chkOff pc2 (by decide) chk_at (by decide)
       (by simp [alignedAll, chk, Instr.accesses, Instr.next, Instr.exec, M0Crypto.Armv6M.State.sp,
             M0Crypto.Armv6M.State.setReg, Access.aligned, sp2, BitVec.toNat_add]
           have := fp4 hv; omega)
       (fun e he y hy => wr_frameW hW (by have := frameWB_writes (n := chStackWords) chk t2 (by decide) e he y hy; rwa [sp2] at this) (by omega))
+      (by decide)
     generalize ht3 : execAll chk t2 = t3
     have c3 : t3.c = decide ((BitVec.ofNat 32 (c.ctr.toNat + ((c.len - 1#32) >>> 6).toNat)).toNat ≠
         c.ctr.toNat + ((c.len - 1#32) >>> 6).toNat) := by
@@ -260,7 +258,7 @@ theorem checks (c : Ctx) (hv : Valid c) (Wr : Word → Prop) (hW : ∀ o < chSta
           · rfl
           · exact absurd (hi.mp h') hlt
         rw [hf]; simp only [Bool.false_eq, Bool.not_eq_false', decide_eq_true_eq]; omega
-    apply Reach.bcond hb2 bccOff accOff 3 (brImm8 bccOff accOff) pc3 (by decide) bcc_at (by decide) (by decide +kernel)
+    apply ChaCha20Policy.evBcond hb2 bccOff accOff 3 (brImm8 bccOff accOff) pc3 (by decide) bcc_at (by decide) (by decide +kernel) (hr := ChaCha20Policy.chaAt hPc (by decide +kernel))
     · intro hc
       rw [condPassed_3] at hc
       have r : ∀ r : Reg, r.val < 4 → (t3.setReg 15 (c.base + BitVec.ofNat 32 accOff)).regs r = c.regs0 r :=
@@ -280,7 +278,7 @@ theorem checks (c : Ctx) (hv : Valid c) (Wr : Word → Prop) (hW : ∀ o < chSta
       · exact h.argN
     · intro hc
       rw [condPassed_3] at hc
-      apply Reach.b hb2 berrOff errOff (brImm11 berrOff errOff) (by rw [setReg15_pc, bcc_next]) (by decide) berr_at (by decide) (by decide +kernel)
+      apply ChaCha20Policy.evB hb2 berrOff errOff (brImm11 berrOff errOff) (by rw [setReg15_pc, bcc_next]) (by decide) berr_at (by decide) (by decide +kernel) (hr := ChaCha20Policy.chaAt hPc (by decide +kernel))
       apply kerr
       · rw [setReg15_pc]
       · rw [setReg15_regs _ _ 13 (by decide), setReg15_regs _ _ 13 (by decide),
@@ -292,12 +290,53 @@ theorem checks (c : Ctx) (hv : Valid c) (Wr : Word → Prop) (hW : ∀ o < chSta
     simp only [condPassed, Bool.not_eq_false'] at hz
     rw [z1] at hz
     have hl : c.len = 0 := by simpa using hz
-    apply Reach.b hb2 b0Off zOff (brImm11 b0Off zOff) (by rw [setReg15_pc, bne_next]) (by decide) b0_at (by decide) (by decide +kernel)
+    apply ChaCha20Policy.evB hb2 b0Off zOff (brImm11 b0Off zOff) (by rw [setReg15_pc, bne_next]) (by decide) b0_at (by decide) (by decide +kernel) (hr := ChaCha20Policy.chaAt hPc (by decide +kernel))
     apply k0
     · rw [setReg15_pc]
     · rw [setReg15_regs _ _ 13 (by decide), setReg15_regs _ _ 13 (by decide), r1 13 (by decide), p13]
     · show t1.mem = c.mP; rw [m1, pm]
     · exact hl
+
+theorem checks_events (c : Ctx) (hv : Valid c) (Wr : Word → Prop) (hW : ∀ o < chStackBytes, Wr (c.fp + BitVec.ofNat 32 o))
+    (allowed : Word → Kind → Word → Prop) (hA : ChaCha20Policy.Admits (ChaCha20Policy.FrontPc c.base) Wr allowed)
+    (s : State) (h : Entry c s) (Q : State → Prop)
+    (k0 : ∀ t, t.pc = c.base + BitVec.ofNat 32 zOff → t.regs 13 = c.fp → t.mem = c.mP → c.len = 0 →
+      ConstantTime.ReachEvents c.base allowed t Q)
+    (kerr : ∀ t, t.pc = c.base + BitVec.ofNat 32 errOff → t.regs 13 = c.fp → t.mem = c.mP → c.len ≠ 0 →
+      M0Crypto.Spec.Aead.counterOk c.ctr.toNat c.len.toNat = false → ConstantTime.ReachEvents c.base allowed t Q)
+    (kacc : ∀ t, Acc c t → ConstantTime.ReachEvents c.base allowed t Q) : ConstantTime.ReachEvents c.base allowed s Q :=
+  ChaCha20Policy.ofEvP (checks_S (Pc := fun _ => True) c hv Wr hW allowed hA (fun _ _ => trivial) s h Q
+    (fun t h1 h2 h3 h4 => ChaCha20Policy.reachEvents_toEvP (k0 t h1 h2 h3 h4))
+    (fun t h1 h2 h3 h4 h5 => ChaCha20Policy.reachEvents_toEvP (kerr t h1 h2 h3 h4 h5))
+    (fun t h1 => ChaCha20Policy.reachEvents_toEvP (kacc t h1)))
+
+/-- The prologue and the two entry checks, with every program counter in `Pc`. -/
+theorem checks_w {Pc : Word → Prop} (c : Ctx) (hv : Valid c) (Wr : Word → Prop) (hW : ∀ o < chStackBytes, Wr (c.fp + BitVec.ofNat 32 o))
+    (hPc : ∀ pc, ChaCha20Policy.ChaPc c.base pc → Pc pc)
+    (s : State) (h : Entry c s) (Q : State → Prop)
+    (k0 : ∀ t, t.pc = c.base + BitVec.ofNat 32 zOff → t.regs 13 = c.fp → t.mem = c.mP → c.len = 0 →
+      ReachW c.base Pc Wr t Q)
+    (kerr : ∀ t, t.pc = c.base + BitVec.ofNat 32 errOff → t.regs 13 = c.fp → t.mem = c.mP → c.len ≠ 0 →
+      M0Crypto.Spec.Aead.counterOk c.ctr.toNat c.len.toNat = false → ReachW c.base Pc Wr t Q)
+    (kacc : ∀ t, Acc c t → ReachW c.base Pc Wr t Q) : ReachW c.base Pc Wr s Q :=
+  ChaCha20Policy.ofEvPW
+    (checks_S c hv Wr hW _ (ChaCha20Policy.admits_writeOnly _ Wr) hPc s h Q
+      (fun t h1 h2 h3 h4 => ChaCha20Policy.reachW_toEvP (k0 t h1 h2 h3 h4))
+      (fun t h1 h2 h3 h4 h5 => ChaCha20Policy.reachW_toEvP (kerr t h1 h2 h3 h4 h5))
+      (fun t h1 => ChaCha20Policy.reachW_toEvP (kacc t h1)))
+
+/-- The prologue and the two entry checks. -/
+theorem checks (c : Ctx) (hv : Valid c) (Wr : Word → Prop) (hW : ∀ o < chStackBytes, Wr (c.fp + BitVec.ofNat 32 o))
+    (s : State) (h : Entry c s) (Q : State → Prop)
+    (k0 : ∀ t, t.pc = c.base + BitVec.ofNat 32 zOff → t.regs 13 = c.fp → t.mem = c.mP → c.len = 0 →
+      Reach c.base Wr t Q)
+    (kerr : ∀ t, t.pc = c.base + BitVec.ofNat 32 errOff → t.regs 13 = c.fp → t.mem = c.mP → c.len ≠ 0 →
+      M0Crypto.Spec.Aead.counterOk c.ctr.toNat c.len.toNat = false → Reach c.base Wr t Q)
+    (kacc : ∀ t, Acc c t → Reach c.base Wr t Q) : Reach c.base Wr s Q :=
+  (checks_w (Pc := fun _ => True) c hv Wr hW (fun _ _ => trivial) s h Q
+    (fun t h1 h2 h3 h4 => (k0 t h1 h2 h3 h4).toReachW)
+    (fun t h1 h2 h3 h4 h5 => (kerr t h1 h2 h3 h4 h5).toReachW)
+    (fun t h1 => (kacc t h1).toReachW)).toReach
 
 /-! ## `LOAD_LE32 r3, off` -/
 

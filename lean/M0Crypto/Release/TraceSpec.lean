@@ -5,6 +5,7 @@ import M0Crypto.Release.AeadPrologue
 import M0Crypto.Release.AeadCrypt
 import M0Crypto.Release.AeadDecrypt
 import M0Crypto.Release.RunStates
+import M0Crypto.Release.TraceSpecDefs
 
 open M0Crypto.Armv6M (Word Reg State Mem)
 open M0Crypto.Thumb
@@ -47,30 +48,21 @@ namespace M0Crypto.Release.TraceSpec
 # Constant-time trace, read and stack specifications
 
 This file contains specification statements only (`def ... : Prop`, no proofs).
-It defines the desired properties for the three public entry points:
+It states the properties proved for the three public entry points:
 - `m0c_chacha20_xor`
 - `m0c_chacha20poly1305_encrypt`
 - `m0c_chacha20poly1305_decrypt`
 
-Under the existing functional contracts:
+Under the functional entry contracts:
 1. Constant-time trace independence (equal traces for equal public inputs; decrypt also
    conditioned on equal authentication verdict).
-2. Read bounds (all reads are confined to the caller-provided buffers, code and stack window).
+2. Read bounds (all reads are confined to the caller-provided buffers, code and stack window;
+   the decryption bound also admits the output buffer).
 3. Stack bounds (SP remains within the entry's stack window at every step).
 -/
 
-/-! ## Named stack bound constants -/
-
-/-- Stack bytes allocated by the AEAD entry points (`m0c_chacha20poly1305_encrypt`
-and `m0c_chacha20poly1305_decrypt`), matching `AValid.spLo`. -/
-def aeadStackBytes : Nat := 320
-
-theorem aeadStackBytes_eq : aeadStackBytes = 320 := by decide
-
-/-- Stack bytes allocated by `m0c_chacha20_xor`, matching `ChaCha20Layout.chStackBytes`. -/
-def chacha20StackBytes : Nat := ChaCha20Layout.chStackBytes
-
-theorem chacha20StackBytes_eq : chacha20StackBytes = 176 := ChaCha20Layout.chStackBytes_eq
+/-! The named stack bound constants `aeadStackBytes` and `chacha20StackBytes` are in
+`TraceSpecDefs`. -/
 
 /-! ## Read access model -/
 
@@ -108,7 +100,8 @@ def AeadEncryptReadRegion (c : ACall) (y : Word) : Prop :=
 
 
 /-- Allowed readable regions for `m0c_chacha20poly1305_decrypt`: the encrypt set plus
-tag[0, 16). -/
+tag[0, 16). This over-approximates what decryption reads (it also admits `out[0, len)`; the proof
+does not show that decryption avoids it); the claim bounds the set of read addresses, not their order. -/
 def AeadDecryptReadRegion (c : ACall) (y : Word) : Prop :=
   AeadEncryptReadRegion c y ∨ (∃ o < 16, y = c.tag + BitVec.ofNat 32 o)
 

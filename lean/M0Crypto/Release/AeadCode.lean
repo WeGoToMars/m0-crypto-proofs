@@ -25,6 +25,9 @@ namespace M0Crypto.Release.Aead
 open M0Crypto.Armv6M (Word Reg State)
 open M0Crypto.Thumb
 
+/-- Size of the AEAD frame: `ACall.A = sp0 - aeadFrame`. -/
+def aeadFrame : Nat := 144
+
 /-- Entry offsets: the release symbols, so each function starts where its piece layout begins. -/
 def encOff : Nat := Artifacts.Release.chacha20poly1305_encrypt
 def decOff : Nat := Artifacts.Release.chacha20poly1305_decrypt

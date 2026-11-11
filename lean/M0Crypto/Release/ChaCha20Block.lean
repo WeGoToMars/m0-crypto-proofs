@@ -179,44 +179,25 @@ theorem w4_memOk (c : Ctx) {P : Nat} {m : Mem} (h : c.MemOk P m) (a b : Nat) (hb
   exact c.memOk_write_slot (c.memOk_write_slot (c.memOk_write_slot (c.memOk_write_slot h _ (by omega) _)
     _ (by omega) _) _ (by omega) _) _ (by omega) _
 
-/-- One `ldm/stm` pair at offset `off`, in `Reach` form. -/
-theorem pair_block_events (c : Ctx) (hv : Valid c) (t : State) (off a b : Nat) (ho : off % 2 = 0)
+/-- One `ldm/stm` pair at offset `off`, in `ReachS` form with pc tracking. -/
+theorem pair_block_S {Pc : Word → Prop} (c : Ctx) (hv : Valid c) (hPc : ∀ pc, ChaCha20Policy.ChaPc c.base pc → Pc pc)
+    (t : State) (off a b : Nat) (ho : off % 2 = 0)
     (hpc : t.pc = c.base + BitVec.ofNat 32 off) (hseq : seqAt B off ptr = true)
     (h4 : t.regs 4 = slot c.fp a) (h5 : t.regs 5 = slot c.fp b) (hb : b + 4 ≤ chFrameWords)
+    (hlt : off + seqSize ptr ≤ ChaCha20Policy.chaEnd)
     (allowed : Word → Kind → Word → Prop) (hacc : EventAccessesTo allowed (traceAll ptr t)) (Q : State → Prop)
     (cont : ∀ t', t'.pc = c.base + BitVec.ofNat 32 (off + 4) → t'.regs 4 = slot c.fp (a + 4) →
       t'.regs 5 = slot c.fp (b + 4) → (∀ r : Reg, 5 < r.val → r.val ≠ 15 → t'.regs r = t.regs r) →
-      t'.mem = w4 t.mem c.fp a b → ReachEvents c.base allowed t' Q) :
-    ReachEvents c.base allowed t Q := by
+      t'.mem = w4 t.mem c.fp a b → ReachS c.base (ChaCha20Policy.EvP Pc allowed) t' Q) :
+    ReachS c.base (ChaCha20Policy.EvP Pc allowed) t Q := by
   have hb2 : c.base.toNat % 2 = 0 := by have := hv.base4; omega
   have sSB := ChaCha20Layout.chStackBytes_eq
   have sFW := ChaCha20Layout.chFrameWords_eq
-  apply ReachEvents.block hb2 ptr off hpc ho hseq (by decide) (pair_aligned t c.fp a b (fp4 hv) h4 h5)
-    hacc
+  apply ChaCha20Policy.blockP hPc hb2 ptr off hpc ho hseq (by decide) (pair_aligned t c.fp a b (fp4 hv) h4 h5)
+    hacc hlt
   obtain ⟨p4, p5, -, -, -, -, pr, pm⟩ := pair t c.fp a b h4 h5
   apply cont _ _ p4 p5 pr pm
   rw [execAll_pc _ _ (by decide), hpc, ofNat_add_assoc]; rfl
-
-theorem pair_block (c : Ctx) (hv : Valid c) (t : State) (off a b : Nat) (ho : off % 2 = 0)
-    (hpc : t.pc = c.base + BitVec.ofNat 32 off) (hseq : seqAt B off ptr = true)
-    (h4 : t.regs 4 = slot c.fp a) (h5 : t.regs 5 = slot c.fp b) (hb : b + 4 ≤ chFrameWords) (Q : State → Prop)
-    (cont : ∀ t', t'.pc = c.base + BitVec.ofNat 32 (off + 4) → t'.regs 4 = slot c.fp (a + 4) →
-      t'.regs 5 = slot c.fp (b + 4) → (∀ r : Reg, 5 < r.val → r.val ≠ 15 → t'.regs r = t.regs r) →
-      t'.mem = w4 t.mem c.fp a b → Reach c.base c.Wr t' Q) :
-    Reach c.base c.Wr t Q := by
-  apply (pair_block_events c hv t off a b ho hpc hseq h4 h5 hb (writeOnlyPolicy c.Wr) ?_ Q ?_).toReach
-  · intro _ _ h
-    rcases h with h | h
-    · cases h
-    · exact h
-  · apply WritesTo.toEventAccesses
-    intro e he y hy
-    obtain ⟨o, hlt, rfl⟩ := pair_writes t c.fp b h5 e he y hy
-    have := ChaCha20Layout.chStackBytes_eq
-    have := ChaCha20Layout.chFrameWords_eq
-    exact .inl ⟨o, by omega, rfl⟩
-  · intro u hp hr4 hr5 hr hm
-    exact Reach.toReachEvents (cont u hp hr4 hr5 hr hm)
 
 theorem ptr_at1 : seqAt B ptr1Off ptr = true := by decide
 theorem ptr_at2 : seqAt B ptr2Off ptr = true := by decide
@@ -236,13 +217,10 @@ theorem w4_3_read (m : Mem) (sp : Word) (j : Nat) (hj : j < 64) :
   repeat' split
   all_goals first | rfl | (exfalso; omega) | (congr 2; omega)
 
-theorem noWrites (is : List Instr) (s : State) (h : is.all (!·.writesMem) = true) (Wr : Word → Prop) :
-    WritesTo Wr (traceAll is s) := WritesTo.of_noWritesMem is s h Wr
-
 open M0Crypto.Release.ChaCha20Round (RotRegs view dregOf) in
 /-- **`.Lblock` setup** (`bpreOff` - `droundOff`): from `BlockInv c k` to the round-loop start with
 the state `j` of block `k` in the loop's view. -/
-theorem bsetup_events (c : Ctx) (hv : Valid c) (k : Nat) (t : State) (h : BlockInv c k t) (allowed : Word → Kind → Word → Prop)
+theorem bsetup_S {Pc : Word → Prop} (c : Ctx) (hv : Valid c) (k : Nat) (t : State) (hPc : ∀ pc, ChaCha20Policy.ChaPc c.base pc → Pc pc) (h : BlockInv c k t) (allowed : Word → Kind → Word → Prop)
     (hpre : ∀ u : State, u.pc = c.base + BitVec.ofNat 32 bpreOff →
       EventAccessesTo allowed (traceAll bpre u))
     (hpair : ∀ (off a b : Nat) (u : State), (off = ptr1Off ∨ off = ptr2Off ∨ off = ptr3Off) →
@@ -253,24 +231,24 @@ theorem bsetup_events (c : Ctx) (hv : Valid c) (k : Nat) (t : State) (h : BlockI
       EventAccessesTo allowed (traceAll btail u)) (Q : State → Prop)
     (cont : ∀ u, u.pc = c.base + BitVec.ofNat 32 droundOff → RotRegs u → u.regs 13 = c.fp →
       u.regs 12 = 10#32 → view (some 2) u = c.J k →
-      (∀ j, 12 ≤ j → j < 64 → c.fw u j = c.fw t j) → c.MemOk (64 * k) u.mem → ReachEvents c.base allowed u Q) :
-    ReachEvents c.base allowed t Q := by
+      (∀ j, 12 ≤ j → j < 64 → c.fw u j = c.fw t j) → c.MemOk (64 * k) u.mem → ReachS c.base (ChaCha20Policy.EvP Pc allowed) u Q) :
+    ReachS c.base (ChaCha20Policy.EvP Pc allowed) t Q := by
   have hb2 : c.base.toNat % 2 = 0 := by have := hv.base4; omega
-  apply ReachEvents.block hb2 bpre bpreOff h.pc (by decide) bpre_at (by decide) (bpre_aligned t)
-    (hpre t h.pc)
+  apply ChaCha20Policy.blockP hPc hb2 bpre bpreOff h.pc (by decide) bpre_at (by decide) (bpre_aligned t)
+    (hpre t h.pc) (by decide +kernel)
   obtain ⟨p4, p5, pm, pr⟩ := bpre_effect t c.fp h.sp
   have pc0 : (execAll bpre t).pc = c.base + BitVec.ofNat 32 ptr1Off := by
     rw [execAll_pc _ _ (by decide), h.pc, ofNat_add_assoc]; rfl
   have sp0 : (execAll bpre t).regs 13 = c.fp := by rw [pr 13 (by decide) (by decide) (by decide)]; exact h.sp
-  apply pair_block_events c hv _ ptr1Off slotJ slotX (by decide) pc0 ptr_at1 p4 p5 (by decide)
+  apply pair_block_S c hv hPc _ ptr1Off slotJ slotX (by decide) pc0 ptr_at1 p4 p5 (by decide) (by decide +kernel)
     allowed (hpair _ _ _ _ (by simp) pc0 ptr_at1 p4 p5 (by decide))
   intro t1 pc1 a1 b1 r1 m1
   rw [ptr1_next] at pc1
-  apply pair_block_events c hv t1 ptr2Off (slotJ + 4) (slotX + 4) (by decide) pc1 ptr_at2 a1 b1 (by decide)
+  apply pair_block_S c hv hPc t1 ptr2Off (slotJ + 4) (slotX + 4) (by decide) pc1 ptr_at2 a1 b1 (by decide) (by decide +kernel)
     allowed (hpair _ _ _ t1 (by simp) pc1 ptr_at2 a1 b1 (by decide))
   intro t2 pc2 a2 b2 r2 m2
   rw [ptr2_next] at pc2
-  apply pair_block_events c hv t2 ptr3Off (slotJ + 4 + 4) (slotX + 4 + 4) (by decide) pc2 ptr_at3 a2 b2 (by decide)
+  apply pair_block_S c hv hPc t2 ptr3Off (slotJ + 4 + 4) (slotX + 4 + 4) (by decide) pc2 ptr_at3 a2 b2 (by decide) (by decide +kernel)
     allowed (hpair _ _ _ t2 (by simp) pc2 ptr_at3 a2 b2 (by decide))
   intro t3 pc3 a3 b3 r3 m3
   rw [ptr3_next] at pc3
@@ -280,8 +258,8 @@ theorem bsetup_events (c : Ctx) (hv : Valid c) (k : Nat) (t : State) (h : BlockI
       (slotX + 4 + 4) := by rw [m3, m2, m1, pm]
   have rd : ∀ j, j < 64 → read32 t3.mem (slot c.fp j) =
       if j < 12 then c.fw t (slotJ + j) else c.fw t j := fun j hj => by rw [hM, w4_3_read _ _ _ hj]; rfl
-  apply ReachEvents.block hb2 btail btailOff pc3 (by decide) btail_at (by decide)
-    (btail_aligned t3 c.fp (fp4 hv) sp3 a3) (htail t3 pc3)
+  apply ChaCha20Policy.blockP hPc hb2 btail btailOff pc3 (by decide) btail_at (by decide)
+    (btail_aligned t3 c.fp (fp4 hv) sp3 a3) (htail t3 pc3) (by decide +kernel)
   obtain ⟨um, u13, u0, u8, u9, u10, u11, u4, u5, u6, u7, u12⟩ := btail_effect t3 c.fp sp3 a3
   apply cont _ (by rw [execAll_pc _ _ (by decide), pc3, ofNat_add_assoc]; rfl) ⟨u4, u5, u6, u7⟩ u13 u12
   · funext i
@@ -313,18 +291,16 @@ theorem bsetup_events (c : Ctx) (hv : Valid c) (k : Nat) (t : State) (h : BlockI
       (by decide)
 
 open M0Crypto.Release.ChaCha20Round (RotRegs view dregOf) in
-theorem block_setup (c : Ctx) (hv : Valid c) (k : Nat) (t : State) (h : BlockInv c k t) (Q : State → Prop)
+theorem bsetup_w {Pc : Word → Prop} (c : Ctx) (hv : Valid c) (hPc : ∀ pc, ChaCha20Policy.ChaPc c.base pc → Pc pc)
+    (k : Nat) (t : State) (h : BlockInv c k t) (Q : State → Prop)
     (cont : ∀ u, u.pc = c.base + BitVec.ofNat 32 droundOff → RotRegs u → u.regs 13 = c.fp →
       u.regs 12 = 10#32 → view (some 2) u = c.J k →
-      (∀ j, 12 ≤ j → j < 64 → c.fw u j = c.fw t j) → c.MemOk (64 * k) u.mem → Reach c.base c.Wr u Q) :
-    Reach c.base c.Wr t Q := by
-  apply (bsetup_events c hv k t h (writeOnlyPolicy c.Wr) ?_ ?_ ?_ Q ?_).toReach
-  · intro _ _ h
-    rcases h with h | h
-    · cases h
-    · exact h
+      (∀ j, 12 ≤ j → j < 64 → c.fw u j = c.fw t j) → c.MemOk (64 * k) u.mem → ReachW c.base Pc c.Wr u Q) :
+    ReachW c.base Pc c.Wr t Q := by
+  apply ChaCha20Policy.ofEvPW
+  apply bsetup_S c hv k t hPc h (writeOnlyPolicy c.Wr) ?_ ?_ ?_ Q ?_
   · intro u _
-    exact WritesTo.toEventAccesses (noWrites bpre u (by decide) c.Wr)
+    exact WritesTo.toEventAccesses (WritesTo.of_noWritesMem bpre u (by decide) c.Wr)
   · intro off a b u hoff hp hseq h4 h5 hb
     apply WritesTo.toEventAccesses
     intro e he y hy
@@ -333,9 +309,18 @@ theorem block_setup (c : Ctx) (hv : Valid c) (k : Nat) (t : State) (h : BlockInv
     have := ChaCha20Layout.chFrameWords_eq
     exact Or.inl ⟨o, by omega, rfl⟩
   · intro u _
-    exact WritesTo.toEventAccesses (noWrites btail u (by decide) c.Wr)
+    exact WritesTo.toEventAccesses (WritesTo.of_noWritesMem btail u (by decide) c.Wr)
   · intro u hp hr hs h12 hv' hf hm
-    exact Reach.toReachEvents (cont u hp hr hs h12 hv' hf hm)
+    exact ChaCha20Policy.reachW_toEvP (cont u hp hr hs h12 hv' hf hm)
+
+open M0Crypto.Release.ChaCha20Round (RotRegs view dregOf) in
+theorem block_setup (c : Ctx) (hv : Valid c) (k : Nat) (t : State) (h : BlockInv c k t) (Q : State → Prop)
+    (cont : ∀ u, u.pc = c.base + BitVec.ofNat 32 droundOff → RotRegs u → u.regs 13 = c.fp →
+      u.regs 12 = 10#32 → view (some 2) u = c.J k →
+      (∀ j, 12 ≤ j → j < 64 → c.fw u j = c.fw t j) → c.MemOk (64 * k) u.mem → Reach c.base c.Wr u Q) :
+    Reach c.base c.Wr t Q :=
+  (bsetup_w (Pc := fun _ => True) c hv (fun _ _ => trivial) k t h Q
+    (fun u hp hr hs h12 hv' hf hm => (cont u hp hr hs h12 hv' hf hm).toReachW)).toReach
 
 /-! ## The keystream words of block `k` -/
 
@@ -363,7 +348,7 @@ theorem block_keystream (c : Ctx) (k j : Nat) (hj : j < 64) :
 open M0Crypto.Release.ChaCha20Round (view) in
 /-- **One block's rounds**: from `BlockInv c k` through `.Lblock` and the ten double rounds
 to offset `postOff`. -/
-theorem bround_events (c : Ctx) (hv : Valid c) (k : Nat) (t : State) (h : BlockInv c k t) (allowed : Word → Kind → Word → Prop)
+theorem bround_S {Pc : Word → Prop} (c : Ctx) (hv : Valid c) (k : Nat) (t : State) (hPc : ∀ pc, ChaCha20Policy.ChaPc c.base pc → Pc pc) (h : BlockInv c k t) (allowed : Word → Kind → Word → Prop)
     (hpre : ∀ u : State, u.pc = c.base + BitVec.ofNat 32 bpreOff →
       EventAccessesTo allowed (traceAll bpre u))
     (hpair : ∀ (off a b : Nat) (u : State), (off = ptr1Off ∨ off = ptr2Off ∨ off = ptr3Off) →
@@ -377,19 +362,19 @@ theorem bround_events (c : Ctx) (hv : Valid c) (k : Nat) (t : State) (h : BlockI
       EventAccessesTo allowed tr) (Q : State → Prop)
     (cont : ∀ v, v.pc = c.base + BitVec.ofNat 32 postOff → v.regs 13 = c.fp →
       ChaCha20Round.view (some 2) v = ChaCha20Loop.iter innerBlockF 10 (c.J k) →
-      (∀ j, 12 ≤ j → j < 64 → c.fw v j = c.fw t j) → c.MemOk (64 * k) v.mem → ReachEvents c.base allowed v Q) :
-    ReachEvents c.base allowed t Q := by
+      (∀ j, 12 ≤ j → j < 64 → c.fw v j = c.fw t j) → c.MemOk (64 * k) v.mem → ReachS c.base (ChaCha20Policy.EvP Pc allowed) v Q) :
+    ReachS c.base (ChaCha20Policy.EvP Pc allowed) t Q := by
   have sSB := ChaCha20Layout.chStackBytes_eq
   have sFB := ChaCha20Layout.chFrameBytes_eq
   have hdb := ChaCha20Layout.droundBytes_le_chFrameBytes
   have hfs := ChaCha20Layout.chFrameBytes_le_chStackBytes
   have hsp := ChaCha20Layout.droundBytes_le_spilled
-  apply bsetup_events c hv k t h allowed hpre hpair htail
+  apply bsetup_S c hv k t hPc h allowed hpre hpair htail
   intro u pc rot sp r12 hview hfw hmem
   obtain ⟨v, tr, hrun, vpc, vview, -, v13, -, -, vmem, vw, hpcs, haccess⟩ :=
     ChaCha20Loop.loop_bounded hv.base4 10 (by decide) (by decide) u pc rot (by rw [sp]; exact fp4 hv) (by rw [r12])
-  apply ReachEvents.bind
-  refine ⟨_, v, tr, hrun, hloop u tr sp vw hpcs haccess, ?_⟩
+  apply ReachS.bind
+  refine ⟨_, v, tr, hrun, ChaCha20Policy.stepsOk_evP hPc hrun (fun e he => by obtain ⟨o, _, h2, h3⟩ := hpcs e he; exact ⟨o, h2, h3⟩) (hloop u tr sp vw hpcs haccess), ?_⟩
   apply cont v vpc (v13.trans sp) (by rw [vview, hview])
   · intro j hj hj'
     rw [← hfw j hj hj']
@@ -405,18 +390,16 @@ theorem bround_events (c : Ctx) (hv : Valid c) (k : Nat) (t : State) (h : BlockI
     exact hmem y hy
 
 open M0Crypto.Release.ChaCha20Round (view) in
-theorem block_rounds (c : Ctx) (hv : Valid c) (k : Nat) (t : State) (h : BlockInv c k t) (Q : State → Prop)
+theorem bround_w {Pc : Word → Prop} (c : Ctx) (hv : Valid c) (hPc : ∀ pc, ChaCha20Policy.ChaPc c.base pc → Pc pc)
+    (k : Nat) (t : State) (h : BlockInv c k t) (Q : State → Prop)
     (cont : ∀ v, v.pc = c.base + BitVec.ofNat 32 postOff → v.regs 13 = c.fp →
       ChaCha20Round.view (some 2) v = ChaCha20Loop.iter innerBlockF 10 (c.J k) →
-      (∀ j, 12 ≤ j → j < 64 → c.fw v j = c.fw t j) → c.MemOk (64 * k) v.mem → Reach c.base c.Wr v Q) :
-    Reach c.base c.Wr t Q := by
-  apply (bround_events c hv k t h (writeOnlyPolicy c.Wr) ?_ ?_ ?_ ?_ Q ?_).toReach
-  · intro _ _ h
-    rcases h with h | h
-    · cases h
-    · exact h
+      (∀ j, 12 ≤ j → j < 64 → c.fw v j = c.fw t j) → c.MemOk (64 * k) v.mem → ReachW c.base Pc c.Wr v Q) :
+    ReachW c.base Pc c.Wr t Q := by
+  apply ChaCha20Policy.ofEvPW
+  apply bround_S c hv k t hPc h (writeOnlyPolicy c.Wr) ?_ ?_ ?_ ?_ Q ?_
   · intro u _
-    exact WritesTo.toEventAccesses (noWrites bpre u (by decide) c.Wr)
+    exact WritesTo.toEventAccesses (WritesTo.of_noWritesMem bpre u (by decide) c.Wr)
   · intro off a b u hoff hp hseq h4 h5 hb
     apply WritesTo.toEventAccesses
     intro e he y hy
@@ -425,7 +408,7 @@ theorem block_rounds (c : Ctx) (hv : Valid c) (k : Nat) (t : State) (h : BlockIn
     have := ChaCha20Layout.chFrameWords_eq
     exact Or.inl ⟨o, by omega, rfl⟩
   · intro u _
-    exact WritesTo.toEventAccesses (noWrites btail u (by decide) c.Wr)
+    exact WritesTo.toEventAccesses (WritesTo.of_noWritesMem btail u (by decide) c.Wr)
   · intro u tr hs hw _ _
     apply WritesTo.toEventAccesses
     exact WritesTo.of_writesIn hw (fun o ho => Or.inl ⟨o, by
@@ -433,37 +416,47 @@ theorem block_rounds (c : Ctx) (hv : Valid c) (k : Nat) (t : State) (h : BlockIn
       have := ChaCha20Layout.chFrameBytes_le_chStackBytes
       omega, by rw [hs]⟩)
   · intro u hp hs hv' hf hm
-    exact Reach.toReachEvents (cont u hp hs hv' hf hm)
+    exact ChaCha20Policy.reachW_toEvP (cont u hp hs hv' hf hm)
+
+open M0Crypto.Release.ChaCha20Round (view) in
+theorem block_rounds (c : Ctx) (hv : Valid c) (k : Nat) (t : State) (h : BlockInv c k t) (Q : State → Prop)
+    (cont : ∀ v, v.pc = c.base + BitVec.ofNat 32 postOff → v.regs 13 = c.fp →
+      ChaCha20Round.view (some 2) v = ChaCha20Loop.iter innerBlockF 10 (c.J k) →
+      (∀ j, 12 ≤ j → j < 64 → c.fw v j = c.fw t j) → c.MemOk (64 * k) v.mem → Reach c.base c.Wr v Q) :
+    Reach c.base c.Wr t Q :=
+  (bround_w (Pc := fun _ => True) c hv (fun _ _ => trivial) k t h Q
+    (fun v hp hs hv' hf hm => (cont v hp hs hv' hf hm).toReachW)).toReach
 
 /-- The functional block setup and round loop access memory only before the
 output instruction region. -/
-theorem bround_before_output (c : Ctx) (hv : Valid c) (k : Nat) (t : State)
+theorem bround_before_output {Pc : Word → Prop} (c : Ctx) (hv : Valid c)
+    (hPc : ∀ pc, ChaCha20Policy.ChaPc c.base pc → Pc pc) (k : Nat) (t : State)
     (h : BlockInv c k t) :
-    ReachEvents c.base (fun pc kind y => PCBefore c.base ChaCha20Layout.achOff pc ∧ writeOnlyPolicy c.Wr pc kind y) t (fun v =>
+    ReachS c.base (ChaCha20Policy.EvP Pc (fun pc kind y => PCBetween c.base ChaCha20Layout.bpreOff ChaCha20Layout.achOff pc ∧ writeOnlyPolicy c.Wr pc kind y)) t (fun v =>
       v.pc = c.base + BitVec.ofNat 32 postOff ∧ v.regs 13 = c.fp ∧
       ChaCha20Round.view (some 2) v = ChaCha20Loop.iter innerBlockF 10 (c.J k) ∧
       (∀ j, 12 ≤ j → j < 64 → c.fw v j = c.fw t j) ∧ c.MemOk (64 * k) v.mem) := by
-  apply bround_events c hv k t h (fun pc kind y => PCBefore c.base ChaCha20Layout.achOff pc ∧ writeOnlyPolicy c.Wr pc kind y)
+  apply bround_S c hv k t hPc h (fun pc kind y => PCBetween c.base ChaCha20Layout.bpreOff ChaCha20Layout.achOff pc ∧ writeOnlyPolicy c.Wr pc kind y)
   · intro u hp
-    exact (traceAll_pcBefore c.base ChaCha20Layout.achOff bpreOff bpre u (by decide) hp (by decide +kernel)).and
-      (WritesTo.toEventAccesses (noWrites bpre u (by decide) c.Wr))
+    exact (traceAll_pcBetween c.base ChaCha20Layout.bpreOff ChaCha20Layout.achOff bpreOff bpre u (by decide) hp (by decide +kernel) (by decide +kernel)).and
+      (WritesTo.toEventAccesses (WritesTo.of_noWritesMem bpre u (by decide) c.Wr))
   · intro off a b u hoff hp hseq h4 h5 hb
     rcases hoff with rfl | rfl | rfl
-    · apply EventAccessesTo.and (traceAll_pcBefore c.base ChaCha20Layout.achOff ptr1Off ptr u (by decide) hp (by decide +kernel))
+    · apply EventAccessesTo.and (traceAll_pcBetween c.base ChaCha20Layout.bpreOff ChaCha20Layout.achOff ptr1Off ptr u (by decide) hp (by decide +kernel) (by decide +kernel))
       apply WritesTo.toEventAccesses
       intro e he y hy
       obtain ⟨o, ho, rfl⟩ := pair_writes u c.fp b h5 e he y hy
       have := ChaCha20Layout.chStackBytes_eq
       have := ChaCha20Layout.chFrameWords_eq
       exact Or.inl ⟨o, by omega, rfl⟩
-    · apply EventAccessesTo.and (traceAll_pcBefore c.base ChaCha20Layout.achOff ptr2Off ptr u (by decide) hp (by decide +kernel))
+    · apply EventAccessesTo.and (traceAll_pcBetween c.base ChaCha20Layout.bpreOff ChaCha20Layout.achOff ptr2Off ptr u (by decide) hp (by decide +kernel) (by decide +kernel))
       apply WritesTo.toEventAccesses
       intro e he y hy
       obtain ⟨o, ho, rfl⟩ := pair_writes u c.fp b h5 e he y hy
       have := ChaCha20Layout.chStackBytes_eq
       have := ChaCha20Layout.chFrameWords_eq
       exact Or.inl ⟨o, by omega, rfl⟩
-    · apply EventAccessesTo.and (traceAll_pcBefore c.base ChaCha20Layout.achOff ptr3Off ptr u (by decide) hp (by decide +kernel))
+    · apply EventAccessesTo.and (traceAll_pcBetween c.base ChaCha20Layout.bpreOff ChaCha20Layout.achOff ptr3Off ptr u (by decide) hp (by decide +kernel) (by decide +kernel))
       apply WritesTo.toEventAccesses
       intro e he y hy
       obtain ⟨o, ho, rfl⟩ := pair_writes u c.fp b h5 e he y hy
@@ -471,17 +464,19 @@ theorem bround_before_output (c : Ctx) (hv : Valid c) (k : Nat) (t : State)
       have := ChaCha20Layout.chFrameWords_eq
       exact Or.inl ⟨o, by omega, rfl⟩
   · intro u hp
-    exact (traceAll_pcBefore c.base ChaCha20Layout.achOff btailOff btail u (by decide) hp (by decide +kernel)).and
-      (WritesTo.toEventAccesses (noWrites btail u (by decide) c.Wr))
+    exact (traceAll_pcBetween c.base ChaCha20Layout.bpreOff ChaCha20Layout.achOff btailOff btail u (by decide) hp (by decide +kernel) (by decide +kernel)).and
+      (WritesTo.toEventAccesses (WritesTo.of_noWritesMem btail u (by decide) c.Wr))
   · intro u tr hs hw hpcs haccess
     apply EventAccessesTo.and
-    · intro e he a ha q hq; exact hpcs e he
+    · intro e he a ha q hq
+      obtain ⟨o, h1, h2, h3⟩ := hpcs e he
+      exact ⟨o, h1, h2, h3⟩
     · apply WritesTo.toEventAccesses
       exact WritesTo.of_writesIn hw (fun o ho => Or.inl ⟨o, by
         have := ChaCha20Layout.droundBytes_le_chFrameBytes
         have := ChaCha20Layout.chFrameBytes_le_chStackBytes
         omega, by rw [hs]⟩)
   · intro u hp hs hv' hf hm
-    exact ReachEvents.done ⟨hp, hs, hv', hf, hm⟩
+    exact ReachS.done ⟨hp, hs, hv', hf, hm⟩
 
 end M0Crypto.Release.ChaCha20Block

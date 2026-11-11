@@ -8,7 +8,7 @@ release unit src/m0crypto.S), one at a time, and runs both checks on it:
 
 * QEMU: tools/test_qemu.sh;
 * model: rebuild the library (its tools/build_lib.sh), regenerate
-  lean/M0Crypto/Artifacts/Release.lean) and build
+  lean/M0Crypto/Artifacts/Release.lean and build
   M0Crypto.Thumb.ReleaseCheck (all access-audit and secret-residue shards).
 
 A check DETECTS a mutant only if it ran and reported a failing case. A build or
@@ -48,14 +48,14 @@ MUTANTS = [
     ("length block swaps aad_len/len", "    ldr  r0, [sp, #A_AADLEN]\n    str  r0, [sp, #BLK+0]", "    ldr  r0, [sp, #S_LEN]\n    str  r0, [sp, #BLK+0]"),
     ("partial block: skip padding zeroing", "    str  r0, [sp, #BLK+12]\n    add  r1, sp, #BLK\n    movs r2, #0\n2:", "    add  r1, sp, #BLK\n    movs r2, #0\n2:"),
     ("encrypt MACs plaintext", "    ldr  r4, [sp, #S_OUT]           /* MAC the ciphertext as written */", "    ldr  r4, [sp, #S_IN]"),
-    # Review of 345e8fc/71f3b80 (2026-11-04): paths the original 14 did not reach.
+    # Paths that the mutants above do not reach.
     ("blocks leaves h4 in LR", "    movs r0, #0\n    mov  lr, r0\n    str  r0, [sp, #0]", "    movs r0, #0\n    str  r0, [sp, #0]"),
     ("decrypt leaves expected_tag[15] in r5", "    movs r5, #0                     /* expected_tag[15]: do not leave it for CRYPT to save */\n", ""),
     # Over-read: one word past the 16-byte block on the aligned path. Results are
     # unchanged, so only the model's access audit can see it.
     ("aligned blocks over-read one word", "    ldmia r6!, {r0-r3}             /* public alignment; no over-read */\n", "    ldmia r6!, {r0-r3}             /* public alignment; no over-read */\n    ldr  r4, [r6]\n", "model"),
-    # Review of the release model (2026-11-04): same-size clearing removals that
-    # the model's register/stack/access checks missed before the residue check.
+    # Same-size clearing removals: the model detects them through its residue check
+    # (the same stack window for different secrets), not its register or access checks.
     ("CLEAR_FRAME stores become moves", "4:  str  r0, [r1]\n    adds r1, #4\n    subs r2, #1\n    bne  4b", "4:  mov  r0, r0\n    adds r1, #4\n    subs r2, #1\n    bne  4b", "model"),
     ("expected_tag[15] clear becomes mov r5, r5", "    movs r5, #0                     /* expected_tag[15]: do not leave it for CRYPT to save */\n", "    mov  r5, r5\n", "model"),
 ]

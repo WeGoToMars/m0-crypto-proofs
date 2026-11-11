@@ -113,21 +113,22 @@ theorem Body.crypt {c : ACall} (hv : AValid c) (hb : ABuf c) {off : Nat} {s t : 
   · intro r a b; rw [ht.hi r (by omega) b, h.hi r a b]
 
 /-- Read-only two-load setup for the next MAC. -/
-theorem load_reach (base A d n : Word) (off : Nat) (is : List Instr) (s : State)
+theorem load_reach_w {Pc : Word → Prop} (base A d n : Word) (off : Nat) (is : List Instr) (s : State)
     (hb : base.toNat % 4 = 0) (ha : A.toNat % 4 = 0) (ho : off % 2 = 0)
     (hseq : seqAt B off is = true) (hp : s.pc = base + BitVec.ofNat 32 off)
     (hs : s.regs 13 = A) (u v : BitVec 8)
     (his : is = [.ldrSp 4 u, .ldrSp 5 v])
     (hd : read32 s.mem (A + BitVec.ofNat 32 (4*u.toNat)) = d)
-    (hn : read32 s.mem (A + BitVec.ofNat 32 (4*v.toNat)) = n) (Wr : Word → Prop) :
-    Reach base Wr s (fun t => t.pc = base + BitVec.ofNat 32 (off + seqSize is) ∧ t.regs 4 = d ∧ t.regs 5 = n ∧
+    (hn : read32 s.mem (A + BitVec.ofNat 32 (4*v.toNat)) = n) (Wr : Word → Prop)
+    (hr : InRegion Pc base off (seqSize is)) :
+    ReachW base Pc Wr s (fun t => t.pc = base + BitVec.ofNat 32 (off + seqSize is) ∧ t.regs 4 = d ∧ t.regs 5 = n ∧
       t.mem = s.mem ∧ ∀ r : Reg, r.val ≠ 4 → r.val ≠ 5 → r.val ≠ 15 → t.regs r = s.regs r) := by
   subst his
-  apply Reach.block (by omega) _ off hp ho hseq (by rfl)
+  apply ReachW.blockR hr (by omega) hp ho hseq (by rfl)
     (by simp [alignedAll, Instr.accesses, Access.aligned, Instr.next, Instr.exec, M0Crypto.Armv6M.State.setReg,
       M0Crypto.Armv6M.State.sp, hs, M0Crypto.Proofs.toReg_4, M0Crypto.Proofs.toReg_5, BitVec.toNat_add, BitVec.toNat_ofNat]; exact ha)
-    (ChaCha20Block.noWrites _ _ (by rfl) _)
-  apply Reach.done
+    (WritesTo.of_noWritesMem _ _ (by rfl) _)
+  apply ReachS.done
   refine ⟨by rw [execAll_pc _ _ (by rfl), hp, ofNat_add_assoc], ?_, ?_, rfl, ?_⟩
   · simpa [execAll, Instr.next, Instr.exec, M0Crypto.Armv6M.State.setReg, M0Crypto.Armv6M.State.sp, hs, M0Crypto.Proofs.toReg_4, M0Crypto.Proofs.toReg_5, Nat.mul_comm] using hd
   · simpa [execAll, Instr.next, Instr.exec, M0Crypto.Armv6M.State.setReg, M0Crypto.Armv6M.State.sp, hs, M0Crypto.Proofs.toReg_4, M0Crypto.Proofs.toReg_5, Nat.mul_comm] using hn
