@@ -1,3 +1,4 @@
+import M0Crypto.Release.Reach
 import M0Crypto.Release.ChaChaRound
 import M0Crypto.Release.ChaChaLayout
 import M0Crypto.Thumb.SeqScan
@@ -29,11 +30,8 @@ theorem b_at : instrAt B loopBOff = some (.b (brImm11 loopBOff droundOff)) := by
 
 theorem B_len : B.length < 2 ^ 32 := by rw [Artifacts.Release.bytes_length]; decide
 
-theorem sub_flags (x y : Word) : (M0Crypto.Armv6M.addWithCarry x (~~~y) true).1 = x - y := by
-  apply BitVec.eq_of_toNat_eq
-  simp only [M0Crypto.Armv6M.addWithCarry, BitVec.toNat_ofNat, BitVec.toNat_not, BitVec.toNat_sub,
-    Bool.toNat_true]
-  omega
+theorem sub_flags (x y : Word) : (M0Crypto.Armv6M.addWithCarry x (~~~y) true).1 = x - y :=
+  M0Crypto.Release.sub_flags x y
 
 /-- The decrement: r1 = r12 = r12 - 1 and Z = (r12 - 1 = 0); r0, r2-r11, SP, LR, memory unchanged. -/
 theorem dec_effect (t : State) :

@@ -1,4 +1,4 @@
-import M0Crypto.Release.AeadEncrypt
+import M0Crypto.Release.AeadPro
 set_option linter.unusedSimpArgs false
 set_option maxRecDepth 100000
 set_option maxHeartbeats 4000000
@@ -36,8 +36,8 @@ theorem cmpL_effect (s : State) :
     (by simp [cmpL, Instr.dsts, MemOp.isLoad, Fin.ext_iff, h0, h3, h4, h5]; omega)⟩ <;>
     simp [cmpL, execAll, Instr.next, Instr.exec, Instr.exec.memOp, addFlags, M0Crypto.Armv6M.State.setReg,
       M0Crypto.Armv6M.State.setNZ, M0Crypto.Armv6M.State.setNZCV, M0Crypto.Armv6M.State.reg,
-      ChaChaOut.add_flags, ChaChaLoop.sub_flags]
-  all_goals rw [show (4294967279#32 : Word) = ~~~16#32 from rfl, ChaChaLoop.sub_flags]
+      M0Crypto.Release.add_flags, M0Crypto.Release.sub_flags]
+  all_goals rw [show (4294967279#32 : Word) = ~~~16#32 from rfl, M0Crypto.Release.sub_flags]
 
 theorem read8_xor_zero (m : Mem) (a b : Word) : read8 m a ^^^ read8 m b = 0#32 ↔ m a = m b := by
   rw [BitVec.xor_eq_zero_iff, read8, read8]
@@ -66,7 +66,7 @@ theorem compare_loop (base tag expected : Word) (M : Mem) (R : Reg → Word)
     obtain ⟨e3, e4, ez, em, er⟩ := cmpL_effect s
     apply Reach.block (by omega) cmpL decCmpLAt hp (by decide) (by decide)
       (by decide) (by simp [alignedAll, cmpL, Instr.accesses, Access.aligned, MemOp.isLoad, MemOp.width, Nat.mod_one])
-      (ChaChaBlock.noWrites _ _ (by decide) _)
+      (WritesTo.of_noWritesMem _ _ (by decide) _)
     generalize ht : execAll cmpL s = t at e3 e4 ez em er
     have tp : t.pc = base+BitVec.ofNat 32 decCmpBrAt := by rw [← ht, execAll_pc _ _ (by decide), hp, ofNat_add_assoc]; rfl
     have teq : t.regs 3=0#32 ↔ ∀ j<k+1, M (tag+BitVec.ofNat 32 j)=M (expected+BitVec.ofNat 32 j) := by
@@ -110,12 +110,12 @@ theorem compare_loop (base tag expected : Word) (M : Mem) (R : Reg → Word)
         apply List.ext_getElem?
         intro j
         by_cases hj : j<16
-        · rw [ChaChaOut.bytesAt_get _ _ _ _ hj, ChaChaOut.bytesAt_get _ _ _ _ hj, he j hj]
+        · rw [Frame.bytesAt_get _ _ _ _ hj, Frame.bytesAt_get _ _ _ _ hj, he j hj]
         · rw [List.getElem?_eq_none (by rw [bytesAt_length]; omega),
             List.getElem?_eq_none (by rw [bytesAt_length]; omega)]
       · intro eq j hj
         have := congrArg (fun bs => bs[j]?) eq
-        simpa only [ChaChaOut.bytesAt_get _ _ _ _ hj, Option.some.injEq] using this
+        simpa only [Frame.bytesAt_get _ _ _ _ hj, Option.some.injEq] using this
 /-- Complete 16-byte tag comparison, with no writes and no early exit. -/
 theorem compare_reach (c : ACall) (hv : AValid c) (s : State)
     (hp : s.pc=c.base+BitVec.ofNat 32 decCmpAAt) (hs : s.regs 13=c.A) (hh : Hi c s.mem) :
@@ -127,7 +127,7 @@ theorem compare_reach (c : ACall) (hv : AValid c) (s : State)
   rw [hs] at e2
   apply Reach.block (by have := hv.base4; omega) cmpA decCmpAAt hp (by decide) (by decide) (by decide)
     (alignedAll_sp _ _ (sp_al (by decide)) (by rw [hs, hv.A_toNat]; have := hv.sp8; have := hv.spLo; omega))
-    (ChaChaBlock.noWrites _ _ (by decide) _)
+    (WritesTo.of_noWritesMem _ _ (by decide) _)
   generalize hu : execAll cmpA s=u at e1 e2 e3 e4 em er
   have up : u.pc=c.base+BitVec.ofNat 32 decCmpLAt := by rw [←hu, execAll_pc _ _ (by decide), hp, ofNat_add_assoc]; rfl
   exact compare_loop c.base c.tag (c.A+72#32) s.mem s.regs hv.base4 16 0 rfl (by decide) u up e1 e2 e4 em er

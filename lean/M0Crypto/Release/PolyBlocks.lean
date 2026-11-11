@@ -1,4 +1,5 @@
 import M0Crypto.Release.PolyBlocksCode
+import M0Crypto.Release.PolyMac
 import M0Crypto.Release.PolyBlocksCheck
 set_option linter.unusedSimpArgs false
 set_option maxRecDepth 100000
@@ -90,7 +91,7 @@ theorem load_run {base : Word} (hb : base.toNat % 4 = 0) {Wr : Word → Prop} (s
     Reach base Wr s (fun t => t = loadState s) := by
   have hb2 : base.toNat % 2 = 0 := by omega
   apply Reach.block hb2 testAlign testAt hp (by decide) segments_at.1 (by decide)
-    (stable_aligned _ _ (by decide) hs hc) (ChaChaBlock.noWrites _ _ (by decide) Wr)
+    (stable_aligned _ _ (by decide) hs hc) (WritesTo.of_noWritesMem _ _ (by decide) Wr)
   let t := execAll testAlign s
   have pt : t.pc = base + BitVec.ofNat 32 alignBrAt := by
     dsimp [t]; rw [execAll_pc _ _ (by decide), hp, ofNat_add_assoc]; rfl
@@ -108,7 +109,7 @@ theorem load_run {base : Word} (hb : base.toNat % 4 = 0) {Wr : Word → Prop} (s
       (stable_aligned _ _ (by decide)
         (by simpa [u, M0Crypto.Armv6M.State.setReg, tr 13 (by decide) (by decide) (by decide)] using hs)
         (by simpa [u, M0Crypto.Armv6M.State.setReg, tr 7 (by decide) (by decide) (by decide)] using hc))
-      (ChaChaBlock.noWrites _ _ (by decide) Wr)
+      (WritesTo.of_noWritesMem _ _ (by decide) Wr)
     apply Reach.done
     simp only [loadState, show execAll testAlign s = t from rfl, hna, ite_false]
     congr 2
@@ -121,7 +122,7 @@ theorem load_run {base : Word} (hb : base.toNat % 4 = 0) {Wr : Word → Prop} (s
     · simp (config := { decide := true }) [bitCount, listRegs, List.range_succ, alignedAll, loadA, Instr.accesses, wordAccesses, List.range_succ, bitCount,
         Access.aligned, M0Crypto.Armv6M.State.reg, M0Crypto.Armv6M.State.setReg, u, BitVec.toNat_add]
       omega
-    · exact ChaChaBlock.noWrites _ _ (by decide) Wr
+    · exact WritesTo.of_noWritesMem _ _ (by decide) Wr
     let v := execAll loadA u
     have pv : v.pc = base + BitVec.ofNat 32 skipBrAt := by
       dsimp [v]; rw [execAll_pc _ _ (by decide)]; change base + _ + _ = _
@@ -171,9 +172,9 @@ theorem dec_props (s : State) :
     t.z = (read32 s.mem (slot (s.regs 13) slotCount) - 1#32 == 0#32) := by
   simp (config := { decide := true }) [bitCount, listRegs, List.range_succ, execAll, dec, Instr.next, Instr.exec, addFlags, M0Crypto.Armv6M.State.setReg,
     M0Crypto.Armv6M.State.setNZCV, M0Crypto.Armv6M.State.sp, M0Crypto.Armv6M.State.reg,
-    ChaChaLoop.sub_flags, slot]
+    M0Crypto.Release.sub_flags, slot]
   change _ = _ ∧ _ = _
-  rw [show (4294967294#32 : Word) = ~~~1#32 from rfl, ChaChaLoop.sub_flags]
+  rw [show (4294967294#32 : Word) = ~~~1#32 from rfl, M0Crypto.Release.sub_flags]
   exact ⟨rfl, rfl⟩
 
 attribute [local irreducible] body loadState

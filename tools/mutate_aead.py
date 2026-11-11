@@ -8,8 +8,8 @@ release unit src/m0crypto.S), one at a time, and runs both checks on it:
 
 * QEMU: tools/test_qemu.sh;
 * model: rebuild the library (its tools/build_lib.sh), regenerate
-  lean/M0Crypto/Artifacts/Release.lean) and evaluate
-  lean/M0Crypto/Thumb/ReleaseCheck.lean (access audit, secret-residue check).
+  lean/M0Crypto/Artifacts/Release.lean) and build
+  M0Crypto.Thumb.ReleaseCheck (all access-audit and secret-residue shards).
 
 A check DETECTS a mutant only if it ran and reported a failing case. A build or
 tool error is reported as such and fails the run; it never counts as detection.
@@ -82,11 +82,9 @@ def model_check():
         return "ERROR", "library build failed: " + (b.stdout + b.stderr).strip()[-200:]
     if open(ARTIFACT, "rb").read() == ORIG_ARTIFACT:
         return "ERROR", "mutant did not change the library bytes"
-    d = subprocess.run(["lake", "build", "M0Crypto.Thumb.FastRun", "M0Crypto.Artifacts.Release",
-                        "M0Crypto.Spec.AEAD"], cwd=ROOT, capture_output=True, text=True)
-    if d.returncode:
-        return "ERROR", "prerequisite lake build failed: " + (d.stdout + d.stderr).strip()[-200:]
-    r = subprocess.run(["lake", "env", "lean", "lean/M0Crypto/Thumb/ReleaseCheck.lean"],
+    # Building the root invalidates every shard when the artifact changes.
+    # `lake env lean` on an import-only root would reuse stale compiled checks.
+    r = subprocess.run(["lake", "build", "+M0Crypto.Thumb.ReleaseCheck"],
                        cwd=ROOT, capture_output=True, text=True)
     out = (r.stdout + r.stderr).strip().splitlines()
     failed = next((l for l in out if "release check FAILED" in l), None)

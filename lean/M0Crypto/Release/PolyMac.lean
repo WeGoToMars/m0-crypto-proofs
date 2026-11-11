@@ -1,4 +1,4 @@
-import M0Crypto.Release.ChaChaBlock
+import M0Crypto.Release.PolyMacDefs
 import M0Crypto.Release.Layout
 import M0Crypto.Release.PolySpec
 
@@ -66,13 +66,6 @@ theorem read16_pair (m : Mem) (a : Word) :
   omega
 
 /-! ## `MAC` -/
-
-/-- `mov r5, h; lsrs r6, r5, #16; uxth r5, r5; ldrh r3, [r7, #2k]; ldrh r4, [r7, #2k+2]; ...` -/
-def mac (h : Reg) (k : Nat) : List Instr :=
-  [.movHi 5 h, .lsrImm 6 5 16, .uxth 5 5, .memImm .ldrh 3 7 (BitVec.ofNat 5 k),
-   .memImm .ldrh 4 7 (BitVec.ofNat 5 (k + 1)), .lslImm 2 5 0, .dp .muls 2 4, .dp .muls 4 6,
-   .dp .muls 6 3, .dp .muls 3 5, .addReg 0 0 3, .dp .adcs 1 4, .lslImm 3 2 16, .lsrImm 2 2 16,
-   .addReg 0 0 3, .dp .adcs 1 2, .lslImm 3 6 16, .lsrImm 6 6 16, .addReg 0 0 3, .dp .adcs 1 6]
 
 /-- The MAC column identity over `Nat`: three 64-bit additions of the four 16x16 products. -/
 theorem mac_nat (v aL aH L H : Nat) :
@@ -151,7 +144,7 @@ theorem mac_run {base ctx : Word} (hb : base.toNat % 4 = 0) (hc : ctx.toNat % 4 
       M0Crypto.Armv6M.State.setNZ, M0Crypto.Armv6M.State.reg, M0Crypto.Proofs.toReg_3, M0Crypto.Proofs.toReg_4,
       M0Crypto.Proofs.toReg_5, M0Crypto.Proofs.toReg_6, M0Crypto.Proofs.toReg_7, h2w, h2w1, h7, BitVec.toNat_add]
     omega
-  · exact ChaChaBlock.noWrites _ _ (mac_noW h _) Wr
+  · exact WritesTo.of_noWritesMem _ _ (mac_noW h _) Wr
   · apply k
     · rw [execAll_pc _ _ (mac_falls h _), mac_size, hpc, ofNat_add_assoc]
     · exact execAll_mem _ _ (mac_noW h _)
@@ -167,9 +160,6 @@ theorem mac_run {base ctx : Word} (hb : base.toNat % 4 = 0) (hc : ctx.toNat % 4 
 
 
 /-! ## `NARROW`: `r1:r0 += (lr * word j) mod 2^32` -/
-
-def narrow (j : Nat) : List Instr :=
-  [.movHi 2 14, .memImm .ldr 3 7 (BitVec.ofNat 5 j), .dp .muls 2 3, .movImm 3 0, .addReg 0 0 2, .dp .adcs 1 3]
 
 theorem narrow_falls (j : Nat) : (narrow j).all Instr.falls = true := by simp [narrow, Instr.falls]
 theorem narrow_noW (j : Nat) : (narrow j).all (!·.writesMem) = true := by
@@ -190,7 +180,7 @@ theorem narrow_run {base ctx : Word} (hb : base.toNat % 4 = 0) (hc : ctx.toNat %
       Instr.accesses, Access.aligned, MemOp.width, MemOp.isLoad, M0Crypto.Armv6M.State.setReg,
       M0Crypto.Armv6M.State.reg, M0Crypto.Proofs.toReg_7, hj', h7, BitVec.toNat_add]
     omega
-  · exact ChaChaBlock.noWrites _ _ (narrow_noW j) Wr
+  · exact WritesTo.of_noWritesMem _ _ (narrow_noW j) Wr
   · apply k
     · rw [execAll_pc _ _ (narrow_falls j), hpc, ofNat_add_assoc]; rfl
     · exact execAll_mem _ _ (narrow_noW j)
@@ -212,8 +202,6 @@ theorem narrow_run {base ctx : Word} (hb : base.toNat % 4 = 0) (hc : ctx.toNat %
       simp only [Nat.zero_mul, Nat.add_zero]
 
 /-! ## Column end: `str r0, [sp, #4j]; movs r0, r1; movs r1, #0` -/
-
-def colend (j : Nat) : List Instr := [.strSp 0 (BitVec.ofNat 8 j), .lslImm 0 1 0, .movImm 1 0]
 
 theorem colend_falls (j : Nat) : (colend j).all Instr.falls = true := by simp [colend, Instr.falls]
 

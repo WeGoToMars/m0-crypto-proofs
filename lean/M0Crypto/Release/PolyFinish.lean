@@ -1,3 +1,4 @@
+import M0Crypto.Release.ChaChaRetDefs
 import M0Crypto.Release.PolyFinishStore
 set_option linter.unusedSimpArgs false
 set_option maxRecDepth 100000

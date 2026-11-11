@@ -1,3 +1,4 @@
+import M0Crypto.Release.ChaChaRetDefs
 import M0Crypto.Release.PolyFinishRet
 import M0Crypto.Release.PolyFinishCheck
 set_option linter.unusedSimpArgs false
@@ -75,7 +76,7 @@ theorem middle_run (c : FCtx) (hv : FValid c) (s : State)
   have hb2 : c.base.toNat % 2 = 0 := by have := hv.base4; omega
   apply Reach.block hb2 arithmetic arithAt hp (by decide) segments_at.2.1 calc_falls
     (PolyBlocks.stable_aligned _ _ calc_stable (by rw [hsp]; exact fp4 c hv)
-      (by rw [hc]; exact hv.ctx4)) (ChaChaBlock.noWrites _ _ calc_noW c.Wr)
+      (by rw [hc]; exact hv.ctx4)) (WritesTo.of_noWritesMem _ _ calc_noW c.Wr)
   have ap : (execAll arithmetic s).pc = c.base + BitVec.ofNat 32 emitAt := by
     rw [execAll_pc _ _ calc_falls, hp, ofNat_add_assoc]; rfl
   apply Reach.block hb2 emit emitAt ap (by decide) segments_at.2.2.1 (by decide) (emit_aligned _)
@@ -85,7 +86,7 @@ theorem middle_run (c : FCtx) (hv : FValid c) (s : State)
   have ep : (execAll emit (execAll arithmetic s)).pc = c.base + BitVec.ofNat 32 clearAt := by
     rw [execAll_pc _ _ (by decide), ap, ofNat_add_assoc]; rfl
   apply Reach.block hb2 clear clearAt ep (by decide) segments_at.2.2.2.1 (by decide)
-    (by simp [alignedAll, clear, Instr.accesses]) (ChaChaBlock.noWrites _ _ (by decide) c.Wr)
+    (by simp [alignedAll, clear, Instr.accesses]) (WritesTo.of_noWritesMem _ _ (by decide) c.Wr)
   exact Reach.done rfl
 
 /-- The saved AAPCS words survive tag publication, including tag/context aliasing. -/
@@ -95,7 +96,7 @@ theorem middle_saved (c : FCtx) (hv : FValid c) (s : State) (hm : s.mem = c.mP) 
   rw [middle_mem, tagMem, execAll_mem _ _ calc_noW, hm, arithmetic_regs _ 12 (by decide) (by decide), ht]
   rw [read32_congr (m := c.mP)]
   · rw [FCtx.mP]
-    have h := ChaChaRet.read32_storeWords_same c.m0 c.fp
+    have h := Frame.read32_storeWords_same c.m0 c.fp
       [c.regs0 4, c.regs0 5, c.regs0 6, c.regs0 7, c.regs0 14] j (by simp; omega) (by simp)
     change read32 _ (c.fp + BitVec.ofNat 32 (4*j)) = _
     rw [h]

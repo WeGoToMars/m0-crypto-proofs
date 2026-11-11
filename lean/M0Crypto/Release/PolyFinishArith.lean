@@ -59,7 +59,7 @@ theorem choose_word (s : State) (h : (s.regs 0).toNat / 4 ≤ 1) :
   simp (config := { decide := true }) only [choose, execAll, Instr.next, Instr.exec, addFlags,
     M0Crypto.Armv6M.State.setReg, M0Crypto.Armv6M.State.setNZ, M0Crypto.Armv6M.State.setNZC,
     M0Crypto.Armv6M.State.setNZCV, M0Crypto.Armv6M.State.reg, M0Crypto.Proofs.toReg_0,
-    M0Crypto.Proofs.toReg_1, ite_true, ite_false, lsrC, ChaChaLoop.sub_flags]
+    M0Crypto.Proofs.toReg_1, ite_true, ite_false, lsrC, M0Crypto.Release.sub_flags]
   have hq : (s.regs 0 >>> 2).toNat = (s.regs 0).toNat / 4 := by
     simp [BitVec.toNat_ushiftRight, Nat.shiftRight_eq_div_pow]
   have hq' : (s.regs 0 >>> 2) = 0#32 ∨ (s.regs 0 >>> 2) = 1#32 := by

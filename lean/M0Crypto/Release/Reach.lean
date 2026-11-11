@@ -1,4 +1,6 @@
-import M0Crypto.Release.ChaChaLoop
+import M0Crypto.Thumb.SpBlock
+import M0Crypto.Artifacts.Release
+import M0Crypto.Proofs.Common
 
 set_option linter.unusedSimpArgs false
 
@@ -17,6 +19,18 @@ namespace M0Crypto.Release
 
 open M0Crypto.Armv6M (Word Reg State)
 open M0Crypto.Thumb
+
+/-- The word result of addition implemented with carry. -/
+theorem add_flags (x y : Word) : (M0Crypto.Armv6M.addWithCarry x y false).1 = x + y := by
+  apply BitVec.eq_of_toNat_eq
+  simp [M0Crypto.Armv6M.addWithCarry, BitVec.toNat_add]
+
+/-- The word result of subtraction implemented with carry. -/
+theorem sub_flags (x y : Word) : (M0Crypto.Armv6M.addWithCarry x (~~~y) true).1 = x - y := by
+  apply BitVec.eq_of_toNat_eq
+  simp only [M0Crypto.Armv6M.addWithCarry, BitVec.toNat_ofNat, BitVec.toNat_not, BitVec.toNat_sub,
+    Bool.toNat_true]
+  omega
 
 abbrev B := Artifacts.Release.bytes
 
@@ -49,6 +63,23 @@ theorem WritesTo.of_writesIn {Wr : Word → Prop} {t : List Event} {lo : Word} {
   intro e he y hy
   obtain ⟨o, ho, rfl⟩ := h e he y hy
   exact hm o ho
+
+/-- A straight-line block containing no stores has no write accesses. -/
+theorem noWrite_traceAll : ∀ (is : List Instr) (s : State), is.all (!·.writesMem) = true →
+    ∀ e ∈ traceAll is s, ∀ y, ¬ Writes e.accesses y
+  | [], _, _ => by intro e he; cases he
+  | i :: is, s, h => by
+    simp only [List.all_cons, Bool.and_eq_true, Bool.not_eq_true'] at h
+    intro e he y ⟨a, ha, hw, _⟩
+    rcases List.mem_cons.mp he with rfl | h'
+    · rw [accesses_read h.1 s a ha] at hw; cases hw
+    · exact noWrite_traceAll is _ (by simpa using h.2) e h' y ⟨a, ha, hw, by assumption⟩
+
+/-- A block with no stores satisfies any write confinement predicate. -/
+theorem WritesTo.of_noWritesMem (is : List Instr) (s : State)
+    (h : is.all (!·.writesMem) = true) (Wr : Word → Prop) :
+    WritesTo Wr (traceAll is s) :=
+  fun e he y hy => absurd hy (noWrite_traceAll is s h e he y)
 
 /-! ## Read access and generalized trace access predicates -/
 

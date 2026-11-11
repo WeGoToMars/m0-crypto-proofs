@@ -88,14 +88,7 @@ theorem pair_writes (t : State) (sp : Word) (b : Nat) (h5 : t.regs 5 = slot sp b
     rw [hy]; simp only [slot, ofNat_add_assoc]
 
 theorem noWrite_traceAll : ∀ (is : List Instr) (s : State), is.all (!·.writesMem) = true →
-    ∀ e ∈ traceAll is s, ∀ y, ¬ Writes e.accesses y
-  | [], _, _ => by intro e he; cases he
-  | i :: is, s, h => by
-    simp only [List.all_cons, Bool.and_eq_true, Bool.not_eq_true'] at h
-    intro e he y ⟨a, ha, hw, _⟩
-    rcases List.mem_cons.mp he with rfl | h'
-    · rw [accesses_read h.1 s a ha] at hw; cases hw
-    · exact noWrite_traceAll is _ (by simpa using h.2) e h' y ⟨a, ha, hw, by assumption⟩
+    ∀ e ∈ traceAll is s, ∀ y, ¬ Writes e.accesses y := M0Crypto.Release.noWrite_traceAll
 
 /-! ## `.Lblock`: `bpreOff` - `droundOff` -/
 
@@ -244,7 +237,7 @@ theorem w4_3_read (m : Mem) (sp : Word) (j : Nat) (hj : j < 64) :
   all_goals first | rfl | (exfalso; omega) | (congr 2; omega)
 
 theorem noWrites (is : List Instr) (s : State) (h : is.all (!·.writesMem) = true) (Wr : Word → Prop) :
-    WritesTo Wr (traceAll is s) := fun e he y hy => absurd hy (noWrite_traceAll is s h e he y)
+    WritesTo Wr (traceAll is s) := WritesTo.of_noWritesMem is s h Wr
 
 open M0Crypto.Release.ChaChaRound (RotRegs view dregOf) in
 /-- **`.Lblock` setup** (`bpreOff` - `droundOff`): from `BlockInv c k` to the round-loop start with

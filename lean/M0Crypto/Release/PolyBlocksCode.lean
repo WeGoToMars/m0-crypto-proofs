@@ -1,4 +1,5 @@
-import M0Crypto.Release.PolyMac
+import M0Crypto.Release.PolyMacDefs
+import M0Crypto.Release.Frame
 import M0Crypto.Release.Layout
 
 set_option linter.unusedSimpArgs false

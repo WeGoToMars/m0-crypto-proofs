@@ -1,4 +1,4 @@
-import M0Crypto.Release.Frame
+import M0Crypto.Release.ChaChaRetDefs
 import M0Crypto.Release.ChaChaLayout
 
 set_option linter.unusedSimpArgs false
@@ -18,22 +18,8 @@ open M0Crypto.Release.ChaChaLayout (epiOff popOff chFrameWords chFrameBytes chSt
 
 set_option maxRecDepth 100000
 
-/-- Saved register words at slots 35..43: r8-r11, r4-r7, LR. -/
-def saved (r : Reg → Word) (i : Nat) : Word :=
-  match i with
-  | 0 => r 8 | 1 => r 9 | 2 => r 10 | 3 => r 11
-  | 4 => r 4 | 5 => r 5 | 6 => r 6 | 7 => r 7 | _ => r 14
-
 theorem epi_at : seqAt B epiOff epi = true := by decide
 theorem pop_at : instrAt B popOff = some (.pop 0xf0 true) := by decide
-theorem listRegs_f0 : listRegs 0xf0 = [4, 5, 6, 7] := by decide
-theorem listRegs_240 : listRegs 240#8 = [4, 5, 6, 7] := by decide
-theorem bitCount_f0 : bitCount 0xf0 = 4 := by decide
-
-theorem four_eq : (4#32 : Word) = BitVec.ofNat 32 4 := rfl
-
-theorem slot_eq (fp : Word) (i : Nat) : slot fp i = fp + BitVec.ofNat 32 (4 * i) := rfl
-
 /-- Closed bridges from the layout names to the frame and epilogue values they determine. -/
 theorem ssv35 : slotSaved = 35 := by decide
 theorem epi_pop : popOff = epiOff + seqSize epi := rfl
@@ -159,24 +145,8 @@ theorem ret (c : Ctx) (hv : Valid c) (Wr : Word → Prop) (s : State)
 /-! ## The memory after the prologue -/
 
 theorem read32_storeWords_same (m : Mem) : ∀ (a : Word) (vs : List Word) (i : Nat) (hi : i < vs.length),
-    vs.length ≤ 2 ^ 28 → read32 (storeWords m a vs) (a + BitVec.ofNat 32 (4 * i)) = vs[i]
-  | _, [], _, hi, _ => absurd hi (by simp)
-  | a, v :: vs, 0, _, hl => by
-    simp only [storeWords, Nat.mul_zero, BitVec.add_zero, List.getElem_cons_zero]
-    rw [Frame.read32_congr (m := write32 m a v)]
-    · exact M0Crypto.Armv6M.read32_write32_same m a v
-    · intro k hk
-      apply storeWords_other
-      intro j q hj hq e
-      have := congrArg BitVec.toNat e
-      simp only [List.length_cons] at hl
-      simp only [BitVec.toNat_add, BitVec.toNat_ofNat] at this
-      omega
-  | a, v :: vs, i + 1, hi, hl => by
-    simp only [storeWords, List.getElem_cons_succ]
-    have := read32_storeWords_same (write32 m a v) (a + 4#32) vs i
-      (by simp only [List.length_cons] at hi; omega) (by simp only [List.length_cons] at hl; omega)
-    rw [← this, four_eq, ofNat_add_assoc, show 4 + 4 * i = 4 * (i + 1) by omega]
+    vs.length ≤ 2 ^ 28 → read32 (storeWords m a vs) (a + BitVec.ofNat 32 (4 * i)) = vs[i] :=
+  Frame.read32_storeWords_same m
 
 theorem mP_other (c : Ctx) (y : Word) (hy : ∀ k < 36, y ≠ c.sp0 - BitVec.ofNat 32 36 + BitVec.ofNat 32 k) :
     c.mP y = c.m0 y := by

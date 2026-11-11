@@ -1,3 +1,4 @@
+import M0Crypto.Release.ChaChaRetDefs
 import M0Crypto.Release.PolyBlocks
 import M0Crypto.Release.PolyBlocksFrame
 

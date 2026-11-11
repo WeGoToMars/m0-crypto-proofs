@@ -2,6 +2,7 @@ import M0Crypto.Release.ChaChaBlock
 import M0Crypto.Release.ChaChaLayout
 import M0Crypto.Release.AccessReach
 import M0Crypto.Sym.MemBridge
+import M0Crypto.Thumb.SeqScan
 
 set_option linter.unusedSimpArgs false
 set_option maxRecDepth 100000
@@ -40,12 +41,9 @@ theorem bch_pc_even (i : Nat) : (bchOff + bchSize * i) % 2 = 0 := by
   rw [Nat.add_mod, bchOff_even, Nat.mul_mod, bchSize_even]; simp
 theorem ach_end : achOff + achSize * 16 = b38eOff := by decide
 
-theorem bytesAt_get (m : Mem) : ∀ (a : Word) (n i : Nat), i < n →
-    (Ctx.bytesAt m a n)[i]? = some (m (a + BitVec.ofNat 32 i))
-  | a, n + 1, 0, _ => by simp [bytesAt_succ]
-  | a, n + 1, i + 1, h => by
-    rw [bytesAt_succ, List.getElem?_cons_succ, bytesAt_get m _ n i (by omega)]
-    rw [show (1#32 : Word) = BitVec.ofNat 32 1 from rfl, ofNat_add_assoc, Nat.add_comm 1 i]
+theorem bytesAt_get (m : Mem) (a : Word) (n i : Nat) (hi : i < n) :
+    (Ctx.bytesAt m a n)[i]? = some (m (a + BitVec.ofNat 32 i)) :=
+  Frame.bytesAt_get m a n i hi
 
 theorem bytesOfWord_get (w : Word) (q : Nat) (hq : q < 4) :
     (bytesOfWord w)[q]? = some (w.extractLsb' (8 * q) 8) := by
@@ -299,9 +297,8 @@ theorem bpost_before_output (c : Ctx) (hv : Valid c) (k : Nat) (t : State)
 
 /-! ## Aligned path: `achOff` to `b38eOff` -/
 
-theorem add_flags (x y : Word) : (M0Crypto.Armv6M.addWithCarry x y false).1 = x + y := by
-  apply BitVec.eq_of_toNat_eq
-  simp [M0Crypto.Armv6M.addWithCarry, BitVec.toNat_add]
+theorem add_flags (x y : Word) : (M0Crypto.Armv6M.addWithCarry x y false).1 = x + y :=
+  M0Crypto.Release.add_flags x y
 
 theorem sub_carry (x y : Word) : (M0Crypto.Armv6M.addWithCarry x (~~~y) true).2.1 = decide (y.toNat ≤ x.toNat) := by
   simp only [M0Crypto.Armv6M.addWithCarry, BitVec.toNat_ofNat, BitVec.toNat_not, Bool.toNat_true]
@@ -310,7 +307,8 @@ theorem sub_carry (x y : Word) : (M0Crypto.Armv6M.addWithCarry x (~~~y) true).2.
   · simp only [h, decide_true, decide_eq_true_eq]; omega
   · simp only [h, decide_false, decide_eq_false_iff_not, Decidable.not_not]; omega
 
-theorem ach_at : (List.range 16).all (fun i => seqAt B (achOff + achSize * i) (ach i)) = true := by decide
+theorem ach_at : (List.range 16).all (fun i => seqAt B (achOff + achSize * i) (ach i)) = true := by
+  simp only [seqAt_eq_scan]; cbv
 
 theorem ach_falls (i : Nat) : (ach i).all Instr.falls = true := by simp [ach, Instr.falls]
 
@@ -522,7 +520,8 @@ theorem apath (c : Ctx) (hv : Valid c) (k : Nat) (hlen : 64 * k + 64 ≤ c.len.t
 
 /-! ## Byte path: `bchOff` to `bloOff` -/
 
-theorem bch_at : (List.range 16).all (fun i => seqAt B (bchOff + bchSize * i) (bch i)) = true := by decide
+theorem bch_at : (List.range 16).all (fun i => seqAt B (bchOff + bchSize * i) (bch i)) = true := by
+  simp only [seqAt_eq_scan]; cbv
 theorem bch_end : bchOff + bchSize * 16 = bmidOff := by decide
 
 theorem bl_at : seqAt B blOff bl = true := by decide

@@ -96,10 +96,10 @@ theorem blk_bytes (A dq : Word) (M0 M mem : Mem) (rem : Nat) (hr : rem ≤ 16) (
   apply List.ext_getElem?
   intro j
   by_cases hj : j < 16
-  · rw [ChaChaOut.bytesAt_get _ _ _ _ hj, h j hj]
+  · rw [Frame.bytesAt_get _ _ _ _ hj, h j hj]
     by_cases hjr : j < rem
     · rw [if_pos hjr, List.getElem?_append_left (by rw [bytesAt_length]; exact hjr),
-        ChaChaOut.bytesAt_get _ _ _ _ hjr, hs j hjr]
+        Frame.bytesAt_get _ _ _ _ hjr, hs j hjr]
     · rw [if_neg hjr, List.getElem?_append_right (by rw [bytesAt_length]; omega), bytesAt_length,
         List.getElem?_replicate, if_pos (by omega)]
   · rw [List.getElem?_eq_none (by rw [bytesAt_length]; omega),

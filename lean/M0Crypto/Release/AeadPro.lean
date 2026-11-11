@@ -1,4 +1,5 @@
 import M0Crypto.Release.AeadPad
+import M0Crypto.Release.ChaChaRetDefs
 set_option linter.unusedSimpArgs false
 set_option maxRecDepth 100000
 set_option maxHeartbeats 4000000
@@ -168,7 +169,7 @@ theorem rd_store_other (m : Mem) (A : Word) (vs : List Word) (a b : Nat)
 theorem rd_store_same (m : Mem) (A : Word) (vs : List Word) (a i : Nat) (hi : i < vs.length)
     (hl : vs.length ≤ 2 ^ 28) :
     read32 (storeWords m (A + BitVec.ofNat 32 a) vs) (A + BitVec.ofNat 32 (a + 4 * i)) = vs[i] := by
-  rw [← ofNat_add_assoc]; exact ChaChaRet.read32_storeWords_same m _ vs i hi hl
+  rw [← ofNat_add_assoc]; exact Frame.read32_storeWords_same m _ vs i hi hl
 
 /-! ## Zeroing `CTX` -/
 
@@ -188,7 +189,7 @@ theorem zs_zero : ∀ (n : Nat), n ≤ 16 → ∀ (t : State), t.regs 0 = 0#32 �
     rw [execAll_append]
     have u0 : (execAll (zs n) t).regs 0 = 0#32 := by rw [zs_regs n t 0 (by decide), h0]
     have u13 : (execAll (zs n) t).regs 13 = t.regs 13 := zs_regs n t 13 (by decide)
-    simp only [execAll, ChaChaInit.strSp_next _ 0 (2 + n) (by omega), M0Crypto.Proofs.toReg_0, u0, u13]
+    simp only [execAll, Frame.strSp_next _ 0 (2 + n) (by omega), M0Crypto.Proofs.toReg_0, u0, u13]
     by_cases hlo : o < 4 * n
     · exact write32_zero_pass _ _ _ (zs_zero n (by omega) t h0 o hlo)
     · have : t.regs 13 + BitVec.ofNat 32 (8 + o) = slot (t.regs 13) (2 + n) + BitVec.ofNat 32 (o - 4 * n) := by
@@ -421,5 +422,8 @@ theorem pro_reach (c : ACall) (hv : AValid c) (e : Nat) (hseq : seqAt B e pro = 
       rw [ofNat_add_assoc, ofNat_add_assoc]
       simp [ACall.saved] at hi
       exact hy _ (by omega)
+
+/-- AAD bytes shared by the encryption and decryption contracts. -/
+def ACall.aadB (c : ACall) := Ctx.bytesAt c.m0 c.aad c.alen.toNat
 
 end M0Crypto.Release.Aead

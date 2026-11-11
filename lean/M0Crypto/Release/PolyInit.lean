@@ -1,4 +1,4 @@
-import M0Crypto.Release.ChaChaRet
+import M0Crypto.Release.Frame
 import M0Crypto.Release.Layout
 
 set_option linter.unusedSimpArgs false
@@ -565,7 +565,7 @@ theorem saved_read {c : ICtx} (hv : IValid c) (L : List (Nat × Word)) (hl : ∀
   have hs := toNat_sp12 hv; have := hv.spLo
   rw [read32_wctx_other _ c1 _ (by simp only [BitVec.toNat_add, BitVec.toNat_ofNat]; omega)
     (by simp only [BitVec.toNat_add, BitVec.toNat_ofNat]; omega) _ _ hl]
-  exact ChaChaRet.read32_storeWords_same _ _ _ i (by simp; omega) (by simp)
+  exact Frame.read32_storeWords_same _ _ _ i (by simp; omega) (by simp)
 
 theorem pop_run {c : ICtx} (hv : IValid c) {Wr : Word → Prop} {L : List (Nat × Word)} {t : State}
     (hpc : t.pc = c.base + BitVec.ofNat 32 popAt) (hsp : t.regs 13 = c.sp0 - BitVec.ofNat 32 12)

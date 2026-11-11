@@ -61,7 +61,7 @@ theorem macD_effect (s : State) :
     (by simp [macD, Instr.dsts, Fin.ext_iff, h0, h1, h2]; omega)⟩ <;>
   simp [macD, execAll, Instr.next, Instr.exec, lsrC, lslC, addFlags, M0Crypto.Armv6M.State.setReg,
     M0Crypto.Armv6M.State.setNZC, M0Crypto.Armv6M.State.setNZ, M0Crypto.Armv6M.State.setNZCV,
-    M0Crypto.Armv6M.State.reg, M0Crypto.Armv6M.State.sp, ChaChaOut.add_flags]
+    M0Crypto.Armv6M.State.reg, M0Crypto.Armv6M.State.sp, M0Crypto.Release.add_flags]
 
 theorem macL_effect (s : State) :
     (execAll macL s).mem = write8 s.mem (s.regs 1 + s.regs 2) (read8 s.mem (s.regs 4 + s.regs 2)) ∧
@@ -71,8 +71,8 @@ theorem macL_effect (s : State) :
   refine ⟨?_, ?_, ?_, fun r h0 h2 h15 => execAll_regs_other _ _ r h15
     (by simp [macL, Instr.dsts, Fin.ext_iff, MemOp.isLoad, h0, h2])⟩ <;>
   simp [macL, execAll, Instr.next, Instr.exec, Instr.exec.memOp, addFlags, M0Crypto.Armv6M.State.setReg,
-    M0Crypto.Armv6M.State.setNZCV, M0Crypto.Armv6M.State.setNZ, M0Crypto.Armv6M.State.reg, ChaChaOut.add_flags,
-    ChaChaLoop.sub_flags]
+    M0Crypto.Armv6M.State.setNZCV, M0Crypto.Armv6M.State.setNZ, M0Crypto.Armv6M.State.reg, M0Crypto.Release.add_flags,
+    M0Crypto.Release.sub_flags]
 
 theorem macE_effect (s : State) :
     (execAll macE s).regs 0 = s.regs 13 + 8#32 ∧ (execAll macE s).regs 2 = 1#32 ∧

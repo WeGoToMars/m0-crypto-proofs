@@ -1,3 +1,4 @@
+import M0Crypto.Release.ChaChaRetDefs
 import M0Crypto.Release.PolyFinish
 import M0Crypto.Release.PolyFinishCheck
 set_option linter.unusedSimpArgs false

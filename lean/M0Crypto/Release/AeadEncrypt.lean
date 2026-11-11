@@ -9,8 +9,6 @@ open M0Crypto.Thumb
 open M0Crypto.Release.Frame
 open M0Crypto.Spec.AEAD (pad16 macData encrypt chacha20)
 
-def ACall.aadB (c : ACall) := Ctx.bytesAt c.m0 c.aad c.alen.toNat
-
 /-- Ciphertext and tag, erasure and C ABI for encryption. -/
 structure EncryptResult (c : ACall) (t : State) : Prop extends RetPost c 0#32 t where
   out : Ctx.bytesAt t.mem c.out c.len.toNat = (encrypt c.keyB c.nonceB c.aadB c.ptB).1
@@ -98,9 +96,7 @@ theorem encrypt_reach (c : ACall) (hv : AValid c) (hb : ABuf c) (s : State)
     intro j hj
     apply hz.frame
     rintro (⟨q, hq, eq⟩ | ⟨q, hq, eq⟩)
-    · exact hv.not_swr hb.outStack hj (by
-        refine ⟨156+q, by omega, ?_⟩
-        rw [eq, BitVec.ofNat_add, ← BitVec.add_assoc]; congr 1; bv_omega)
+    · exact hv.not_swr hb.outStack hj (finishWr_swr c.A _ (.inl ⟨q, hq, eq⟩))
     · exact ne_of_disj hb.tagO.2.1 hb.tagO.1 (Or.symm hb.tagO.2.2) hj hq eq
   have zframe : ∀ a, ¬ AWr c a → z.mem a = c.m0 a := fun a ha =>
     (hz.frame a (fun h => ha (finishWr_awr c a h))).trans (by'.frame a ha)

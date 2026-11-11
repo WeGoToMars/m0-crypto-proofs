@@ -36,7 +36,7 @@ theorem foldPrep_effect (s : State) (hs : Sep s) :
     M0Crypto.Armv6M.State.reg, M0Crypto.Armv6M.State.sp, M0Crypto.Proofs.toReg_0,
     M0Crypto.Proofs.toReg_1, M0Crypto.Proofs.toReg_2, M0Crypto.Proofs.toReg_3,
     M0Crypto.Proofs.toReg_4, M0Crypto.Proofs.toReg_5, M0Crypto.Proofs.toReg_7,
-    ite_true, ite_false, lsrC, M0Crypto.Proofs.addWithCarry_fst, ChaChaLoop.sub_flags]
+    ite_true, ite_false, lsrC, M0Crypto.Proofs.addWithCarry_fst, M0Crypto.Release.sub_flags]
   simp only [show (3 : BitVec 8).toNat = 3 from rfl, show (5 : BitVec 5).toNat = 5 from rfl,
     show (2 : BitVec 5).toNat = 2 from rfl, Nat.reduceMul]
   rw [show read32 (write32 s.mem (s.regs 13 + 12#32) (s.regs 0)) (s.regs 7 + 20#32) =

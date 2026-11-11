@@ -1,3 +1,4 @@
+import M0Crypto.Release.ChaChaRetDefs
 import M0Crypto.Release.PolyBlocksCorrect
 set_option linter.unusedSimpArgs false
 set_option maxRecDepth 100000
@@ -47,7 +48,7 @@ theorem result_cleared (c : BCtx) (s t : State) (he : BEntry c s) (ht : BResult 
       change read32 _ (c.fp + BitVec.ofNat 32 (4*(o/4))) = _
       have hfb : frameBytes = 4 * frameWords := rfl
       have hfw : frameWords ≤ 2^28 := by decide
-      rw [ChaChaRet.read32_storeWords_same _ c.fp (List.replicate frameWords 0#32) (o/4)
+      rw [Frame.read32_storeWords_same _ c.fp (List.replicate frameWords 0#32) (o/4)
         (by simp; omega) (by simp only [List.length_replicate]; exact hfw)]
       exact List.getElem_replicate _
     have b := byte_of_read32 (publishMem (finalLoop c s)) (slot c.fp (o/4)) (o%4) (by omega)
@@ -70,7 +71,7 @@ theorem result_h (c : BCtx) (hv : BValid c) (s t : State) (he : BEntry c s)
   rw [read32_congr (m := storeWords (finalLoop c s).mem c.ctx
     [(finalLoop c s).regs 8, (finalLoop c s).regs 9, (finalLoop c s).regs 10,
       (finalLoop c s).regs 11, (finalLoop c s).regs 14])]
-  · have h := ChaChaRet.read32_storeWords_same (finalLoop c s).mem c.ctx
+  · have h := Frame.read32_storeWords_same (finalLoop c s).mem c.ctx
       [(finalLoop c s).regs 8, (finalLoop c s).regs 9, (finalLoop c s).regs 10,
         (finalLoop c s).regs 11, (finalLoop c s).regs 14] j (by simp; omega) (by simp)
     change read32 _ (c.ctx + BitVec.ofNat 32 (4*j)) = _

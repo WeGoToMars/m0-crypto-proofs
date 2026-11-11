@@ -1,3 +1,4 @@
+import M0Crypto.Release.ChaChaRetDefs
 import M0Crypto.Release.PolyBlocksCode
 import M0Crypto.Release.PolyBlocksCheck
 set_option linter.unusedSimpArgs false
@@ -248,14 +249,14 @@ theorem mP_saved (c : BCtx) (hv : BValid c) (i : Nat) (hi : i < 9) :
   simp only [BCtx.mP]
   by_cases h4 : i < 4
   · rw [hs, ChaChaRet.slot_eq, show 4 * (7 + i) = frameBytes + 4 * i by simp only [frameBytes, frameWords]; omega, ← ofNat_add_assoc,
-      ChaChaRet.read32_storeWords_same _ _ _ i (by simp; omega) (by simp)]
+      Frame.read32_storeWords_same _ _ _ i (by simp; omega) (by simp)]
     rcases (by omega : i = 0 ∨ i = 1 ∨ i = 2 ∨ i = 3) with rfl | rfl | rfl | rfl <;> rfl
   · rw [Frame.read32_congr (m := storeWords c.m0 (c.sp0 - 20#32)
         [c.regs0 4, c.regs0 5, c.regs0 6, c.regs0 7, c.regs0 14])]
     · have h20 : c.sp0 - 20#32 = c.fp + BitVec.ofNat 32 44 := by
         simp only [BCtx.fp]; bv_omega
       rw [h20, ChaChaRet.slot_eq, show 4 * (7 + i) = 44 + 4 * (i - 4) by omega, ← ofNat_add_assoc,
-        ChaChaRet.read32_storeWords_same _ _ _ (i - 4) (by simp; omega) (by simp)]
+        Frame.read32_storeWords_same _ _ _ (i - 4) (by simp; omega) (by simp)]
       rcases (by omega : i = 4 ∨ i = 5 ∨ i = 6 ∨ i = 7 ∨ i = 8) with rfl | rfl | rfl | rfl | rfl <;> rfl
     · simp only [frameBytes, frameWords] at hs
       intro k hk
@@ -302,10 +303,10 @@ theorem prologue_effect (c : BCtx) (s : State) (he : BEntry c s) :
     M0Crypto.Armv6M.State.setReg, M0Crypto.Armv6M.State.setNZCV,
     M0Crypto.Armv6M.State.setNZ, M0Crypto.Armv6M.State.sp, M0Crypto.Armv6M.State.reg,
     listRegs_f0, listRegs_240, bitCount_f0, bitCount, he.mem, he.regs, he.sp,
-    he.r0, he.r1, he.r2, he.r3, BCtx.mP, BCtx.fp, ChaChaLoop.sub_flags,
+    he.r0, he.r1, he.r2, he.r3, BCtx.mP, BCtx.fp, M0Crypto.Release.sub_flags,
     BitVec.sub_sub]
   change ((M0Crypto.Armv6M.addWithCarry c.count (~~~0#32) true).1 == 0#32) = _
-  rw [ChaChaLoop.sub_flags, BitVec.sub_zero]
+  rw [M0Crypto.Release.sub_flags, BitVec.sub_zero]
 
 theorem prologue_run (c : BCtx) (hv : BValid c) (s : State) (he : BEntry c s) :
     Reach c.base c.Wr s (fun t => t = execAll prologue s) := by

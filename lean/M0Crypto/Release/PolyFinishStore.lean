@@ -1,5 +1,4 @@
 import M0Crypto.Release.PolyFinishArith
-import M0Crypto.Release.ChaChaOut
 set_option linter.unusedSimpArgs false
 set_option maxRecDepth 100000
 set_option maxHeartbeats 500000
@@ -124,7 +123,7 @@ theorem emit_writes (s : State) : WritesIn (traceAll emit s) (s.regs 12) 16 := b
   · rcases List.mem_append.mp he with he | he
     · rcases List.mem_append.mp he with he | he
       · rcases List.mem_append.mp he with he | he
-        · have hn := ChaChaBlock.noWrites [.movHi 1 12] s (by decide) (fun _ => False) e he y hy
+        · have hn := WritesTo.of_noWritesMem [.movHi 1 12] s (by decide) (fun _ => False) e he y hy
           exact hn.elim
         · exact a e he y hy
       · exact b e he y hy
@@ -142,14 +141,14 @@ theorem tagMem_bytes (s : State) :
   apply List.ext_getElem?
   intro i
   by_cases hi : i < 16
-  · rw [ChaChaOut.bytesAt_get _ _ _ _ hi, PolySpec.leBytes_get _ _ _ hi]
+  · rw [Frame.bytesAt_get _ _ _ _ hi, PolySpec.leBytes_get _ _ _ hi]
     have hj : i / 4 < 4 := by omega
     have hk : i % 4 < 4 := by omega
     have hw : read32 (tagMem s) (slot (s.regs 12) (i/4)) =
         (if i/4 = 0 then s.regs 2 else if i/4 = 1 then s.regs 3 else if i/4 = 2 then s.regs 4 else s.regs 5) := by
       unfold tagMem
       rw [show slot (s.regs 12) (i/4) = s.regs 12 + BitVec.ofNat 32 (4*(i/4)) from rfl,
-        ChaChaRet.read32_storeWords_same _ _ _ (i/4) (by simp; omega) (by simp)]
+        Frame.read32_storeWords_same _ _ _ (i/4) (by simp; omega) (by simp)]
       rcases (by omega : i/4 = 0 ∨ i/4 = 1 ∨ i/4 = 2 ∨ i/4 = 3) with h | h | h | h <;> simp [h]
     have hb := byte_of_read32 (tagMem s) (slot (s.regs 12) (i/4)) (i%4) hk
     rw [hw] at hb

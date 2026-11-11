@@ -15,11 +15,19 @@ the function's frame (`X`, `J`, `LEN`, `OUTP`, `INP`), 35..43 the saved register
 
 namespace M0Crypto.Release.Frame
 
-open M0Crypto.Armv6M (Word Reg State Mem read32 write32 slot)
+open M0Crypto.Armv6M (Word Reg LowReg State Mem read32 write32 slot)
 open M0Crypto.Thumb
 open M0Crypto.Spec.ChaCha20 (Byte initState)
 open M0Crypto.Spec.AEAD (chacha20)
 open M0Crypto.Release.ChaChaLayout (chStackBytes chFrameBytes chFrameWords slotJ slotLen slotOutp slotInp)
+
+/-- A stack-relative word store advances the PC and writes its selected slot. -/
+theorem strSp_next (t : State) (src : LowReg) (k : Nat) (hk : k < 256) :
+    (Instr.strSp src (BitVec.ofNat 8 k)).next t =
+      { t.setReg 15 (t.pc + 2#32) with mem := write32 t.mem (slot (t.regs 13) k) (t.regs src.toReg) } := by
+  simp only [Instr.next, Instr.exec, M0Crypto.Armv6M.State.sp, M0Crypto.Armv6M.State.reg, Instr.size]
+  congr 3
+  simp [slot, Nat.mod_eq_of_lt hk, Nat.mul_comm]
 
 /-! ## Address arithmetic -/
 
@@ -61,6 +69,27 @@ theorem read32_congr {m m' : Mem} {a : Word} (h : ∀ k < 4, m' (a + BitVec.ofNa
   simp only [read32]
   rw [show (1#32 : Word) = BitVec.ofNat 32 1 from rfl, show (2#32 : Word) = BitVec.ofNat 32 2 from rfl,
     show (3#32 : Word) = BitVec.ofNat 32 3 from rfl, h0, h1, h2, h3]
+
+/-- Reading a word from a short list of consecutive word stores. -/
+theorem read32_storeWords_same (m : Mem) : ∀ (a : Word) (vs : List Word) (i : Nat) (hi : i < vs.length),
+    vs.length ≤ 2 ^ 28 → read32 (storeWords m a vs) (a + BitVec.ofNat 32 (4 * i)) = vs[i]
+  | _, [], _, hi, _ => absurd hi (by simp)
+  | a, v :: vs, 0, _, hl => by
+    simp only [storeWords, Nat.mul_zero, BitVec.add_zero, List.getElem_cons_zero]
+    rw [Frame.read32_congr (m := write32 m a v)]
+    · exact M0Crypto.Armv6M.read32_write32_same m a v
+    · intro k hk
+      apply storeWords_other
+      intro j q hj hq e
+      have := congrArg BitVec.toNat e
+      simp only [List.length_cons] at hl
+      simp only [BitVec.toNat_add, BitVec.toNat_ofNat] at this
+      omega
+  | a, v :: vs, i + 1, hi, hl => by
+    simp only [storeWords, List.getElem_cons_succ]
+    have := read32_storeWords_same (write32 m a v) (a + 4#32) vs i
+      (by simp only [List.length_cons] at hi; omega) (by simp only [List.length_cons] at hl; omega)
+    rw [← this, show (4#32 : Word) = BitVec.ofNat 32 4 from rfl, ofNat_add_assoc, show 4 + 4 * i = 4 * (i + 1) by omega]
 
 theorem read32_write32_slot' (m : Mem) (sp v : Word) (i j : Nat) (hi : i < 2 ^ 28) (hj : j < 2 ^ 28) :
     read32 (write32 m (slot sp i) v) (slot sp j) = if i = j then v else read32 m (slot sp j) := by
@@ -215,6 +244,13 @@ end Ctx
 
 theorem bytesAt_succ (m : Mem) (a : Word) (n : Nat) :
     Ctx.bytesAt m a (n + 1) = m a :: Ctx.bytesAt m (a + 1#32) n := rfl
+
+theorem bytesAt_get (m : Mem) : ∀ (a : Word) (n i : Nat), i < n →
+    (Ctx.bytesAt m a n)[i]? = some (m (a + BitVec.ofNat 32 i))
+  | a, n + 1, 0, _ => by simp [bytesAt_succ]
+  | a, n + 1, i + 1, h => by
+    rw [bytesAt_succ, List.getElem?_cons_succ, bytesAt_get m _ n i (by omega)]
+    rw [show (1#32 : Word) = BitVec.ofNat 32 1 from rfl, ofNat_add_assoc, Nat.add_comm 1 i]
 
 /-- Little-endian word `i` of `n` words of memory from `a`. -/
 theorem wordsOfBytes_bytesAt (m : Mem) : ∀ (n : Nat) (a : Word) (i : Nat), i < n →

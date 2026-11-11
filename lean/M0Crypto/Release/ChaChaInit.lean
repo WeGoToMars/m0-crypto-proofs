@@ -24,10 +24,8 @@ set_option maxRecDepth 100000
 
 theorem strSp_next (t : State) (src : LowReg) (k : Nat) (hk : k < 256) :
     (Instr.strSp src (BitVec.ofNat 8 k)).next t =
-      { t.setReg 15 (t.pc + 2#32) with mem := write32 t.mem (slot (t.regs 13) k) (t.regs src.toReg) } := by
-  simp only [Instr.next, Instr.exec, M0Crypto.Armv6M.State.sp, M0Crypto.Armv6M.State.reg, Instr.size]
-  congr 3
-  simp [slot, Nat.mod_eq_of_lt hk, Nat.mul_comm]
+      { t.setReg 15 (t.pc + 2#32) with mem := write32 t.mem (slot (t.regs 13) k) (t.regs src.toReg) } :=
+  Frame.strSp_next t src k hk
 
 /-- A store chunk: register-only code ending in `str r0, [sp, #4k]`. -/
 theorem store_effect (t : State) (is : List Instr) (k : Nat) (hk : k < 256)
