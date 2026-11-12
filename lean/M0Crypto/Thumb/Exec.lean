@@ -3,8 +3,8 @@ import M0Crypto.Armv6M.Step
 
 /-!
 Execution semantics of the whole-function Thumb model, transcribed from the
-ARMv6-M ARM pseudocode (DDI 0419E §A2.2 `AddWithCarry`, `Shift_C`; §A6.7 the
-per-instruction operation blocks; §A5.2 `BXWritePC`/`LoadWritePC`).
+ARMv6-M ARM pseudocode (DDI 0419E §A2.2 `AddWithCarry`, `LSL_C`, `LSR_C`, `ROR_C`; §A6.4
+`Shift_C`; §A6.7 the per-instruction operation blocks; §A2.3 `BXWritePC`/`LoadWritePC`).
 
 Scope and assumptions (in addition to `M0Crypto.Armv6M.State`):
 * Thumb state, one execution thread, no exceptions or interrupts. Faults are not

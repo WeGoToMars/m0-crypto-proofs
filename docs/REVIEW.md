@@ -64,7 +64,7 @@ How to read a table row: open the file, find the declaration, open the reference
 
 The model is what "the code runs on a Cortex-M0+" means inside Lean. Every theorem relies on it, and nothing else checks it against hardware, so it deserves the most careful reading.
 
-**Check against:** *ARMv6-M Architecture Reference Manual* (Arm DDI 0419), mainly §A2.2 (`AddWithCarry`, `ROR_C` pseudocode), §A3 (alignment, endianness), §A6.3 (condition codes), §A6.4 (shifts applied to a register, `Shift_C`) and the §A6.7 page of each instruction. The module headers of [`Thumb/Exec.lean`](../lean/M0Crypto/Thumb/Exec.lean) and [`Armv6M/State.lean`](../lean/M0Crypto/Armv6M/State.lean) state the scope; read them first.
+**Check against:** *ARMv6-M Architecture Reference Manual* (Arm DDI 0419), mainly §A2.2 (`AddWithCarry`, `LSL_C`, `LSR_C`, `ROR_C` pseudocode), §A2.3 (`BXWritePC`, for `pop {..., pc}`), §A3 (alignment, endianness), §A6.3 (condition codes), §A6.4 (shifts applied to a register: `DecodeImmShift`, `Shift_C`) and the §A6.7 page of each instruction. The module headers of [`Thumb/Exec.lean`](../lean/M0Crypto/Thumb/Exec.lean) and [`Armv6M/State.lean`](../lean/M0Crypto/Armv6M/State.lean) state the scope; read them first.
 
 - For every instruction in `Instr.exec`: result value, flags written (and flags *not* written), destination and writeback registers, as on its A6.7 page.
 - Immediate scaling, which happens here and not in the decoder: `imm5 × width` for `ldr`/`ldrh`/`ldrb` and their stores, `imm8 × 4` for SP-relative and literal forms, `imm7 × 4` for `add sp`/`sub sp`. The one exception is `bl`, whose offset the decoder delivers already scaled.
@@ -127,7 +127,7 @@ In `Armv6M/Memory.lean` and `Armv6M/Step.lean` only the listed declarations are 
 | `Thumb.write8` | 2 |  |
 | `Thumb.write16` | 4 |  |
 | `Thumb.fetch16` | 2 |  |
-| `Thumb.lslC` | 3 | `Shift_C` LSL for n < 32: carry = last bit shifted out. |
+| `Thumb.lslC` | 3 | `Shift_C` LSL for n < 32: carry = last bit shifted out. n = 0 is `movs Rd, Rm` (MOV register, encoding T2; 31 sites in the code): value and carry unchanged. |
 | `Thumb.lsrC` | 3 | `Shift_C` LSR for 1 ≤ n ≤ 32; `lsrs #0` encodes a shift by 32 (handled in `exec`). |
 | `Thumb.condPassed` | 18 | Condition codes EQ…LE (A6.3 table). Check each of the 14 cases, especially HI (C ∧ ¬Z), LS, GE (N = V), GT, LT, LE. |
 | `Thumb.listRegs` | 3 |  |
