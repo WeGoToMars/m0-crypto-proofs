@@ -106,6 +106,7 @@ M0Crypto.Proofs.ChaCha20DoubleRoundKeep15.dround_spec
 M0Crypto.Thumb.decode_at
 M0Crypto.Thumb.step_of_instrAt
 M0Crypto.Thumb.exec_mem_other
+M0Crypto.Thumb.exec_reads_only
 M0Crypto.Thumb.step_mem_other
 M0Crypto.Thumb.runFast_eq
 M0Crypto.Artifacts.Release.bytes_length

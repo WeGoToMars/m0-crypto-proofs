@@ -39,6 +39,7 @@ theorem depends only on `propext`, `Classical.choice` and `Quot.sound`
 #print axioms M0Crypto.Thumb.decode_at
 #print axioms M0Crypto.Thumb.step_of_instrAt
 #print axioms M0Crypto.Thumb.exec_mem_other
+#print axioms M0Crypto.Thumb.exec_reads_only
 #print axioms M0Crypto.Thumb.step_mem_other
 #print axioms M0Crypto.Thumb.runFast_eq
 #print axioms M0Crypto.Artifacts.Release.bytes_length

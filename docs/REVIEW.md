@@ -50,11 +50,11 @@ All four theorems about one function assume the same thing, a valid call: `ChaCh
 
 | Order | Part | Files | Hand-written lines | Main reference |
 |---|---|---:|---:|---|
-| 1 | [Machine model](#31-machine-model) | 4 | 285 | ARMv6-M Architecture Reference Manual |
+| 1 | [Machine model](#31-machine-model) | 4 | 288 | ARMv6-M Architecture Reference Manual |
 | 2 | [Decoder](#32-decoder) | 1 | 66 to read, 100 cross-checked | `Instr.exec`; `llvm-objdump` |
 | 3 | [Artifact](#33-artifact) | 1 | generated (196) | the build; review the generator instead |
 | 4 | [Specifications](#34-specifications) | 2 | 117 | RFC 8439 |
-| 5 | [Contracts and statements](#35-contracts-and-statements) | 4 | 322 | public headers, AAPCS, README claims |
+| 5 | [Contracts and statements](#35-contracts-and-statements) | 4 | 319 | public headers, AAPCS, README claims |
 
 Line counts include doc comments. Structure fields are counted with their structure. The tables name declarations, not line numbers, so they do not go stale when code moves.
 
@@ -68,7 +68,8 @@ The model is what "the code runs on a Cortex-M0+" means inside Lean. Every theor
 
 - For every instruction in `Instr.exec`: result value, flags written (and flags *not* written), destination and writeback registers, as on its A6.7 page.
 - Immediate scaling, which happens here and not in the decoder: `imm5 × width` for `ldr`/`ldrh`/`ldrb` and their stores, `imm8 × 4` for SP-relative and literal forms, `imm7 × 4` for `add sp`/`sub sp`. The one exception is `bl`, whose offset the decoder delivers already scaled.
-- `Instr.accesses` and `Instr.exec` compute each address separately. The trace records the first; the memory changes by the second. Compare them case by case: same address, width and direction.
+- `Instr.accesses` and `Instr.exec` compute each address separately. The trace records the first; the memory changes by the second. Two proved lemmas tie them together. Read their statements instead of comparing the addresses: `exec_mem_other` ([`Thumb/Program.lean`](../lean/M0Crypto/Thumb/Program.lean)), an instruction changes memory only at the bytes of its write accesses, and `exec_reads_only` ([`Thumb/ExecReads.lean`](../lean/M0Crypto/Thumb/ExecReads.lean)), its result depends on memory only at the bytes of its read accesses. So no byte an instruction uses is missing from the trace.
+- The lemmas do not show the converse, that the trace records no more than the instruction uses. Check in `Instr.accesses` that each access has the instruction's size: 1, 2 or 4 bytes, and one 4-byte access per register for `push`, `pop`, `ldm` and `stm`. The alignment fault in `step` uses the same sizes. With the right size, a wrong address or direction would contradict the lemmas.
 - PC reads as instruction address + 4; literal loads use `Align(PC + 4, 4)`.
 - Branch targets: `b`, `bcond`, `bl` add a sign-extended, halfword-scaled offset to PC + 4.
 - `bl` writes LR = return address | 1; `pop {pc}` faults if bit 0 of the loaded value is clear.
@@ -81,7 +82,7 @@ The model is what "the code runs on a Cortex-M0+" means inside Lean. Every theor
 
 - It covers the instructions those calls execute: 1,450 of the 1,459. Not reached are the four instructions of the ChaCha20 counter-overflow return, one branch of `poly1305_blocks`, and four padding instructions between functions.
 - It covers them on the values that occur. A model error that needs a particular operand (a carry out of bit 31 in one specific instruction, say) is found only if a traced call produces it. Reading `Instr.exec` is still required.
-- Loads are checked through the registers they fill and stores through the final RAM; `Instr.accesses`, the addresses the trace records, is not compared with anything.
+- Loads are checked through the registers they fill and stores through the final RAM. `Instr.accesses`, the addresses the trace records, is not compared with QEMU; it is tied to `Instr.exec` by the two lemmas of the list above.
 - QEMU is another implementation, not the chip.
 
 The two models handle code differently. The early fragment model keeps code in a separate immutable region. The release model in `Thumb/Exec.lean` fetches code from the same memory as data, and its contracts require that no write reaches the code bytes. The release theorems use the release model. (Some proof files and doc comments say "Harvard run": that is an intermediate proof device. The theorems are stated on `runUntil`, the single-memory run.)
@@ -144,12 +145,13 @@ In `Armv6M/Memory.lean` and `Armv6M/Step.lean` only the listed declarations are 
 | `Thumb.storeWords` | 4 |  |
 | `Thumb.wordAccesses` | 3 |  |
 | `Thumb.loadRegs` | 4 |  |
-| `Thumb.Instr.accesses` | 20 | Addresses of every load and store. **This function, not `exec`, is what the trace records**, so compare it with `exec` case by case: same address, width and direction for every memory instruction. `ldr` literal uses `Align(PC+4, 4)`; `push` writes below SP; `ldm`/`stm` ascend. |
+| `Thumb.Instr.accesses` | 20 | Addresses of every load and store. **This function, not `exec`, is what the trace records.** `exec_mem_other` and `exec_reads_only` prove it covers every byte `exec` reads or writes, so check only the size of each access (1, 2 or 4 bytes; one 4-byte access per register in the multi-word forms). |
 | `Thumb.Instr.exec` | 93 | **The core of the model.** One case per instruction; compare each with its A6.7 page: result, which flags are set (for example MULS sets only N, Z), register writeback for `ldm`/`stm`, branch targets (PC+4 + offset), `bl` sets LR = next instruction \| 1, `pop {pc}` requires bit 0 = 1. |
 | `Thumb.step` | 14 | Fetch two halfwords, decode, fault on misalignment (ARMv6-M has no unaligned access), execute. |
 | `Thumb.runUntil` | 14 | Runs until PC = `stop` (the return address). Theorems quantify over its result. Check it records every executed instruction in the trace. |
 | `Thumb.CodeAt` | 3 | The bytes are in memory at `base`. Both precondition structures (`Valid`, `AValid`) require it of the release bytes. |
 | `Thumb.Writes` | 3 | Byte addresses touched by a write access (all `width` bytes). |
+| `Thumb.Reads` | 3 | Byte addresses touched by a read access (all `width` bytes). |
 
 ### 3.2 Decoder
 
@@ -357,7 +359,6 @@ For every postcondition and statement, ask:
 | `Release.Aead.ACall.pub` | 5 | What counts as public for the AEAD. Same warning. |
 | `Release.Aead.ACall.verdict` | 2 | The one secret bit allowed to influence decryption's trace: whether the tag verifies. |
 | `Release.TraceSpec.aeadStackBytes` | 3 | 320: stack bytes of an AEAD call including its callees. |
-| `Release.TraceSpec.Reads` | 3 | Byte addresses touched by a read access (all `width` bytes). |
 | `Release.TraceSpec.ReadsFrom` | 3 | Every read in the trace lies in a region. |
 | `Release.TraceSpec.ChaCha20XorReadRegion` | 6 | Where ChaCha20 may read: one `Region` per buffer. Check no secret region beyond the inputs is allowed. The stack region starts at `fp` and includes the 8 bytes of stack arguments above the 176. |
 | `Release.TraceSpec.AeadEncryptReadRegion` | 8 | The stack region includes the 16 bytes of stack arguments above the 320. |
@@ -379,14 +380,14 @@ These files decide whether the proofs are about the shipped library and whether 
 
 | File | Lines | What it guarantees |
 |---|---:|---|
-| [`tools/check.sh`](../tools/check.sh) | 295 | The release gate. Step 2b: rebuilds the library and compares the regenerated artifact file with the checked-in one. Step 4: builds all proofs. Step 4b: compares the decoder with `llvm-objdump`. Step 4c: runs the specification on external vectors. Step 5: rejects `sorry`/`admit`/`axiom`/`native_decide`/`implemented_by`/`extern` in sources. Step 6: audits axioms. Step 6b: compares statements with the golden file. Step 7: runs the QEMU tests. Step 7b: compares the model with QEMU instruction by instruction. |
+| [`tools/check.sh`](../tools/check.sh) | 296 | The release gate. Step 2b: rebuilds the library and compares the regenerated artifact file with the checked-in one. Step 4: builds all proofs. Step 4b: compares the decoder with `llvm-objdump`. Step 4c: runs the specification on external vectors. Step 5: rejects `sorry`/`admit`/`axiom`/`native_decide`/`implemented_by`/`extern` in sources. Step 6: audits axioms. Step 6b: compares statements with the golden file. Step 7: runs the QEMU tests. Step 7b: compares the model with QEMU instruction by instruction. |
 | [`../tools/build_lib.sh`](../../tools/build_lib.sh) | 51 | Builds the object whose `.text` is proved, with the pinned toolchain. |
 | [`tools/extract_release.py`](../tools/extract_release.py) | 172 | Generates `Artifacts/Release.lean` from the built object. |
 | [`tools/check_listing.py`](../tools/check_listing.py), [`lean/DumpListing.lean`](../lean/DumpListing.lean), [`lean/M0Crypto/Thumb/Listing.lean`](../lean/M0Crypto/Thumb/Listing.lean) | 83 + 5 + 129 | The decoder-versus-LLVM comparison, including `render`, which prints the model's decoding. This is what stands in for reading the decoding functions (section 3.2). |
 | [`tools/spec_vectors.py`](../tools/spec_vectors.py), [`lean/SpecVectors.lean`](../lean/SpecVectors.lean) | 50 + 61 | Runs the specification on the library's test vectors (section 3.4). A test: an error here could hide a specification bug, not create a false theorem. |
 | [`tools/qemu_steps.py`](../tools/qemu_steps.py), [`lean/StepTrace.lean`](../lean/StepTrace.lean) | 180 + 84 | Compares the model with QEMU after every instruction of sampled calls (section 3.1). Also a test. |
-| [`lean/Audit.lean`](../lean/Audit.lean) | 279 | Theorems whose axioms are printed. `check.sh` allows only `propext`, `Classical.choice`, `Quot.sound`. |
-| [`tools/statements.sh`](../tools/statements.sh) + [`tools/statements.golden`](../tools/statements.golden) | 19 + 1853 | Printed statement of every audited theorem. See section 2 for what this does not lock. |
+| [`lean/Audit.lean`](../lean/Audit.lean) | 280 | Theorems whose axioms are printed. `check.sh` allows only `propext`, `Classical.choice`, `Quot.sound`. |
+| [`tools/statements.sh`](../tools/statements.sh) + [`tools/statements.golden`](../tools/statements.golden) | 19 + 1866 | Printed statement of every audited theorem. See section 2 for what this does not lock. |
 | [`lean-toolchain`](../lean-toolchain), [`tools/versions.txt`](../tools/versions.txt), [`../tools/versions.txt`](../../tools/versions.txt) | — | Pinned Lean, LLVM and QEMU versions. |
 | [`tools/trusted_defs.lean`](../tools/trusted_defs.lean) | 98 | Computes the lists in section 3. An error here would hide trusted code from the reviewer. Not run by `check.sh`. |
 

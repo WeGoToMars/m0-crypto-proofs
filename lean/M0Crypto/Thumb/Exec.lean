@@ -303,6 +303,10 @@ def CodeAt (m : Mem) (base : Word) (bytes : List (BitVec 8)) : Prop :=
 def Writes (acc : List Access) (y : Word) : Prop :=
   ∃ a ∈ acc, a.kind = .write ∧ ∃ k, k < a.width ∧ y = a.addr + BitVec.ofNat 32 k
 
+/-- Byte addresses read by an access list. -/
+def Reads (acc : List Access) (y : Word) : Prop :=
+  ∃ a ∈ acc, a.kind = .read ∧ ∃ k, k < a.width ∧ y = a.addr + BitVec.ofNat 32 k
+
 /-! Helper checks against the pseudocode boundary cases. -/
 
 -- LSRS #32 (imm5 = 0): result 0, carry = bit 31.

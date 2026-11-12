@@ -15,6 +15,7 @@ import M0Crypto.Proofs.ChaCha20DoubleRoundKeep15
 import M0Crypto.Thumb.Decode
 import M0Crypto.Thumb.Exec
 import M0Crypto.Thumb.Program
+import M0Crypto.Thumb.ExecReads
 import M0Crypto.Thumb.FastRun
 import M0Crypto.Spec.Aead
 import M0Crypto.Artifacts.Release

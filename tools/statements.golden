@@ -203,6 +203,19 @@ M0Crypto.Spec.ChaCha20.block_length : ∀ (key nonce : List M0Crypto.Spec.ChaCha
                   M0Crypto.Thumb.step s = Except.ok (s', { pc := s.pc, instr := i, accesses := i.accesses s })
 M0Crypto.Thumb.exec_mem_other : ∀ (i : M0Crypto.Thumb.Instr) (s s' : M0Crypto.Armv6M.State),
   i.exec s = Except.ok s' → ∀ (y : M0Crypto.Armv6M.Word), ¬M0Crypto.Thumb.Writes (i.accesses s) y → s'.mem y = s.mem y
+M0Crypto.Thumb.exec_reads_only : ∀ (i : M0Crypto.Thumb.Instr) (s : M0Crypto.Armv6M.State) (m : M0Crypto.Armv6M.Mem),
+  (∀ (y : M0Crypto.Armv6M.Word), M0Crypto.Thumb.Reads (i.accesses s) y → m y = s.mem y) →
+    match i.exec s, i.exec { regs := s.regs, n := s.n, z := s.z, c := s.c, v := s.v, mem := m } with
+    | Except.ok t, Except.ok t' =>
+      t'.regs = t.regs ∧
+        t'.n = t.n ∧
+          t'.z = t.z ∧
+            t'.c = t.c ∧
+              t'.v = t.v ∧
+                ∀ (y : M0Crypto.Armv6M.Word),
+                  m y = s.mem y ∨ M0Crypto.Thumb.Writes (i.accesses s) y → t'.mem y = t.mem y
+    | Except.error e, Except.error e' => e' = e
+    | x, x_1 => False
 @M0Crypto.Thumb.step_mem_other : ∀ {s s' : M0Crypto.Armv6M.State} {e : M0Crypto.Thumb.Event},
   M0Crypto.Thumb.step s = Except.ok (s', e) →
     ∀ (y : M0Crypto.Armv6M.Word), ¬y ∈ M0Crypto.Thumb.writtenAddrs e.accesses → s'.mem y = s.mem y
@@ -1778,7 +1791,7 @@ M0Crypto.Release.ConstantTime.aligned_chunk_read_addresses : ∀ (t : M0Crypto.A
     ∀ (e : M0Crypto.Thumb.Event),
       e ∈ M0Crypto.Thumb.traceAll (M0Crypto.Release.ChaCha20Output.ach i) t →
         ∀ (y : M0Crypto.Armv6M.Word),
-          M0Crypto.Release.Reads e.accesses y →
+          M0Crypto.Thumb.Reads e.accesses y →
             ∃ q,
               q < 4 ∧
                 (y = t.regs 13 + BitVec.ofNat 32 (4 * (M0Crypto.Release.ChaCha20Layout.slotX + i)) + BitVec.ofNat 32 q ∨

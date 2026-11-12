@@ -56,10 +56,6 @@ def aeadStackBytes : Nat := 320
 
 /-! ## Read access model -/
 
-/-- Byte addresses read by an access list. -/
-def Reads (acc : List Access) (y : Word) : Prop :=
-  ∃ a ∈ acc, a.kind = .read ∧ ∃ k < a.width, y = a.addr + BitVec.ofNat 32 k
-
 /-- Every read of the trace lies in `Rd`. -/
 def ReadsFrom (Rd : Word → Prop) (tr : List Event) : Prop :=
   ∀ e ∈ tr, ∀ y, Reads e.accesses y → Rd y
