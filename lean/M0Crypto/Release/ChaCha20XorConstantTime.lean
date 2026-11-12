@@ -127,7 +127,7 @@ theorem _root_.M0Crypto.Release.ChaCha20Xor.xor_constant_time : TraceSpec.ChaCha
       PositionObligations chacha20Env chacha20Cert
         ⟨c₁.base, c₁.sp0, c₁.regs0 14, Artifacts.Release.bytes.length⟩ Artifacts.Release.bytes u₁ u₂ := by
     intro u₁ u₂ hb₁ _ _ b off st i is hm hp hrel
-    refine ⟨bufferStoreOk c₁ hv₁ hret₁ hrun hpol hm hp hrel (hb₁.mem_runStates hrun), ?_⟩
+    refine ⟨bufferStoreOk c₁ hv₁ hret₁ hrun hpol hm hp hrel (hb₁.mem_runStates hrun), pubLoadOk_nil rfl _ _ _ _, ?_⟩
     intro cond imm _ hd
     simp [chacha20Env] at hd
   have key := certificate_reachable_trace_eq (env := chacha20Env) (bytes := Artifacts.Release.bytes)

@@ -161,7 +161,7 @@ theorem recorded_self_certAt {env : Env} {bytes : List (BitVec 8)} {entry : Nat}
       ·
         have hlocal : PositionObligations env cert p bytes x x := by
           intro b off st i is hm hp hrel
-          exact ⟨hbuffer _ hxmem b off st i is hm hp hrel, by intros; rfl⟩
+          exact ⟨hbuffer _ hxmem b off st i is hm hp hrel, pubLoadOk_self _ _ _ _, by intros; rfl⟩
         have hpaired := certAt_run_paired hc hi ha hslots hwidth hdisj hsize hbase
           hnowrap hlr hcert hlocal
         simp only [PairedStep, hs] at hpaired

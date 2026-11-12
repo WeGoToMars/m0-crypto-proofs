@@ -98,14 +98,14 @@ theorem certPoint_memory_paired {env : Env} {bytes : List (BitVec 8)} {entry : N
     (hwidth : env.win.below + env.win.above < 2 ^ 32)
     (hdisj : M0Crypto.Release.Frame.Disj p.base bytes.length
       (p.sp0 - BitVec.ofNat 32 env.win.below) (env.win.below + env.win.above))
-    (hbuffer : BufferStoreOk env p bytes st s₁ i)
+    (hbuffer : BufferStoreOk env p bytes st s₁ i) (hpl : PubLoadOk env off s₁ s₂ i)
     (hsize : env.size = bytes.length) (hbase : p.base.toNat % 4 = 0)
     (hnowrap : p.base.toNat + bytes.length ≤ 2 ^ 32)
     (heven : (p.base + BitVec.ofNat 32 off).getLsbD 0 = false)
     (hmemory : memoryInstruction i = true) :
     PairedStep (CertAt env cert p bytes) s₁ s₂ := by
   cases i with
-  | memImm op t n k => exact certPoint_memImm_paired op t n k hc hi hslots hm hp h hwidth hdisj hbuffer heven
+  | memImm op t n k => exact certPoint_memImm_paired op t n k hc hi hslots hm hp h hwidth hdisj hbuffer hpl heven
   | memReg op t n m => exact certPoint_memReg_paired op t n m hc hi hslots hm hp h hwidth hdisj hbuffer heven
   | strSp t k => exact certPoint_strSp_paired t k hc hi hslots hm hp h hwidth hdisj heven
   | push l lr => exact certPoint_push_paired l lr hc hi hslots hm hp h hwidth hdisj heven
@@ -133,7 +133,7 @@ theorem certPoint_noncontrol_paired {env : Env} {bytes : List (BitVec 8)} {entry
     (hwidth : env.win.below + env.win.above < 2 ^ 32)
     (hdisj : M0Crypto.Release.Frame.Disj p.base bytes.length
       (p.sp0 - BitVec.ofNat 32 env.win.below) (env.win.below + env.win.above))
-    (hbuffer : BufferStoreOk env p bytes st s₁ i)
+    (hbuffer : BufferStoreOk env p bytes st s₁ i) (hpl : PubLoadOk env off s₁ s₂ i)
     (hsize : env.size = bytes.length) (hbase : p.base.toNat % 4 = 0)
     (hnowrap : p.base.toNat + bytes.length ≤ 2 ^ 32)
     (heven : (p.base + BitVec.ofNat 32 off).getLsbD 0 = false)
@@ -145,7 +145,7 @@ theorem certPoint_noncontrol_paired {env : Env} {bytes : List (BitVec 8)} {entry
   | true => exact certPoint_register_paired i hc hi hm hp h hr heven
   | false =>
     have hm' : memoryInstruction i = true := by simpa [hr] using hall
-    exact certPoint_memory_paired i hc hi hslots hm hp h hwidth hdisj hbuffer hsize hbase hnowrap heven hm'
+    exact certPoint_memory_paired i hc hi hslots hm hp h hwidth hdisj hbuffer hpl hsize hbase hnowrap heven hm'
 
 /-- Final direct branches, calls and internal returns preserve the certificate
 relation; an outer return advances both runs to their common stop address. -/
@@ -258,7 +258,7 @@ theorem certPoint_paired {env : Env} {bytes : List (BitVec 8)} {entry : Nat}
     (hwidth : env.win.below + env.win.above < 2 ^ 32)
     (hdisj : M0Crypto.Release.Frame.Disj p.base bytes.length
       (p.sp0 - BitVec.ofNat 32 env.win.below) (env.win.below + env.win.above))
-    (hbuffer : BufferStoreOk env p bytes st s₁ i)
+    (hbuffer : BufferStoreOk env p bytes st s₁ i) (hpl : PubLoadOk env off s₁ s₂ i)
     (hsize : env.size = bytes.length) (hbase : p.base.toNat % 4 = 0)
     (hnowrap : p.base.toNat + bytes.length ≤ 2 ^ 32) (hlr : p.lr0.getLsbD 0 = true)
     (hdecision : ∀ cond imm, i = .bcond cond imm → env.declass = some off →
@@ -267,7 +267,7 @@ theorem certPoint_paired {env : Env} {bytes : List (BitVec 8)} {entry : Nat}
   have hbase2 : p.base.toNat % 2 = 0 := by omega
   have heven := certPoint_pc_even p.base hbase2 ha hm hp
   by_cases hn : controlInstruction i = false
-  · exact (certPoint_noncontrol_paired i hc hi hslots hm hp h hwidth hdisj hbuffer
+  · exact (certPoint_noncontrol_paired i hc hi hslots hm hp h hwidth hdisj hbuffer hpl
       hsize hbase hnowrap heven hn).toRunRel
   · cases i with
     | bcond cond imm =>
@@ -295,6 +295,7 @@ def PositionObligations (env : Env) (cert : Cert) (p : Params) (bytes : List (Bi
     (s₁ s₂ : State) : Prop :=
   ∀ b off st i is, b ∈ cert → BlockPoint env b off st (i :: is) →
     LowEq p bytes off st s₁ s₂ → BufferStoreOk env p bytes st s₁ i ∧
+      PubLoadOk env off s₁ s₂ i ∧
       (∀ cond imm, i = .bcond cond imm → env.declass = some off →
         condPassed cond s₁ = condPassed cond s₂)
 
@@ -315,8 +316,8 @@ theorem certAt_run_paired {env : Env} {bytes : List (BitVec 8)} {entry : Nat}
   cases code with
   | nil => contradiction
   | cons i is =>
-    have ⟨hbuffer, hdecision⟩ := hlocal b off st i is hm hp hrel
-    exact certPoint_paired i hc hi ha hslots hm hp hrel hwidth hdisj hbuffer
+    have ⟨hbuffer, hpl, hdecision⟩ := hlocal b off st i is hm hp hrel
+    exact certPoint_paired i hc hi ha hslots hm hp hrel hwidth hdisj hbuffer hpl
       hsize hbase hnowrap hlr hdecision
 
 /-- If the site obligations hold at all reachable certificate states, paired

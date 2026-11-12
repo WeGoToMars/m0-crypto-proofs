@@ -31,6 +31,10 @@ structure Env where
   size : Nat
   /-- Offset of the declassified conditional branch, if any. -/
   declass : Option Nat
+  /-- Offsets of immediate-offset loads from a public non-stack address whose loaded value is
+  declared public. Soundness is a per-position obligation (`PubLoadOk`): the two runs load the
+  same value there. -/
+  pubLoads : List Nat := []
   deriving DecidableEq, Repr
 
 inductive Tgt where
@@ -342,7 +346,9 @@ def xferCore (env : Env) (off : Nat) (ctx : Option Nat) (i : Instr) (st : AbsSta
     let a := (g n.val).addK (imm5.toNat * op.width)
     match access env st a op.width op.isLoad t.val with
     | .error e => .error e
-    | .ok (st', ks) => .ok ⟨[(.pt (off + 2) ctx, st')], ks⟩
+    | .ok (st', ks) =>
+      let st'' := if op.isLoad && env.pubLoads.contains off && !a.isSp then st.set t.val .lo else st'
+      .ok ⟨[(.pt (off + 2) ctx, st'')], ks⟩
   | .strSp t imm8 =>
     let o := st.spOff + (imm8.toNat * 4 : Nat)
     if env.win.covers o (o + 4) then

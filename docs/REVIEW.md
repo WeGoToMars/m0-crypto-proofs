@@ -23,7 +23,7 @@ A fully checked proof can still mislead in six ways. Each has a defence in this 
 
 The rest of the Lean code (proofs, tactics, helper lemmas and the constant-time certificate checker in `Release/ConstantTime/`) needs no review for correctness: it is checked by the kernel against the statements. It still matters for maintenance cost, but not for trust.
 
-## 2. The headline theorems
+## 2. Top-level theorems
 
 These are the roots from which the trusted base is computed. A reviewer reads each statement once, in full, and checks that it says what the release notes claim.
 
@@ -216,7 +216,7 @@ The specifications are the answer key. They must be readable without any knowled
 - The test vectors are copied from the RFC, not produced by this spec. They are in [`Spec/ChaCha20Vectors.lean`](../lean/M0Crypto/Spec/ChaCha20Vectors.lean) (§2.1.1 as a kernel-checked theorem, §2.3.2 as a `#guard`) and at the end of [`Spec/Aead.lean`](../lean/M0Crypto/Spec/Aead.lean) (§2.4.2, §2.5.2, §2.8.2 as `#guard`s). A `#guard` is a compiled evaluation: a test, not a kernel proof.
 - Anything that is not in the RFC is a design choice and must match the header: the ChaCha20 counter-overflow rule (`counterOk`).
 
-`check.sh` step 4c ([`tools/spec_vectors.py`](../tools/spec_vectors.py)) also runs the specification on the vectors the library itself is tested with ([`../tests/aead_vectors.h`](../../tests/aead_vectors.h)): RFC 8439 §2.8.2, 316 Wycheproof vectors and 46 random ones from pyca/cryptography for the AEAD (303 that must encrypt and decrypt exactly, 60 that must be rejected), and 76 Poly1305 vectors. These come from independent implementations and include empty messages, empty AAD and lengths around the 16- and 64-byte block boundaries.
+`check.sh` step 4c ([`tools/spec_vectors.py`](../tools/spec_vectors.py)) also runs the specification on the vectors the library itself is tested with ([`../tests/aead_vectors.h`](https://github.com/WeGoToMars/m0-crypto-lib/blob/main/tests/aead_vectors.h)): RFC 8439 §2.8.2, 316 Wycheproof vectors and 46 random ones from pyca/cryptography for the AEAD (303 that must encrypt and decrypt exactly, 60 that must be rejected), and 76 Poly1305 vectors. These come from independent implementations and include empty messages, empty AAD and lengths around the 16- and 64-byte block boundaries.
 
 Vectors are a second check, but they do not replace reading: a spec bug on a path the vectors do not exercise passes all of them. Know what they do not cover:
 
@@ -272,9 +272,9 @@ They are in four statement files, which contain definitions only and import noth
 Two definitions carry most of the weight, so read them first:
 
 - `Region a n y` says that address `y` is one of the `n` bytes starting at `a`. Every read region, write region and "outside the stack" condition is written with it, and so is the condition on the return address. Three neighbouring notions keep their own definitions: `Disj` (two ranges do not overlap), `InStackWindow` (the closed range SP may be in) and the bytes of one access (`Reads`, `Writes`).
-- `Pre` (ChaCha20) and `APre` (AEAD) are the complete hypothesis of every headline theorem: the preconditions, the entry state, and two conditions on the return address.
+- `Pre` (ChaCha20) and `APre` (AEAD) are the complete hypothesis of every top-level theorem: the preconditions, the entry state, and two conditions on the return address.
 
-**Check against:** [`include/m0crypto/chacha20.h`](../../include/m0crypto/chacha20.h), [`include/m0crypto/chacha20poly1305.h`](../../include/m0crypto/chacha20poly1305.h), the claims in the [library README](../../README.md#proofs-and-scope) and the [proofs README](../README.md#constant-time-traces-read-bounds-and-stack-bounds), and the Arm *Procedure Call Standard* (AAPCS32: arguments in r0-r3 then the stack, r4-r11 and SP preserved).
+**Check against:** [`include/m0crypto/chacha20.h`](https://github.com/WeGoToMars/m0-crypto-lib/blob/main/include/m0crypto/chacha20.h), [`include/m0crypto/chacha20poly1305.h`](https://github.com/WeGoToMars/m0-crypto-lib/blob/main/include/m0crypto/chacha20poly1305.h), the claims in the [library README](https://github.com/WeGoToMars/m0-crypto-lib/blob/main/README.md#proofs-and-scope) and the [proofs README](../README.md#constant-time-traces-read-bounds-and-stack-bounds), and the Arm *Procedure Call Standard* (AAPCS32: arguments in r0-r3 then the stack, r4-r11 and SP preserved).
 
 For every precondition, ask:
 
@@ -286,7 +286,7 @@ For every precondition, ask:
 For every postcondition and statement, ask:
 
 - Does it say what the README and the headers claim, with nothing missing? Go through the claims one by one: output bytes, return value, restored registers, write regions, output on decryption failure, **and the clearing of working state**.
-- Clearing is stated more narrowly than the prose. ChaCha20 (`Result.wipe`): the 35 frame words are zero for an accepted call with `len ≠ 0`. AEAD (`zero`): 96 bytes of the AEAD's own frame are zero. No headline statement covers the callee frames inside an AEAD call (the ChaCha20 frame, the `poly1305_blocks` frame). Decide whether the README and header wording is acceptable against that.
+- Clearing is stated more narrowly than the prose. ChaCha20 (`Result.wipe`): the 35 frame words are zero for an accepted call with `len ≠ 0`. AEAD (`zero`): 96 bytes of the AEAD's own frame are zero. No top-level theorem covers the callee frames inside an AEAD call (the ChaCha20 frame, the `poly1305_blocks` frame). Decide whether the README and header wording is acceptable against that.
 - For constant time: is everything in `pub` really public, and is every secret absent from it?
 - For read regions: is each allowed region needed, and is none of them "all memory"?
 
@@ -388,7 +388,7 @@ These files decide whether the proofs are about the shipped library and whether 
 | [`tools/qemu_steps.py`](../tools/qemu_steps.py), [`lean/StepTrace.lean`](../lean/StepTrace.lean) | 180 + 84 | Compares the model with QEMU after every instruction of sampled calls (section 3.1). Also a test. |
 | [`lean/Audit.lean`](../lean/Audit.lean) | 280 | Theorems whose axioms are printed. `check.sh` allows only `propext`, `Classical.choice`, `Quot.sound`. |
 | [`tools/statements.sh`](../tools/statements.sh) + [`tools/statements.golden`](../tools/statements.golden) | 19 + 1866 | Printed statement of every audited theorem. See section 2 for what this does not lock. |
-| [`lean-toolchain`](../lean-toolchain), [`tools/versions.txt`](../tools/versions.txt), [`../tools/versions.txt`](../../tools/versions.txt) | — | Pinned Lean, LLVM and QEMU versions. |
+| [`lean-toolchain`](../lean-toolchain), [`tools/versions.txt`](../tools/versions.txt), [`../tools/versions.txt`](https://github.com/WeGoToMars/m0-crypto-lib/blob/main/tools/versions.txt) | — | Pinned Lean, LLVM and QEMU versions. |
 | [`tools/trusted_defs.lean`](../tools/trusted_defs.lean) | 98 | Computes the lists in section 3. An error here would hide trusted code from the reviewer. Not run by `check.sh`. |
 
 Also trusted, outside this repository:
@@ -401,7 +401,7 @@ The assembler is *not* trusted. The proofs are about its output bytes, whatever 
 
 ## 5. Assumptions no review can remove
 
-These are stated in the [library README](../../README.md#proofs-and-scope). A reviewer checks that they are stated, not that they hold:
+These are stated in the [library README](https://github.com/WeGoToMars/m0-crypto-lib/blob/main/README.md#proofs-and-scope). A reviewer checks that they are stated, not that they hold:
 
 - Execution is sequential, without interrupts or exceptions, and nothing else modifies memory while a function runs (another bus master such as DMA would).
 - Memory is ordinary RAM: no faults, no device side effects.
@@ -482,7 +482,7 @@ Background reading: [Theorem Proving in Lean 4](https://lean-lang.org/theorem_pr
 | [ARMv6-M Architecture Reference Manual](https://developer.arm.com/documentation/ddi0419/latest) (DDI 0419) | Machine model and decoder |
 | [Procedure Call Standard for the Arm Architecture](https://github.com/ARM-software/abi-aa/releases) (AAPCS32) | Entry contracts: argument registers, stack arguments, callee-saved registers |
 | [Cortex-M0+ Technical Reference Manual](https://developer.arm.com/documentation/ddi0484/latest) (DDI 0484) and [Generic User Guide](https://developer.arm.com/documentation/dui0662/latest) (DUI 0662) | Timing assumption (instruction cycle counts, no cache or branch prediction) |
-| [`include/m0crypto/chacha20.h`](../../include/m0crypto/chacha20.h), [`chacha20poly1305.h`](../../include/m0crypto/chacha20poly1305.h) | Contracts: what callers must guarantee and what they are promised |
-| [Library README](../../README.md), [proofs README](../README.md) | The claims the theorems must support |
+| [`include/m0crypto/chacha20.h`](https://github.com/WeGoToMars/m0-crypto-lib/blob/main/include/m0crypto/chacha20.h), [`chacha20poly1305.h`](https://github.com/WeGoToMars/m0-crypto-lib/blob/main/include/m0crypto/chacha20poly1305.h) | Contracts: what callers must guarantee and what they are promised |
+| [Library README](https://github.com/WeGoToMars/m0-crypto-lib/blob/main/README.md), [proofs README](../README.md) | The claims the theorems must support |
 
 Links that start with `../../` point into the library repository and work in a local checkout with submodules, not on the proofs repository's own web page.

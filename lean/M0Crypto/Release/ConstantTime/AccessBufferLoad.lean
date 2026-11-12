@@ -9,15 +9,15 @@ open M0Crypto.Thumb
 theorem memImm_buffer_load_sound {p : Params} {bytes : List (BitVec 8)}
     {off : Nat} {st : AbsState} {s₁ s₂ : State}
     (op : MemOp) (t n : LowReg) (imm : BitVec 5) (hop : op.isLoad = true)
-    (hidx : st.indicesOk) (h : LowEq p bytes off st s₁ s₂) :
+    (hidx : st.indicesOk) (h : LowEq p bytes off st s₁ s₂) (v : AbsVal)
+    (hv : AbsVal.Sem p v (loadMem op s₁.mem (s₁.reg n + BitVec.ofNat 32 (imm.toNat * op.width)))
+      (loadMem op s₂.mem (s₂.reg n + BitVec.ofNat 32 (imm.toNat * op.width)))) :
     ∃ u₁ u₂, (Instr.memImm op t n imm).exec s₁ = .ok u₁ ∧
       (Instr.memImm op t n imm).exec s₂ = .ok u₂ ∧
       LowEq p bytes (off + (Instr.memImm op t n imm).size)
-        (st.set t.val AbsVal.hi) u₁ u₂ := by
+        (st.set t.val v) u₁ u₂ := by
   have ht : regIndexOk t.val := by
     constructor <;> have := t.isLt <;> simp [numRegs] <;> omega
-  have hv : AbsVal.Sem p AbsVal.hi (loadMem op s₁.mem (s₁.reg n + BitVec.ofNat 32 (imm.toNat * op.width)))
-      (loadMem op s₂.mem (s₂.reg n + BitVec.ofNat 32 (imm.toNat * op.width))) := by trivial
   have hw := paired_setReg_sound ht hidx (h.withPC hidx (next := off + (Instr.memImm op t n imm).size)) hv
   have hreg : (⟨t.val, by have := ht.1; simp [numRegs] at this; omega⟩ : M0Crypto.Armv6M.Reg) = t.toReg := by
     apply Fin.ext; rfl
@@ -68,6 +68,9 @@ theorem certPoint_memImm_buffer_load_paired {env : Env} {bytes : List (BitVec 8)
     (hm : b ∈ cert)
     (hp : BlockPoint env b off st (.memImm op t n imm :: is))
     (hrel : LowEq p bytes off st s₁ s₂)
+    (hpl : env.pubLoads.contains off = true →
+      loadMem op s₁.mem (s₁.reg n + BitVec.ofNat 32 (imm.toNat * op.width)) =
+        loadMem op s₂.mem (s₂.reg n + BitVec.ofNat 32 (imm.toNat * op.width)))
     (heven : (p.base + BitVec.ofNat 32 off).getLsbD 0 = false) :
     PairedStep (CertAt env cert p bytes) s₁ s₂ := by
   obtain ⟨out, hx⟩ := certPoint_xfer hc hm hp
@@ -80,16 +83,27 @@ theorem certPoint_memImm_buffer_load_paired {env : Env} {bytes : List (BitVec 8)
     cases ha : (st.get n.val).addK (imm.toNat * op.width) <;>
       simp_all [xfer, xferCore, access, AbsVal.pub]
   have haccess := access_public_buffer_load env st _ op.width t.val hpub hn
-  have hout : out = ⟨[(.pt (off + 2) b.ctx, st.set t.val .hi)], [.load]⟩ := by
-    simpa [xfer, xferCore, hw, hb.2.1, hop, haccess] using hx.symm
+  have hout : out = ⟨[(.pt (off + 2) b.ctx,
+      st.set t.val (if env.pubLoads.contains off = true then .lo else .hi))], [.load]⟩ := by
+    by_cases hpb : env.pubLoads.contains off = true
+    · have hpb' : off ∈ env.pubLoads := by simpa using hpb
+      rw [if_pos hpb]; simpa [xfer, xferCore, hw, hb.2.1, hop, haccess, hn, hpb'] using hx.symm
+    · have hpb' : off ∉ env.pubLoads := by simpa using hpb
+      rw [if_neg hpb]; simpa [xfer, xferCore, hw, hb.2.1, hop, haccess, hn, hpb'] using hx.symm
   have hpoint := BlockPoint.next hp hx (congrArg Out.succs hout)
   have hacc := memImm_accesses_eq op t n imm hx hrel
   have ⟨_, _, _, _, _, _, _, _, _, _, _, hc₁, hc₂⟩ := hrel
+  have hvs : AbsVal.Sem p (if env.pubLoads.contains off = true then .lo else .hi)
+      (loadMem op s₁.mem (s₁.reg n + BitVec.ofNat 32 (imm.toNat * op.width)))
+      (loadMem op s₂.mem (s₂.reg n + BitVec.ofNat 32 (imm.toNat * op.width))) := by
+    by_cases hpb : env.pubLoads.contains off = true
+    · rw [if_pos hpb]; exact hpl hpb
+    · rw [if_neg hpb]; trivial
   by_cases hal : ((Instr.memImm op t n imm).accesses s₁).all Access.aligned = true
   · have hal₂ : ((Instr.memImm op t n imm).accesses s₂).all Access.aligned = true := by
       simpa [hacc] using hal
     obtain ⟨u₁, u₂, he₁, he₂, hnext⟩ :=
-      memImm_buffer_load_sound op t n imm hop hidx hrel
+      memImm_buffer_load_sound op t n imm hop hidx hrel _ hvs
     have hs₁ := step_of_instrAt hc₁ off (.memImm op t n imm) hrel.pc heven hdecode hlen hal he₁
     have hs₂ := step_of_instrAt hc₂ off (.memImm op t n imm) (hrel.pc_eq.trans hrel.pc)
       heven hdecode hlen hal₂ he₂

@@ -70,7 +70,8 @@ theorem dec_calls :
     blTarget decFinishAt (blImm decFinishAt finishOff) = BitVec.ofNat 32 finishOff ∧
     blTarget decXor1At (blImm decXor1At xorOff) = BitVec.ofNat 32 xorOff := by decide
 
-/-- The two functions are the last 614 bytes of the artifact. -/
-theorem aead_end : encEnd = decOff ∧ decEnd = Artifacts.Release.size := by decide
+/-- The two functions are contiguous and end where the BLAKE2s code (padded to a 4-byte
+boundary) begins. -/
+theorem aead_end : encEnd = decOff ∧ decEnd ≤ Artifacts.Release.blake2s_compress := by decide
 
 end M0Crypto.Release.Aead

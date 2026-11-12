@@ -1,5 +1,5 @@
 /-
-Lists every definition that the statements of the headline theorems depend on: the
+Lists every definition that the statements of the top-level theorems depend on: the
 trusted part of the proofs, which must be reviewed by a person (see docs/REVIEW.md).
 
 It starts from each root theorem's *statement* (its type), follows the bodies of
@@ -14,17 +14,7 @@ docs/REVIEW.md section 3 names the files a reviewer reads; the `FILE` lines must
 files. Update `roots` when a headline theorem is added or renamed (it fails if a root is
 missing).
 -/
-import M0Crypto.Release.ChaCha20Xor
-import M0Crypto.Release.AeadEncrypt
-import M0Crypto.Release.AeadDecrypt
-import M0Crypto.Release.ChaCha20XorConstantTime
-import M0Crypto.Release.ChaCha20XorReads
-import M0Crypto.Release.ChaCha20XorStack
-import M0Crypto.Release.AeadEncryptConstantTime
-import M0Crypto.Release.AeadDecryptConstantTime
-import M0Crypto.Release.AeadEncryptStack
-import M0Crypto.Release.AeadDecryptStack
-import M0Crypto.Release.AeadReads
+import M0Crypto
 open Lean Meta
 
 def roots : List Name :=
@@ -34,7 +24,22 @@ def roots : List Name :=
    `M0Crypto.Release.ChaCha20Xor.xor_stack, `M0Crypto.Release.Aead.encrypt_constant_time,
    `M0Crypto.Release.Aead.encrypt_reads, `M0Crypto.Release.Aead.encrypt_stack,
    `M0Crypto.Release.Aead.decrypt_constant_time, `M0Crypto.Release.Aead.decrypt_reads,
-   `M0Crypto.Release.Aead.decrypt_stack]
+   `M0Crypto.Release.Aead.decrypt_stack,
+   `M0Crypto.Release.Blake2sCompress.compress_correct,
+   `M0Crypto.Release.Blake2sCompress.compress_constant_time,
+   `M0Crypto.Release.Blake2sCompress.compress_reads, `M0Crypto.Release.Blake2sCompress.compress_stack,
+   `M0Crypto.Release.Blake2sCopy.copy_correct, `M0Crypto.Release.Blake2sCopy.copy_constant_time,
+   `M0Crypto.Release.Blake2sCopy.copy_reads, `M0Crypto.Release.Blake2sCopy.copy_stack,
+   `M0Crypto.Release.Blake2sInit.init_constant_time, `M0Crypto.Release.Blake2sInit.init_reads,
+   `M0Crypto.Release.Blake2sInit.init_stack,
+   `M0Crypto.Release.Blake2sUpdate.update_constant_time, `M0Crypto.Release.Blake2sUpdate.update_reads,
+   `M0Crypto.Release.Blake2sUpdate.update_stack,
+   `M0Crypto.Release.Blake2sFinal.final_constant_time, `M0Crypto.Release.Blake2sFinal.final_reads,
+   `M0Crypto.Release.Blake2sFinal.final_stack,
+   `M0Crypto.Release.Blake2sHash.init_correct, `M0Crypto.Release.Blake2sHash.update_correct,
+   `M0Crypto.Release.Blake2sHash.final_correct, `M0Crypto.Release.Blake2sHash.hash_machine,
+   `M0Crypto.Release.Blake2sHash.hash_correct, `M0Crypto.Release.Blake2sHash.hash_constant_time,
+   `M0Crypto.Release.Blake2sStatements.c1, `M0Crypto.Release.Blake2sStatements.c4]
 
 /-- Constants reachable from `start` through types, and through the bodies of everything
 except theorems. -/

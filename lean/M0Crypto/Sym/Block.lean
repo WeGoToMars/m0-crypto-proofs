@@ -31,13 +31,21 @@ def peel : SExpr → Option (Reg × Word)
   | .sub e (.const k) => (peel e).map fun p => (p.1, p.2 - k)
   | _ => none
 
-/-- One access is aligned: its base register has an alignment that the width divides,
-and so does the constant offset. Widths are 1, 2 or 4. -/
+/-- A PC-relative literal address `((pc + 4) &&& ~~~3) + k` with `4 ∣ k`: aligned for every
+width dividing 4, whatever `pc` is (the `ldr Rt, [pc, #imm]` shape of `symAccesses`). -/
+def litAligned : SExpr → Bool
+  | .add (.and _ (.not (.const c))) (.const k) => c == 3#32 && k.toNat % 4 == 0
+  | _ => false
+
+/-- One access is aligned: it is a PC-relative literal address (`litAligned`), or its base
+register has an alignment that the width divides, and so does the constant offset. Widths are
+1, 2 or 4. -/
 def accAligned (al : List (Reg × Nat)) (a : SAccess) : Bool :=
   (a.width == 1 || a.width == 2 || a.width == 4) &&
+  (litAligned a.addr ||
   match peel (norm a.addr) with
   | some (r, k) => al.any fun p => p.1 == r && p.2 % a.width == 0 && k.toNat % a.width == 0
-  | none => false
+  | none => false)
 
 /-- A write access lies inside one region; reads always pass. -/
 def accCovered (rg : List (Reg × Word × Nat)) (a : SAccess) : Bool :=
@@ -116,6 +124,23 @@ theorem add_toNat_mod_of_dvd (x y : Word) (w : Nat) (hw : w ∣ 2 ^ 32)
   rw [BitVec.toNat_add, Nat.mod_mod_of_dvd _ hw, Nat.add_mod, hx, hy]
   simp
 
+theorem and_not3_toNat' (a : Word) : (a &&& ~~~3#32).toNat = a.toNat - a.toNat % 4 := by
+  have h1 : (a &&& ~~~3#32) &&& (a &&& 3#32) = 0 := by
+    ext i hi; simp only [BitVec.getElem_and, BitVec.getElem_not, BitVec.getElem_zero]
+    cases a[i] <;> cases (3#32)[i] <;> simp
+  have h2 : (a &&& ~~~3#32) + (a &&& 3#32) = a := by
+    rw [BitVec.add_eq_or_of_and_eq_zero _ _ h1]
+    ext i hi; simp only [BitVec.getElem_and, BitVec.getElem_not, BitVec.getElem_or]
+    cases a[i] <;> cases (3#32)[i] <;> rfl
+  have h3 : (a &&& 3#32).toNat = a.toNat % 4 := by
+    rw [BitVec.toNat_and]
+    exact Nat.and_two_pow_sub_one_eq_mod a.toNat 2
+  have := congrArg BitVec.toNat h2
+  rw [BitVec.toNat_add, h3] at this
+  have : a.toNat < 2 ^ 32 := a.isLt
+  have : (a &&& ~~~3#32).toNat < 2 ^ 32 := (a &&& ~~~3#32).isLt
+  omega
+
 /-- An aligned annotation makes the access aligned. -/
 theorem accAligned_sound (s0 : State) (al : List (Reg × Nat))
     (hal : ∀ p ∈ al, (s0.regs p.1).toNat % p.2 = 0) (a : SAccess)
@@ -127,23 +152,46 @@ theorem accAligned_sound (s0 : State) (al : List (Reg × Nat))
     have h3 : a.width = 1 ∨ a.width = 2 ∨ a.width = 4 := by
       simp only [Bool.or_eq_true, beq_iff_eq] at hw; omega
     rcases h3 with h3 | h3 | h3 <;> rw [h3] <;> decide
-  generalize hpe : peel (norm a.addr) = pe at hm
-  cases pe with
-  | none => simp at hm
-  | some p =>
-    obtain ⟨r, k⟩ := p
-    have hn : a.addr.denote s0 = s0.regs r + k := by
-      rw [← norm_sound s0 a.addr]; exact peel_sound s0 _ r k hpe
-    simp only [List.any_eq_true, Bool.and_eq_true, beq_iff_eq] at hm
-    obtain ⟨x, hmem, ⟨hr, hmw⟩, hkw⟩ := hm
-    subst hr
-    have hx := hal x hmem
+  by_cases hl : litAligned a.addr = true
+  · have hcases : ∀ e, litAligned e = true → ∃ x c k, e = .add (.and x (.not (.const c))) (.const k) ∧
+        c = 3#32 ∧ k.toNat % 4 = 0 := by
+      intro e he
+      match e, he with
+      | .add (.and x (.not (.const c))) (.const k), he =>
+        simp only [litAligned, Bool.and_eq_true, beq_iff_eq] at he
+        exact ⟨x, c, k, rfl, he.1, by simpa using he.2⟩
+    obtain ⟨x, c, k, he, hc, hk⟩ := hcases _ hl
     simp only [Access.aligned, SAccess.denote, beq_iff_eq]
-    rw [hn]
-    apply add_toNat_mod_of_dvd _ _ _ hdiv
-    · exact Nat.mod_eq_zero_of_dvd
-        (Nat.dvd_trans (Nat.dvd_of_mod_eq_zero hmw) (Nat.dvd_of_mod_eq_zero hx))
-    · exact hkw
+    rw [he]
+    simp only [SExpr.denote]
+    subst hc
+    have hw4 : a.width ∣ 4 := by
+      have h3 : a.width = 1 ∨ a.width = 2 ∨ a.width = 4 := by
+        simp only [Bool.or_eq_true, beq_iff_eq] at hw; omega
+      rcases h3 with h3 | h3 | h3 <;> rw [h3] <;> decide
+    have hm4 : ((x.denote s0 &&& ~~~3#32) + k).toNat % 4 = 0 := by
+      apply add_toNat_mod_of_dvd _ _ _ (by decide)
+      · rw [and_not3_toNat']; omega
+      · exact hk
+    exact Nat.mod_eq_zero_of_dvd (Nat.dvd_trans hw4 (Nat.dvd_of_mod_eq_zero hm4))
+  · simp only [hl, Bool.false_or] at hm
+    generalize hpe : peel (norm a.addr) = pe at hm
+    cases pe with
+    | none => simp at hm
+    | some p =>
+      obtain ⟨r, k⟩ := p
+      have hn : a.addr.denote s0 = s0.regs r + k := by
+        rw [← norm_sound s0 a.addr]; exact peel_sound s0 _ r k hpe
+      simp only [List.any_eq_true, Bool.and_eq_true, beq_iff_eq] at hm
+      obtain ⟨x, hmem, ⟨hr, hmw⟩, hkw⟩ := hm
+      subst hr
+      have hx := hal x hmem
+      simp only [Access.aligned, SAccess.denote, beq_iff_eq]
+      rw [hn]
+      apply add_toNat_mod_of_dvd _ _ _ hdiv
+      · exact Nat.mod_eq_zero_of_dvd
+          (Nat.dvd_trans (Nat.dvd_of_mod_eq_zero hmw) (Nat.dvd_of_mod_eq_zero hx))
+      · exact hkw
 
 /-- Rearrangement used at the end of `accCovered_sound`: `k` is `q + (k - q)`. -/
 theorem add_sub_rearr (R q k X : Word) : R + k + X = R + q + ((k - q) + X) := by

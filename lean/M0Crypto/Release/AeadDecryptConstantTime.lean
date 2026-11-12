@@ -75,7 +75,7 @@ theorem _root_.M0Crypto.Release.Aead.decrypt_constant_time : TraceSpec.AeadDecry
         ⟨c₁.base, c₁.sp0, c₁.regs0 14, M0Crypto.Artifacts.Release.bytes.length⟩
         M0Crypto.Artifacts.Release.bytes u₁ u₂ := by
     intro u₁ u₂ hs₁ hs₂ _ b off st i is hm hp hrel
-    refine ⟨hbuffer u₁ (hs₁.mem_runStates hrun₁) u₂ b off st i is hm hp hrel, ?_⟩
+    refine ⟨hbuffer u₁ (hs₁.mem_runStates hrun₁) u₂ b off st i is hm hp hrel, pubLoadOk_nil rfl _ _ _ _, ?_⟩
     intro cond imm hi hd
     have hoff : off = decRejectBrAt := by simpa [decryptEnv] using hd.symm
     subst hoff

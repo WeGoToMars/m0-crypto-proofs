@@ -110,7 +110,7 @@ theorem certPoint_memImm_stack_load_paired {env : Env} {bytes : List (BitVec 8)}
       simp_all [xfer, xferCore, access]
   have hout : out = ⟨[(.pt (off + 2) b.ctx,
       st.set t.val (stkLoad st x y op.width))], []⟩ := by
-    simpa [xfer, xferCore, hw, hb.2.1, ha, access, hop, hcover] using hx.symm
+    simpa [xfer, xferCore, hw, hb.2.1, ha, access, hop, hcover, AbsVal.isSp] using hx.symm
   have hpoint := BlockPoint.next hp hx (congrArg Out.succs hout)
   have hacc := memImm_accesses_eq op t n imm hx hrel
   have ⟨_, _, _, _, _, _, _, _, _, _, _, hc₁, hc₂⟩ := hrel

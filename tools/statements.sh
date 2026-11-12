@@ -15,5 +15,6 @@ if [ $# -ge 1 ]; then git show "$1:lean/Audit.lean" > "$TMP/audit.lean"; else cp
     echo "set_option pp.deepTerms true"
     echo "set_option pp.proofs true"
     sed -n 's/^#print axioms \(.*\)$/#check @\1/p' "$TMP/audit.lean"
+    sed -n 's/^-- print \(M0Crypto[^ ]*\)$/#print \1/p' "$TMP/audit.lean"
 } > "$TMP/S.lean"
 lake env lean "$TMP/S.lean"

@@ -159,7 +159,7 @@ theorem decryptAfterBranch_step {p : Params} {s t : State} {event : Event}
   | cons i is =>
     have hpaired := certPoint_paired i decryptAfter_certOk decryptAfter_indicesFailure
       decryptAfter_aligned decryptAfter_slots hm hp hrel (by decide) hdisj
-      (hbuffer b off st i is hm hp hrel) (by decide) hbase hnowrap hlr
+      (hbuffer b off st i is hm hp hrel) (pubLoadOk_self _ _ _ _) (by decide) hbase hnowrap hlr
       (by intros; rfl)
     simp only [PairedStep, hs] at hpaired
     rcases hpaired.2 with hcert | hret

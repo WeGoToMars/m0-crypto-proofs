@@ -87,7 +87,7 @@ theorem _root_.M0Crypto.Release.ChaCha20Xor.xor_reads : TraceSpec.ChaCha20XorRea
         ⟨c.base, c.sp0, c.regs0 14, Artifacts.Release.bytes.length⟩ Artifacts.Release.bytes u₁ u₂ := by
     intro u₁ u₂ hb₁ _ _ b off st i is hm hp hrel
     refine ⟨ChaCha20XorConstantTime.bufferStoreOk c hv hret hrun hpolS hm hp hrel
-      (hb₁.mem_runStates hrun), ?_⟩
+      (hb₁.mem_runStates hrun), pubLoadOk_nil rfl _ _ _ _, ?_⟩
     intro cond imm _ hd
     simp [chacha20Env] at hd
   have hsize : chacha20Env.size = Artifacts.Release.bytes.length := by

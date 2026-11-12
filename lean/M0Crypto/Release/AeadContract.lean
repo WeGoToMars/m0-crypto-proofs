@@ -5,7 +5,7 @@ import M0Crypto.Release.ChaCha20Contract
 
 Statement file: definitions only, no proofs (see `Contract.lean`). In reading order: the call
 (`ACall`), the entry state (`AEntry`), the preconditions (`AValid`, `ABuf`), the three bundled
-as the hypothesis of every headline theorem (`APre`), the write regions, and what a returned
+as the hypothesis of every top-level theorem (`APre`), the write regions, and what a returned
 call guarantees (`RetPost`, `EncryptResult`, `DecryptResult`). Compare with
 `include/m0crypto/chacha20poly1305.h`.
 -/
@@ -102,7 +102,7 @@ structure ABuf (c : ACall) : Prop where
   tagO : Disj c.tag 16 c.out c.len.toNat
   codeT : Disj c.base Artifacts.Release.size c.tag 16
 
-/-! ## Hypothesis of the headline theorems -/
+/-! ## Hypothesis of the top-level theorems -/
 
 /-- A valid call of the AEAD function at offset `e` (`encOff` or `decOff`) entered in state
 `s`. The correctness, trace, read and stack theorems of both functions assume exactly this. -/

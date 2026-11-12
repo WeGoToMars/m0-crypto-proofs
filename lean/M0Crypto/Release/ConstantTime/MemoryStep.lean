@@ -5,6 +5,20 @@ namespace M0Crypto.Release.ConstantTime
 open M0Crypto.Armv6M (State LowReg)
 open M0Crypto.Thumb
 
+/-- Declared public loads (`Env.pubLoads`): the two runs load the same value. -/
+def PubLoadOk (env : Env) (off : Nat) (s₁ s₂ : State) : Instr → Prop
+  | .memImm op _ n k => op.isLoad = true → env.pubLoads.contains off = true →
+      loadMem op s₁.mem (s₁.reg n + BitVec.ofNat 32 (k.toNat * op.width)) =
+        loadMem op s₂.mem (s₂.reg n + BitVec.ofNat 32 (k.toNat * op.width))
+  | _ => True
+
+theorem pubLoadOk_nil {env : Env} (h : env.pubLoads = []) (off : Nat) (s₁ s₂ : State) (i : Instr) :
+    PubLoadOk env off s₁ s₂ i := by
+  cases i <;> simp [PubLoadOk, h]
+
+theorem pubLoadOk_self (env : Env) (off : Nat) (s : State) (i : Instr) : PubLoadOk env off s s i := by
+  cases i <;> simp [PubLoadOk]
+
 /-- Immediate-offset accesses preserve paired certificate execution when
 buffer stores satisfy their concrete separation obligations. -/
 theorem certPoint_memImm_paired {env : Env} {bytes : List (BitVec 8)} {entry : Nat}
@@ -23,6 +37,7 @@ theorem certPoint_memImm_paired {env : Env} {bytes : List (BitVec 8)} {entry : N
         (s₁.reg n + BitVec.ofNat 32 (imm.toNat * op.width)) op.width ∧
       M0Crypto.Release.Frame.Disj (p.sp0 - BitVec.ofNat 32 env.win.below)
         (env.win.below + env.win.above) (s₁.reg n + BitVec.ofNat 32 (imm.toNat * op.width)) op.width)
+    (hpl : PubLoadOk env off s₁ s₂ (.memImm op t n imm))
     (heven : (p.base + BitVec.ofNat 32 off).getLsbD 0 = false) :
     PairedStep (CertAt env cert p bytes) s₁ s₂ := by
   cases ha : (st.get n.val).addK (imm.toNat * op.width) with
@@ -36,7 +51,7 @@ theorem certPoint_memImm_paired {env : Env} {bytes : List (BitVec 8)} {entry : N
     | false =>
       have ⟨hcode, hstack⟩ := hbuffer hn hop
       exact certPoint_memImm_buffer_store_paired op t n imm hop hn hc hi hslots hm hp hrel hcode hstack heven
-    | true => exact certPoint_memImm_buffer_load_paired op t n imm hop hn hc hi hm hp hrel heven
+    | true => exact certPoint_memImm_buffer_load_paired op t n imm hop hn hc hi hm hp hrel (hpl hop) heven
 
 /-- Register-offset accesses preserve paired certificate execution when
 buffer stores satisfy their concrete separation obligations. -/

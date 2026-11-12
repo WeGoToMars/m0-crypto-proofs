@@ -6,7 +6,7 @@ import M0Crypto.Spec.Aead
 
 Statement file: definitions only, no proofs (see `Contract.lean`). In reading order: the stack
 sizes, the call (`Ctx`), its preconditions (`Valid`), the entry state (`Entry`), the two
-bundled as the hypothesis of every headline theorem (`Pre`), and what a returned call
+bundled as the hypothesis of every top-level theorem (`Pre`), and what a returned call
 guarantees (`Result`, `WrOk`). Compare with `include/m0crypto/chacha20.h`.
 -/
 
@@ -122,7 +122,7 @@ open M0Crypto.Armv6M (Word Reg State Mem read32 slot)
 open M0Crypto.Release.Frame
 open M0Crypto.Release.ChaCha20Layout (chStackBytes chFrameWords)
 
-/-! ## Hypothesis of the headline theorems -/
+/-! ## Hypothesis of the top-level theorems -/
 
 /-- A valid call of `m0c_chacha20_xor` entered in state `s`. The correctness, trace, read and
 stack theorems of the function assume exactly this. -/

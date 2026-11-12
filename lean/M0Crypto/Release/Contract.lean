@@ -5,7 +5,7 @@ import M0Crypto.Artifacts.Release
 # Shared contract vocabulary
 
 Statement file: definitions only, no proofs. Together with `ChaCha20Contract`, `AeadContract`
-and `TraceSpec` it holds every definition of `Release/` that a headline theorem's statement
+and `TraceSpec` it holds every definition of `Release/` that a top-level theorem's statement
 depends on. These files import only the specification, the machine model and the generated
 artifact, never a proof file. Review them against the public headers (see `docs/REVIEW.md`).
 -/

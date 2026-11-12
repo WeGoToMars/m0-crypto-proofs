@@ -148,7 +148,7 @@ def main(argv):
               f"def dataRanges : List (Nat × Nat) := [{fmt(data_ranges)}]"]
     lines += ["", "/-- Length of `bytes` in bytes. Statements and proofs name this, not a literal. -/",
               f"def size : Nat := {len(code)}"]
-    lines += ["", "/-- The bytes of `.text` (`size` of them). -/", "def bytes : List (BitVec 8) := ["]
+    lines += ["", "set_option maxRecDepth 100000 in", "/-- The bytes of `.text` (`size` of them). -/", "def bytes : List (BitVec 8) := ["]
     rows = [", ".join(f"0x{b:02x}#8" for b in code[i:i + 16]) for i in range(0, len(code), 16)]
     lines.append(",\n".join("  " + r for r in rows) + "]")
     lines += ["", "set_option maxRecDepth 100000 in",

@@ -248,7 +248,39 @@ M0Crypto.Release.Aead.decrypt_reads
 M0Crypto.Release.Aead.decrypt_stack
 M0Crypto.Release.NonVacuity.xor_correct_nonvacuous
 M0Crypto.Release.NonVacuity.encrypt_correct_nonvacuous
-M0Crypto.Release.NonVacuity.decrypt_correct_nonvacuous"
+M0Crypto.Release.NonVacuity.decrypt_correct_nonvacuous
+M0Crypto.Spec.Blake2s.stream_partition
+M0Crypto.Release.Blake2sCompress.compress_correct
+M0Crypto.Release.Blake2sCompress.compress_constant_time
+M0Crypto.Release.Blake2sCompress.compress_reads
+M0Crypto.Release.Blake2sCompress.compress_stack
+M0Crypto.Release.Blake2sCopy.copy_correct
+M0Crypto.Release.Blake2sCopy.copy_constant_time
+M0Crypto.Release.Blake2sCopy.copy_reads
+M0Crypto.Release.Blake2sCopy.copy_stack
+M0Crypto.Release.Blake2sInit.init_constant_time
+M0Crypto.Release.Blake2sInit.init_reads
+M0Crypto.Release.Blake2sInit.init_stack
+M0Crypto.Release.Blake2sUpdate.update_constant_time
+M0Crypto.Release.Blake2sUpdate.update_reads
+M0Crypto.Release.Blake2sUpdate.update_stack
+M0Crypto.Release.Blake2sFinal.final_constant_time
+M0Crypto.Release.Blake2sFinal.final_reads
+M0Crypto.Release.Blake2sFinal.final_stack
+M0Crypto.Release.Blake2sHash.init_correct
+M0Crypto.Release.Blake2sHash.update_correct
+M0Crypto.Release.Blake2sHash.final_correct
+M0Crypto.Release.Blake2sHash.hash_machine
+M0Crypto.Release.Blake2sHash.hash_correct
+M0Crypto.Release.Blake2sHash.hash_constant_time
+M0Crypto.Release.Blake2sStatements.c1
+M0Crypto.Release.Blake2sStatements.c4
+M0Crypto.Release.NonVacuity.compress_correct_nonvacuous
+M0Crypto.Release.NonVacuity.init_correct_nonvacuous
+M0Crypto.Release.NonVacuity.update_correct_nonvacuous
+M0Crypto.Release.NonVacuity.final_correct_nonvacuous
+M0Crypto.Release.Blake2sCopy.copy_correct_nonvacuous
+M0Crypto.Release.NonVacuity.c4_nonvacuous"
 ALLOWED="(propext|Classical\.choice|Quot\.sound)"
 for name in $EXPECTED; do
     n=$(grep -c -F "'$name' " "$TMP/axioms.txt" || true)
@@ -280,7 +312,8 @@ grep -E 'peak stack|RESULT' "$TMP/qemu.txt"
 echo "== 7b. machine model agrees with QEMU after every instruction of sampled calls"
 python3 -I tools/qemu_steps.py "${QEMU:-qemu-system-arm}" "$LLVM_BIN/llvm-nm" "$LIB/build/lib/text.bin" \
     "$LIB/build/test/test_chacha20.elf" m0c_chacha20_xor \
-    "$LIB/build/test/test_aead.elf" m0c_chacha20poly1305_encrypt,m0c_chacha20poly1305_decrypt
+    "$LIB/build/test/test_aead.elf" m0c_chacha20poly1305_encrypt,m0c_chacha20poly1305_decrypt \
+    "$LIB/build/test/test_blake2s.elf" m0c_blake2s_init,m0c_blake2s_update,m0c_blake2s_final
 
 echo "== 8. diagnostic disassembly (not part of the trusted chain)"
 echo "$KERNELS" | while read -r stem _symbol _module; do
