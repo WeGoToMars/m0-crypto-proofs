@@ -75,17 +75,20 @@ theorem slot_not_wrok (c : ACall) (hv : AValid c) (xc : Ctx) (hsp : xc.sp0 = c.A
   have hA := hv.A_lo
   have hA' := hv.A_hi
   have sb := ChaCha20Layout.chStackBytes_eq
-  rintro (⟨o, ho, h⟩ | ⟨_, h⟩)
-  · simp only [Ctx.fp, hsp, sb] at h
+  rintro (hs | ⟨_, h⟩)
+  · obtain ⟨o, ho, h⟩ := Region.exists hs
+    simp only [Ctx.fp, hsp, sb] at h
     rw [sb] at ho
     bv_omega
-  · simp only [Ctx.oidx, hout, hlen] at h
+  · replace h : (c.A + 4#32 + BitVec.ofNat 32 k - xc.out).toNat < xc.len.toNat := h
+    simp only [hout, hlen] at h
     bv_omega
 
 theorem wrOk_swr_key (c : ACall) (xc : Ctx) (hsp : xc.sp0 = c.A) (hout : xc.out = c.A + 8#32)
     (hlen : xc.len = 64#32) {y : Word} (h : ChaCha20Xor.WrOk xc y) : SWr c.A y := by
-  rcases h with ⟨o, ho, rfl⟩ | ⟨_, hy⟩
-  · have : xc.fp = c.A - BitVec.ofNat 32 176 := by simp [Ctx.fp, hsp, ChaCha20Layout.chStackBytes_eq]
+  rcases h with hs | ⟨_, hy⟩
+  · obtain ⟨o, ho, rfl⟩ := Region.exists hs
+    have : xc.fp = c.A - BitVec.ofNat 32 176 := by simp [Ctx.fp, hsp, ChaCha20Layout.chStackBytes_eq]
     rw [this]; exact swr_lo c.A o ho
   · have hy' : (y - (c.A + 8#32)).toNat < 64 := by
       have := hy; simp only [Ctx.oidx, hout, hlen] at this; exact this
@@ -186,8 +189,9 @@ theorem crypt_reach_p {Pc : Word → Prop} (c : ACall) (hv : AValid c) (hb : ABu
       have hO : ∀ y, xc.oidx y < xc.len.toNat → OutR c y := fun y hy => by
         simpa only [Ctx.oidx, OutR, hout, hlen] using hy
       refine ⟨⟨hx.1.1, fun y hy => ?_⟩, fun hs _ y hy => hO y (hx.2 y hy hs)⟩
-      rcases hx.1.2 y hy with ⟨o, ho, rfl⟩ | ⟨_, hy'⟩
-      · have : xc.fp = c.A - BitVec.ofNat 32 176 := by simp [Ctx.fp, hsp, ChaCha20Layout.chStackBytes_eq]
+      rcases hx.1.2 y hy with hs | ⟨_, hy'⟩
+      · obtain ⟨o, ho, rfl⟩ := Region.exists hs
+        have : xc.fp = c.A - BitVec.ofNat 32 176 := by simp [Ctx.fp, hsp, ChaCha20Layout.chStackBytes_eq]
         rw [this]; exact .inl (swr_lo c.A o ho)
       · exact .inr (hO y hy'))
     (fun _ _ _ _ _ _ _ _ _ _ _ _ hrest => hrest)

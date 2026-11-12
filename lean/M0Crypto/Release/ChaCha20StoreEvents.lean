@@ -55,8 +55,8 @@ theorem admitsRd_back (c : Ctx) :
 
 theorem knRd_chaChaRd (c : Ctx) {y : Word} (h : ChaCha20Init.KNRd c y) : TraceSpec.ChaCha20XorReadRegion c y := by
   rcases h with ⟨o, ho, e⟩ | ⟨o, ho, e⟩
-  · exact Or.inr (Or.inl ⟨o, ho, e⟩)
-  · exact Or.inr (Or.inr (Or.inl ⟨o, ho, e⟩))
+  · exact Or.inr (Or.inl (Region.mk ho e))
+  · exact Or.inr (Or.inr (Or.inl (Region.mk ho e)))
 
 theorem admitsSite_rd (c : Ctx) :
     ChaCha20Policy.AdmitsSite c.base c.Wr (ChaCha20Init.KNRd c) (RdPolicy c) := by

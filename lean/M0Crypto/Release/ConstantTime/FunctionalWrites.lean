@@ -60,7 +60,7 @@ theorem decrypt_recorded_writes (c : ACall) (hv : AValid c) (hb : ABuf c)
     {fuel : Nat} {states : List State} {events : List Event}
     (hrun : runStates (c.regs0 14 &&& ~~~1#32) fuel s = .ok (states, events)) :
     WritesTo (DAllowed c) events := by
-  obtain ⟨n, hcorrect⟩ := decrypt_correct c hv hb s he hlr hret
+  obtain ⟨n, hcorrect⟩ := decrypt_correct c s ⟨hv, hb, he, hlr, Region.not hret⟩
   obtain ⟨t, tr, ht, _, hw⟩ := hcorrect n (Nat.le_refl n)
   have hrun' := runStates_events (c.regs0 14 &&& ~~~1#32) fuel s
   simp only [hrun, Except.map] at hrun'

@@ -1,5 +1,6 @@
 import M0Crypto.Release.AeadPad
 import M0Crypto.Release.Frame
+import M0Crypto.Release.AeadContract
 set_option linter.unusedSimpArgs false
 set_option maxRecDepth 100000
 set_option maxHeartbeats 4000000
@@ -20,53 +21,18 @@ open M0Crypto.Release.Frame
 
 /-! ## The call -/
 
-/-- One AEAD call (same register and stack arguments for encrypt and decrypt). -/
-structure ACall where
-  base : Word
-  sp0 : Word
-  out : Word
-  tag : Word
-  inp : Word
-  len : Word
-  aad : Word
-  alen : Word
-  key : Word
-  nonce : Word
-  m0 : Mem
-  regs0 : Reg → Word
-
 namespace ACall
 variable (c : ACall)
-/-- Stack pointer after the prologue. -/
-def A : Word := c.sp0 - 144#32
 /-- The four words `push {r4-r7, lr}` saves. -/
 def saved : List Word := [c.regs0 4, c.regs0 5, c.regs0 6, c.regs0 7, c.regs0 14]
 end ACall
 
-/-- Entry to the function at offset `e`. -/
-structure AEntry (c : ACall) (e : Nat) (s : State) : Prop where
-  regs : s.regs = c.regs0
-  mem : s.mem = c.m0
-  pc : c.regs0 15 = c.base + BitVec.ofNat 32 e
-  sp : c.regs0 13 = c.sp0
-  r0 : c.regs0 0 = c.out
-  r1 : c.regs0 1 = c.tag
-  r2 : c.regs0 2 = c.inp
-  r3 : c.regs0 3 = c.len
-  aad : read32 c.m0 c.sp0 = c.aad
-  alen : read32 c.m0 (c.sp0 + 4#32) = c.alen
-  key : read32 c.m0 (c.sp0 + 8#32) = c.key
-  nonce : read32 c.m0 (c.sp0 + 12#32) = c.nonce
-
-/-- The stack region of the AEAD and its callees: `[sp0 - 320, sp0)`. -/
-def SWr (A : Word) (y : Word) : Prop := ∃ o < 320, y = A - 176#32 + BitVec.ofNat 32 o
-
 theorem swr_A (A : Word) (o : Nat) (ho : o < 144) : SWr A (A + BitVec.ofNat 32 o) := by
-  refine ⟨176 + o, by omega, ?_⟩
+  refine Region.mk (o := 176 + o) (by omega) ?_
   rw [BitVec.ofNat_add, ← BitVec.add_assoc, BitVec.sub_add_cancel]
 
 theorem swr_lo (A : Word) (o : Nat) (ho : o < 176) : SWr A (A - BitVec.ofNat 32 176 + BitVec.ofNat 32 o) :=
-  ⟨o, by omega, rfl⟩
+  Region.mk (o := o) (by omega) rfl
 
 /-! ## Effects of the four pieces of `pro` -/
 
@@ -209,16 +175,6 @@ theorem zeroCtx_other (t : State) (y : Word) (hy : ∀ o < 64, y ≠ t.regs 13 +
     exact hy _ (by omega)
 
 /-! ## Placement and the high frame words -/
-
-structure AValid (c : ACall) : Prop where
-  base4 : c.base.toNat % 4 = 0
-  sp8 : c.sp0.toNat % 8 = 0
-  spLo : 320 ≤ c.sp0.toNat
-  spHi : c.sp0.toNat + 16 ≤ 2 ^ 32
-  codeS : Disj c.base Artifacts.Release.size (c.sp0 - 320#32) 336
-  keyS : Disj c.key 32 (c.sp0 - 320#32) 320
-  nonceS : Disj c.nonce 12 (c.sp0 - 320#32) 320
-  code : CodeAt c.m0 c.base B
 
 namespace AValid
 variable {c : ACall} (hv : AValid c)
@@ -423,8 +379,5 @@ theorem pro_reach_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (e : Nat) (
       rw [ofNat_add_assoc, ofNat_add_assoc]
       simp [ACall.saved] at hi
       exact hy _ (by omega)
-
-/-- AAD bytes shared by the encryption and decryption contracts. -/
-def ACall.aadB (c : ACall) := Ctx.bytesAt c.m0 c.aad c.alen.toNat
 
 end M0Crypto.Release.Aead

@@ -104,7 +104,9 @@ theorem bufferStoreOk (c : Ctx) (hv : Valid c)
 /-- **`m0c_chacha20_xor` runs with a trace independent of its secret inputs.** Two calls
 satisfying the entry contract with equal public inputs have equal traces, for every fuel. -/
 theorem _root_.M0Crypto.Release.ChaCha20Xor.xor_constant_time : TraceSpec.ChaCha20XorConstantTime := by
-  intro c₁ c₂ s₁ s₂ hv₁ he₁ hlr₁ hret₁ hv₂ he₂ hlr₂ hret₂ hpub fuel
+  intro c₁ c₂ s₁ s₂ ⟨hv₁, he₁, hlr₁, hret₁⟩ ⟨hv₂, he₂, hlr₂, hret₂⟩ hpub fuel
+  replace hret₁ := Region.ne hret₁
+  replace hret₂ := Region.ne hret₂
   have hlr : c₁.regs0 14 = c₂.regs0 14 := by
     simp only [Frame.Ctx.pub, Prod.mk.injEq] at hpub
     exact hpub.2.2.1

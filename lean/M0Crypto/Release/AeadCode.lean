@@ -1,5 +1,6 @@
 import M0Crypto.Release.Reach
 import M0Crypto.Release.Layout
+import M0Crypto.Release.AeadContract
 set_option linter.unusedSimpArgs false
 set_option maxRecDepth 100000
 set_option maxHeartbeats 1000000
@@ -28,9 +29,6 @@ open M0Crypto.Thumb
 /-- Size of the AEAD frame: `ACall.A = sp0 - aeadFrame`. -/
 def aeadFrame : Nat := 144
 
-/-- Entry offsets: the release symbols, so each function starts where its piece layout begins. -/
-def encOff : Nat := Artifacts.Release.chacha20poly1305_encrypt
-def decOff : Nat := Artifacts.Release.chacha20poly1305_decrypt
 def xorOff : Nat := Artifacts.Release.chacha20_xor
 def initOff : Nat := Artifacts.Release.poly1305_init
 def blocksOff : Nat := Artifacts.Release.poly1305_blocks

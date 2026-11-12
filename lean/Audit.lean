@@ -274,3 +274,6 @@ theorem depends only on `propext`, `Classical.choice` and `Quot.sound`
 #print axioms M0Crypto.Release.Aead.decrypt_constant_time
 #print axioms M0Crypto.Release.Aead.decrypt_reads
 #print axioms M0Crypto.Release.Aead.decrypt_stack
+#print axioms M0Crypto.Release.NonVacuity.xor_correct_nonvacuous
+#print axioms M0Crypto.Release.NonVacuity.encrypt_correct_nonvacuous
+#print axioms M0Crypto.Release.NonVacuity.decrypt_correct_nonvacuous

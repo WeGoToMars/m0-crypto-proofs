@@ -27,9 +27,11 @@ open M0Crypto.Release.Aead
 /-- **`m0c_chacha20poly1305_encrypt` runs with a trace independent of its secret inputs.** Two calls
 satisfying the entry contract with equal public inputs have equal traces, for every fuel. -/
 theorem _root_.M0Crypto.Release.Aead.encrypt_constant_time : TraceSpec.AeadEncryptConstantTime := by
-  intro c₁ c₂ s₁ s₂ hv₁ hb₁ he₁ hlr₁ hret₁ hv₂ hb₂ he₂ hlr₂ hret₂ hpub fuel
+  intro c₁ c₂ s₁ s₂ ⟨hv₁, hb₁, he₁, hlr₁, hret₁⟩ ⟨hv₂, hb₂, he₂, hlr₂, hret₂⟩ hpub fuel
+  replace hret₁ := Region.ne hret₁
+  replace hret₂ := Region.ne hret₂
   have hlr := pub_lr hpub
-  obtain ⟨n, hn⟩ := encrypt_correct c₁ hv₁ hb₁ s₁ he₁ hlr₁ hret₁
+  obtain ⟨n, hn⟩ := encrypt_correct c₁ s₁ ⟨hv₁, hb₁, he₁, hlr₁, Region.not hret₁⟩
   obtain ⟨t, tr, ht, -, -⟩ := hn n (Nat.le_refl n)
   obtain ⟨states, hrun, -, -⟩ := runStates_of_runUntil ht
   obtain ⟨hdisj, hnowrap⟩ := encrypt_frame c₁ hv₁

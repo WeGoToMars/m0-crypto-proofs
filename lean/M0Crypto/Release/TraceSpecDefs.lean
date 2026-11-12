@@ -1,17 +1,13 @@
 import M0Crypto.Release.ChaCha20Layout
+import M0Crypto.Release.TraceSpec
 
 /-!
-# Stack bound constants of the trace specifications
+# Values of the stack bound constants of the trace specifications
 
-Split out of `TraceSpec` so that the constant-time certificates can use them without
-importing the functional proofs.
+`aeadStackBytes` itself is defined in `TraceSpec`.
 -/
 
 namespace M0Crypto.Release.TraceSpec
-
-/-- Stack bytes allocated by the AEAD entry points (`m0c_chacha20poly1305_encrypt`
-and `m0c_chacha20poly1305_decrypt`), matching `AValid.spLo`. -/
-def aeadStackBytes : Nat := 320
 
 theorem aeadStackBytes_eq : aeadStackBytes = 320 := by decide
 

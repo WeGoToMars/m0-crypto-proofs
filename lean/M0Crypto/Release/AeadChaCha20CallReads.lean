@@ -58,7 +58,7 @@ theorem chaRd_enc (c : ACall) (xc : Ctx) (hsp : xc.sp0 = c.A) (hbase : xc.base =
     (hin : ∀ o < xc.len.toNat, TraceSpec.AeadEncryptReadRegion c (xc.inp + BitVec.ofNat 32 o)) {Rd : Word → Prop}
     (hsub : ∀ y, TraceSpec.AeadEncryptReadRegion c y → Rd y) (y : Word) (h : TraceSpec.ChaCha20XorReadRegion xc y) : Rd y := by
   apply hsub
-  rcases h with ⟨o, ho, rfl⟩ | ⟨o, ho, rfl⟩ | ⟨o, ho, rfl⟩ | ⟨o, ho, rfl⟩ | ⟨o, ho, rfl⟩
+  rcases h with h | h | h | h | h <;> obtain ⟨o, ho, rfl⟩ := Region.exists h
   · exact hin o ho
   · rw [hkey]; exact .key ho rfl
   · rw [hnon]; exact .nonce ho rfl
@@ -67,8 +67,7 @@ theorem chaRd_enc (c : ACall) (xc : Ctx) (hsp : xc.sp0 = c.A) (hbase : xc.base =
     · have := ChaCha20Layout.chStackBytes_eq
       simp only [TraceSpec.aeadStackBytes]; omega
     · have := ChaCha20Layout.chStackBytes_eq
-      rw [hsp]
-      simp only [ACall.A, TraceSpec.aeadStackBytes, this]
+      simp only [Ctx.fp, hsp, ACall.A, TraceSpec.aeadStackBytes, this]
       bv_omega
 
 /-- The setup key call under the read policy. -/

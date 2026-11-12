@@ -1,6 +1,7 @@
 import M0Crypto.Thumb.SpBlock
 import M0Crypto.Artifacts.Release
 import M0Crypto.Proofs.Common
+import M0Crypto.Release.Contract
 
 set_option linter.unusedSimpArgs false
 
@@ -32,13 +33,7 @@ theorem sub_flags (x y : Word) : (M0Crypto.Armv6M.addWithCarry x (~~~y) true).1 
     Bool.toNat_true]
   omega
 
-abbrev B := Artifacts.Release.bytes
-
 theorem B_len : B.length = Artifacts.Release.size := Artifacts.Release.bytes_length
-
-/-- Every write of the trace lies in `Wr`. -/
-def WritesTo (Wr : Word → Prop) (tr : List Event) : Prop :=
-  ∀ e ∈ tr, ∀ y, Writes e.accesses y → Wr y
 
 theorem WritesTo.nil (Wr : Word → Prop) : WritesTo Wr [] := by intro e he; cases he
 

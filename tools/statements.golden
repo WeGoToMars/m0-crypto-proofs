@@ -530,19 +530,15 @@ M0Crypto.Release.ChaCha20Xor.xor_reach : ∀ (c : M0Crypto.Release.Frame.Ctx),
         BitVec.getLsbD (c.regs0 14) 0 = Bool.true →
           M0Crypto.Release.Reach c.base (M0Crypto.Release.ChaCha20Xor.WrOk c) s fun u =>
             u.pc = c.regs0 14 &&& ~~~1#32 ∧ M0Crypto.Release.ChaCha20Xor.Result c u
-M0Crypto.Release.ChaCha20Xor.xor_correct : ∀ (c : M0Crypto.Release.Frame.Ctx),
-  M0Crypto.Release.Frame.Valid c →
-    ∀ (s : M0Crypto.Armv6M.State),
-      M0Crypto.Release.ChaCha20Setup.Entry c s →
-        BitVec.getLsbD (c.regs0 14) 0 = Bool.true →
-          (∀ (i : Nat), i < M0Crypto.Artifacts.Release.size → c.regs0 14 &&& ~~~1#32 ≠ c.base + BitVec.ofNat 32 i) →
-            ∃ n,
-              ∀ (fuel : Nat),
-                n ≤ fuel →
-                  ∃ s' tr,
-                    M0Crypto.Thumb.runUntil (c.regs0 14 &&& ~~~1#32) fuel s = Except.ok (s', tr) ∧
-                      M0Crypto.Release.ChaCha20Xor.Result c s' ∧
-                        M0Crypto.Release.WritesTo (M0Crypto.Release.ChaCha20Xor.WrOk c) tr
+M0Crypto.Release.ChaCha20Xor.xor_correct : ∀ (c : M0Crypto.Release.Frame.Ctx) (s : M0Crypto.Armv6M.State),
+  M0Crypto.Release.ChaCha20Xor.Pre c s →
+    ∃ n,
+      ∀ (fuel : Nat),
+        n ≤ fuel →
+          ∃ s' tr,
+            M0Crypto.Thumb.runUntil c.ret fuel s = Except.ok (s', tr) ∧
+              M0Crypto.Release.ChaCha20Xor.Result c s' ∧
+                M0Crypto.Release.WritesTo (M0Crypto.Release.ChaCha20Xor.WrOk c) tr
 M0Crypto.Release.ChaCha20Xor.result_output : ∀ (c : M0Crypto.Release.Frame.Ctx),
   M0Crypto.Release.Frame.Valid c →
     ∀ {t : M0Crypto.Armv6M.State},
@@ -1443,20 +1439,14 @@ M0Crypto.Release.Aead.encrypt_reach : ∀ (c : M0Crypto.Release.Aead.ACall),
         M0Crypto.Release.Aead.AEntry c M0Crypto.Release.Aead.encOff s →
           BitVec.getLsbD (c.regs0 14) 0 = Bool.true →
             M0Crypto.Release.Reach c.base (M0Crypto.Release.Aead.AWr c) s (M0Crypto.Release.Aead.EncryptResult c)
-M0Crypto.Release.Aead.encrypt_correct : ∀ (c : M0Crypto.Release.Aead.ACall),
-  M0Crypto.Release.Aead.AValid c →
-    M0Crypto.Release.Aead.ABuf c →
-      ∀ (s : M0Crypto.Armv6M.State),
-        M0Crypto.Release.Aead.AEntry c M0Crypto.Release.Aead.encOff s →
-          BitVec.getLsbD (c.regs0 14) 0 = Bool.true →
-            (∀ (i : Nat), i < M0Crypto.Artifacts.Release.size → c.regs0 14 &&& ~~~1#32 ≠ c.base + BitVec.ofNat 32 i) →
-              ∃ n,
-                ∀ (fuel : Nat),
-                  n ≤ fuel →
-                    ∃ t tr,
-                      M0Crypto.Thumb.runUntil (c.regs0 14 &&& ~~~1#32) fuel s = Except.ok (t, tr) ∧
-                        M0Crypto.Release.Aead.EncryptResult c t ∧
-                          M0Crypto.Release.WritesTo (M0Crypto.Release.Aead.AWr c) tr
+M0Crypto.Release.Aead.encrypt_correct : ∀ (c : M0Crypto.Release.Aead.ACall) (s : M0Crypto.Armv6M.State),
+  M0Crypto.Release.Aead.APre c M0Crypto.Release.Aead.encOff s →
+    ∃ n,
+      ∀ (fuel : Nat),
+        n ≤ fuel →
+          ∃ t tr,
+            M0Crypto.Thumb.runUntil c.ret fuel s = Except.ok (t, tr) ∧
+              M0Crypto.Release.Aead.EncryptResult c t ∧ M0Crypto.Release.WritesTo (M0Crypto.Release.Aead.AWr c) tr
 M0Crypto.Release.Aead.crypt_reach_narrow : ∀ (c : M0Crypto.Release.Aead.ACall),
   M0Crypto.Release.Aead.AValid c →
     M0Crypto.Release.Aead.ABuf c →
@@ -1564,20 +1554,14 @@ M0Crypto.Release.Aead.decrypt_reach : ∀ (c : M0Crypto.Release.Aead.ACall),
         M0Crypto.Release.Aead.AEntry c M0Crypto.Release.Aead.decOff s →
           BitVec.getLsbD (c.regs0 14) 0 = Bool.true →
             M0Crypto.Release.Reach c.base (M0Crypto.Release.Aead.DAllowed c) s (M0Crypto.Release.Aead.DecryptResult c)
-M0Crypto.Release.Aead.decrypt_correct : ∀ (c : M0Crypto.Release.Aead.ACall),
-  M0Crypto.Release.Aead.AValid c →
-    M0Crypto.Release.Aead.ABuf c →
-      ∀ (s : M0Crypto.Armv6M.State),
-        M0Crypto.Release.Aead.AEntry c M0Crypto.Release.Aead.decOff s →
-          BitVec.getLsbD (c.regs0 14) 0 = Bool.true →
-            (∀ (i : Nat), i < M0Crypto.Artifacts.Release.size → c.regs0 14 &&& ~~~1#32 ≠ c.base + BitVec.ofNat 32 i) →
-              ∃ n,
-                ∀ (fuel : Nat),
-                  n ≤ fuel →
-                    ∃ t tr,
-                      M0Crypto.Thumb.runUntil (c.regs0 14 &&& ~~~1#32) fuel s = Except.ok (t, tr) ∧
-                        M0Crypto.Release.Aead.DecryptResult c t ∧
-                          M0Crypto.Release.WritesTo (M0Crypto.Release.Aead.DAllowed c) tr
+M0Crypto.Release.Aead.decrypt_correct : ∀ (c : M0Crypto.Release.Aead.ACall) (s : M0Crypto.Armv6M.State),
+  M0Crypto.Release.Aead.APre c M0Crypto.Release.Aead.decOff s →
+    ∃ n,
+      ∀ (fuel : Nat),
+        n ≤ fuel →
+          ∃ t tr,
+            M0Crypto.Thumb.runUntil c.ret fuel s = Except.ok (t, tr) ∧
+              M0Crypto.Release.Aead.DecryptResult c t ∧ M0Crypto.Release.WritesTo (M0Crypto.Release.Aead.DAllowed c) tr
 M0Crypto.Release.Aead.rejected_writes : ∀ (c : M0Crypto.Release.Aead.ACall) (tr : List M0Crypto.Thumb.Event),
   M0Crypto.Spec.Aead.decrypt c.keyB c.nonceB c.aadB c.ptB c.tagB = Option.none →
     M0Crypto.Release.WritesTo (M0Crypto.Release.Aead.DAllowed c) tr →
@@ -1857,3 +1841,13 @@ M0Crypto.Release.Aead.encrypt_stack : M0Crypto.Release.TraceSpec.AeadEncryptStac
 M0Crypto.Release.Aead.decrypt_constant_time : M0Crypto.Release.TraceSpec.AeadDecryptConstantTime
 M0Crypto.Release.Aead.decrypt_reads : M0Crypto.Release.TraceSpec.AeadDecryptReads
 M0Crypto.Release.Aead.decrypt_stack : M0Crypto.Release.TraceSpec.AeadDecryptStack
+M0Crypto.Release.NonVacuity.xor_correct_nonvacuous : M0Crypto.Release.ChaCha20Xor.Pre M0Crypto.Release.NonVacuity.chCtx
+  (M0Crypto.Release.NonVacuity.stOf M0Crypto.Release.NonVacuity.chMem M0Crypto.Release.NonVacuity.chCtx.regs0)
+M0Crypto.Release.NonVacuity.encrypt_correct_nonvacuous : M0Crypto.Release.Aead.APre
+  (M0Crypto.Release.NonVacuity.aCall M0Crypto.Release.Aead.encOff) M0Crypto.Release.Aead.encOff
+  (M0Crypto.Release.NonVacuity.stOf M0Crypto.Release.NonVacuity.aMem
+    (M0Crypto.Release.NonVacuity.aCall M0Crypto.Release.Aead.encOff).regs0)
+M0Crypto.Release.NonVacuity.decrypt_correct_nonvacuous : M0Crypto.Release.Aead.APre
+  (M0Crypto.Release.NonVacuity.aCall M0Crypto.Release.Aead.decOff) M0Crypto.Release.Aead.decOff
+  (M0Crypto.Release.NonVacuity.stOf M0Crypto.Release.NonVacuity.aMem
+    (M0Crypto.Release.NonVacuity.aCall M0Crypto.Release.Aead.decOff).regs0)

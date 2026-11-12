@@ -56,15 +56,16 @@ theorem readOk_chaChaRd (c : Frame.Ctx) {y : Word}
   have hsb := ChaCha20Layout.chStackBytes_eq
   rcases h with ⟨o, ho, e⟩ | ⟨o, ho, e⟩
   · right; right; right; right
-    refine ⟨o, ?_, ?_⟩
+    refine Region.mk (o := o) ?_ ?_
     · simp [chacha20Env, TraceSpec.chacha20StackBytes, chacha20ArgWords] at ho; omega
-    · simpa [chacha20Env, TraceSpec.chacha20StackBytes, hsb] using e
+    · simpa [chacha20Env, TraceSpec.chacha20StackBytes, Frame.Ctx.fp, hsb] using e
   · right; right; right; left
-    exact ⟨o, by simpa [chacha20Env, Artifacts.Release.bytes_length] using ho, e⟩
+    exact Region.mk (by simpa [chacha20Env, Artifacts.Release.bytes_length] using ho) e
 
 /-- **Every read of `m0c_chacha20_xor` is inside its permitted regions.** -/
 theorem _root_.M0Crypto.Release.ChaCha20Xor.xor_reads : TraceSpec.ChaCha20XorReads := by
-  intro c s hv he hlr hret
+  intro c s ⟨hv, he, hlr, hret⟩
+  replace hret := Region.ne hret
   have hc : CodeAt s.mem c.base B := by rw [he.mem]; exact hv.code
   obtain ⟨n, hn⟩ := reachEvents_runUntil hc
     (fun pc y hw i hi => by

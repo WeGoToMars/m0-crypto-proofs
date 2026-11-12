@@ -44,7 +44,8 @@ theorem out_hi {a : Word} {l : Nat} (h : Disj a l (c.sp0 - 320#32) 320) {i : Nat
 /-- Bytes of a buffer disjoint from the region are outside `SWr`. -/
 theorem not_swr {a : Word} {l : Nat} (h : Disj a l (c.sp0 - 320#32) 320) {i : Nat} (hi : i < l) :
     ¬ SWr c.A (a + BitVec.ofNat 32 i) := by
-  rintro ⟨o, ho, e⟩
+  intro hs
+  obtain ⟨o, ho, e⟩ := Region.exists hs
   have h' := hv.win h 0 320 (c.A - 176#32) (by rw [hv.sub_toNat 176 (by omega)]; omega) (by omega)
   exact ne_of_disj h'.1 h'.2.1 h'.2.2 hi ho e
 
@@ -77,10 +78,6 @@ theorem sub_off (a : Word) (j : Nat) (hj : j < 2 ^ 32) : (a + BitVec.ofNat 32 j 
   rw [BitVec.add_comm, BitVec.add_sub_cancel, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hj]
 
 /-! ## Block 0 -/
-
-/-- Key and nonce bytes as the caller passed them. -/
-def ACall.keyB (c : ACall) : List M0Crypto.Spec.ChaCha20.Byte := Ctx.bytesAt c.m0 c.key 32
-def ACall.nonceB (c : ACall) : List M0Crypto.Spec.ChaCha20.Byte := Ctx.bytesAt c.m0 c.nonce 12
 
 /-- ChaCha20 of 64 zero bytes at counter 0 is block 0. -/
 theorem chacha20_zero (key nonce msg : List M0Crypto.Spec.ChaCha20.Byte) (hl : msg.length = 64)
@@ -177,7 +174,7 @@ theorem key_reach_gen {Pn : Word → Prop} {P : State → Event → Prop} (c : A
     show M0Crypto.Spec.Aead.counterOk (0#32 : Word).toNat (64#32 : Word).toNat = true; decide
   -- the window `[A, A + 160)` is outside the callee frame
   have sSB := ChaCha20Layout.chStackBytes_eq
-  have hiS : ∀ o' < 160, ChaCha20Xor.OutS xc (c.A + BitVec.ofNat 32 o') := fun o' ho' o ho =>
+  have hiS : ∀ o' < 160, ChaCha20Xor.OutS xc (c.A + BitVec.ofNat 32 o') := fun o' ho' => Region.not fun o ho =>
     ne_of_disj (b := c.A - BitVec.ofNat 32 176) (by omega) (by rw [fp_toNat]; omega)
       (.inr (by rw [fp_toNat]; omega)) ho' ho
   have tm : ∀ y, ChaCha20Xor.OutS xc y → (∀ j < 64, y ≠ c.A + BitVec.ofNat 32 (8 + j)) → t.mem y = p.mem y := by
@@ -200,7 +197,8 @@ theorem key_reach_gen {Pn : Word → Prop} {P : State → Event → Prop} (c : A
     have ho : (c.A + BitVec.ofNat 32 (8 + j) - xc.out).toNat = j := by
       show (c.A + BitVec.ofNat 32 (8 + j) - (c.A + 8#32)).toNat = j
       rw [← ofNat_add_assoc]; exact sub_off _ _ (by omega)
-    rw [hr.mem _ (hiS _ (by omega)), Ctx.oidx, ho, if_pos ⟨hok, by show j < (64#32 : Word).toNat; simp; omega⟩]
+    rw [hr.mem _ (hiS _ (by omega)),
+      if_pos ⟨hok, by show _ < (64#32 : Word).toNat; rw [ho]; simp; omega⟩, Ctx.oidx, ho]
     show (M0Crypto.Spec.Aead.chacha20 xc.keyB (0#32 : Word).toNat xc.nonceB xc.msg)[j]! = _
     have kB : xc.keyB = c.keyB := bytesAt_congr (fun j hj => by show u.mem _ = _; rw [um]; exact hk j hj)
     have nB : xc.nonceB = c.nonceB := bytesAt_congr (fun j hj => by show u.mem _ = _; rw [um]; exact hn j hj)
@@ -218,7 +216,7 @@ theorem key_reach_gen {Pn : Word → Prop} {P : State → Event → Prop} (c : A
     intro k hk
     exact tm _ (hiS k (by omega)) (fun j hj => off_ne _ (by omega) (by omega) (by omega))
   · intro y hy
-    rw [tm y (fun o ho e => hy (e ▸ swr_lo c.A o ho)) (fun j hj e => hy (e ▸ swr_A c.A _ (by omega))),
+    rw [tm y (Region.not fun o ho e => hy (e ▸ swr_lo c.A o ho)) (fun j hj e => hy (e ▸ swr_A c.A _ (by omega))),
       hp.out y (swr_of_hi hy)]
 
 theorem key_reach_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (e : Nat) (i : BitVec 25)
@@ -229,8 +227,9 @@ theorem key_reach_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (e : Nat) (
     ReachW c.base Pc (SWr c.A) p (XPost c e) :=
   key_reach_gen c hv e i hbl ht he hex p hp hpro (fun _ _ h => h) fun xc u xv xe hlr hbase hsp hout hlen _ _ _ _ _ => by
     have wr : ∀ y, ChaCha20Xor.WrOk xc y → SWr c.A y := by
-      rintro y (⟨o, ho, rfl⟩ | ⟨_, hy⟩)
-      · have : xc.fp = c.A - BitVec.ofNat 32 176 := by simp [Ctx.fp, hsp, ChaCha20Layout.chStackBytes_eq]
+      rintro y (hs | ⟨_, hy⟩)
+      · obtain ⟨o, ho, rfl⟩ := Region.exists hs
+        have : xc.fp = c.A - BitVec.ofNat 32 176 := by simp [Ctx.fp, hsp, ChaCha20Layout.chStackBytes_eq]
         rw [this]; exact swr_lo c.A o ho
       · have hy' : (y - (c.A + 8#32)).toNat < 64 := by
           have := hy; simp only [Ctx.oidx, hout, hlen] at this; exact this

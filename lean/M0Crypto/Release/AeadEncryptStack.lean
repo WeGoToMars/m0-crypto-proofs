@@ -188,8 +188,9 @@ theorem encrypt_certAt_states (c : ACall) (hv : AValid c) (hb : ABuf c) (s : Sta
 
 /-- **Every state of AEAD encryption keeps SP in the stack window.** -/
 theorem _root_.M0Crypto.Release.Aead.encrypt_stack : TraceSpec.AeadEncryptStack := by
-  intro c s hv hb he hlr hret
-  obtain ⟨n, hcorrect⟩ := encrypt_correct c hv hb s he hlr hret
+  intro c s ⟨hv, hb, he, hlr, hret⟩
+  replace hret := Region.ne hret
+  obtain ⟨n, hcorrect⟩ := encrypt_correct c s ⟨hv, hb, he, hlr, Region.not hret⟩
   refine ⟨n, fun fuel hf => ?_⟩
   obtain ⟨t, tr, ht, -, -⟩ := hcorrect fuel hf
   obtain ⟨states, hrun, -, -⟩ := runStates_of_runUntil ht

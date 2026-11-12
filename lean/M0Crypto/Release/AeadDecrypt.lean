@@ -10,26 +10,8 @@ open M0Crypto.Thumb
 open M0Crypto.Release.Frame
 open M0Crypto.Spec.Aead (pad16 macData chacha20 decrypt poly1305 polyKey)
 
-def ACall.tagB (c : ACall) := Ctx.bytesAt c.m0 c.tag 16
-def ACall.expected (c : ACall) := poly1305 (polyKey c.keyB c.nonceB) (macData c.aadB c.ptB)
-def DWr (c : ACall) (y : Word) : Prop := SWr c.A y ∨ OutR c y
-
-/-- Output stores are permitted only after successful authentication. -/
-def DAllowed (c : ACall) (y : Word) : Prop := SWr c.A y ∨ (c.expected=c.tagB ∧ OutR c y)
-
 theorem decrypt_eq (c : ACall) : decrypt c.keyB c.nonceB c.aadB c.ptB c.tagB =
     if c.expected=c.tagB then some (chacha20 c.keyB 1 c.nonceB c.ptB) else none := rfl
-
-
-/-- Checked decryption, unchanged output on authentication failure, erasure and ABI. -/
-structure DecryptResult (c : ACall) (t : State) : Prop where
-  abi : RetPost c (if c.expected=c.tagB then 0#32 else 0xfffffffe#32) t
-  ok : ∀ pt, decrypt c.keyB c.nonceB c.aadB c.ptB c.tagB=some pt →
-    t.regs 0=0#32 ∧ Ctx.bytesAt t.mem c.out c.len.toNat=pt
-  reject : decrypt c.keyB c.nonceB c.aadB c.ptB c.tagB=none →
-    t.regs 0=0xfffffffe#32 ∧ Ctx.bytesAt t.mem c.out c.len.toNat=Ctx.bytesAt c.m0 c.out c.len.toNat
-  frame : ∀ y, ¬ DWr c y → t.mem y=c.m0 y
-  zero : ∀ o<96, t.mem (c.A+BitVec.ofNat 32 (8+o))=0#8
 
 /-- Program counters of the decrypt function and of every routine it calls. -/
 def DecAllPc (base : Word) (pc : Word) : Prop :=
@@ -343,12 +325,12 @@ theorem decrypt_reach (c : ACall) (hv : AValid c) (hb : ABuf c) (s : State)
   (decrypt_reach_w (Pc := fun _ => True) c hv hb s he hlr (fun _ _ => trivial)).toReach
 
 /-- Checked-decryption theorem in the single-memory ARMv6-M model. -/
-theorem decrypt_correct (c : ACall) (hv : AValid c) (hb : ABuf c) (s : State)
-    (he : AEntry c decOff s) (hlr : (c.regs0 14).getLsbD 0=true)
-    (hret : ∀ i<Artifacts.Release.size, c.regs0 14 &&& ~~~1#32 ≠ c.base+BitVec.ofNat 32 i) :
+theorem decrypt_correct (c : ACall) (s : State) (hp : APre c decOff s) :
     ∃ n, ∀ fuel, n ≤ fuel → ∃ t tr,
-      Thumb.runUntil (c.regs0 14 &&& ~~~1#32) fuel s=.ok (t,tr) ∧
+      Thumb.runUntil c.ret fuel s = .ok (t, tr) ∧
       DecryptResult c t ∧ WritesTo (DAllowed c) tr := by
+  obtain ⟨hv, hb, he, hlr, hret⟩ := hp
+  replace hret := Region.ne hret
   apply Reach.runUntil (by rw [he.mem]; exact hv.code)
     (fun y hy i hi eq => by
       rw [B_len] at hi

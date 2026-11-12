@@ -92,13 +92,6 @@ theorem pop_reach_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (Wr : Word 
     have h7 : r ≠ 7 := by intro h; have := congrArg Fin.val h; omega
     simp [h4, h5, h6, h7]
   · rw [← hF]; simp [M0Crypto.Armv6M.State.setReg, loadRegs_mem]
-/-- Common C ABI postcondition, independent of AEAD success or failure. -/
-structure RetPost (c : ACall) (result : Word) (t : State) : Prop where
-  pc : t.pc = c.regs0 14 &&& ~~~1#32
-  sp : t.regs 13 = c.sp0
-  callee : ∀ r : Reg, 4 ≤ r.val → r.val < 12 → t.regs r = c.regs0 r
-  r0 : t.regs 0 = result
-  scratch : ∀ r : Reg, 1 ≤ r.val → r.val < 4 → t.regs r = 0#32
 
 def epilogue (dec : Bool) : List Instr := if dec then epiD else epiE
 
@@ -167,7 +160,6 @@ theorem epilogue_reach_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (Wr : 
   · rw [tr 0 (.inl (by decide)) (by decide) (by decide), e0]
   · intro r a b
     rw [tr r (.inl b) (by omega) (by omega), ec r a b]
-
 
 theorem epilogue_reach (c : ACall) (hv : AValid c) (Wr : Word → Prop) (dec : Bool) (off : Nat)
     (hseq : seqAt B off (epilogue dec) = true)

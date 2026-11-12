@@ -5,9 +5,9 @@ Scope and assumptions:
 * Thumb state only, privileged/unprivileged mode and exceptions are not modelled.
 * Core registers r0-r15 and APSR N/Z/C/V. EPSR, IPSR, PRIMASK and CONTROL are not
   modelled; the subset of instructions supported cannot read or write them.
-* Data memory is a total byte map. Code is held separately in an immutable
-  `Code` region (see `Step.lean`): the model assumes fetched bytes are not
-  modified during execution and are not aliased by data writes.
+* Data memory is a total byte map. In the fragment model code is a separate immutable
+  `Code` region (`Step.lean`); the release model (`Thumb/Exec.lean`) fetches code from
+  data memory, and its contracts require that no write reaches the code bytes.
 -/
 
 namespace M0Crypto.Armv6M

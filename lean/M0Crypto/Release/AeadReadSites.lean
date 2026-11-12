@@ -1,4 +1,12 @@
 import M0Crypto.Release.TraceSpec
+import M0Crypto.Release.Frame
+import M0Crypto.Release.ChaCha20Setup
+import M0Crypto.Release.ChaCha20Layout
+import M0Crypto.Release.AeadPrologue
+import M0Crypto.Release.AeadCrypt
+import M0Crypto.Release.AeadDecrypt
+import M0Crypto.Release.RunStates
+import M0Crypto.Release.TraceSpecDefs
 
 set_option linter.unusedSimpArgs false
 set_option maxRecDepth 100000
@@ -25,41 +33,41 @@ constructors. -/
 
 theorem _root_.M0Crypto.Release.TraceSpec.AeadEncryptReadRegion.inp {c : ACall} {y : Word} {o : Nat}
     (h : o < c.len.toNat) (e : y = c.inp + BitVec.ofNat 32 o) : TraceSpec.AeadEncryptReadRegion c y :=
-  Or.inl ⟨o, h, e⟩
+  Or.inl (Region.mk h e)
 
 theorem _root_.M0Crypto.Release.TraceSpec.AeadEncryptReadRegion.aad {c : ACall} {y : Word} {o : Nat}
     (h : o < c.alen.toNat) (e : y = c.aad + BitVec.ofNat 32 o) : TraceSpec.AeadEncryptReadRegion c y :=
-  Or.inr (Or.inl ⟨o, h, e⟩)
+  Or.inr (Or.inl (Region.mk h e))
 
 theorem _root_.M0Crypto.Release.TraceSpec.AeadEncryptReadRegion.key {c : ACall} {y : Word} {o : Nat}
     (h : o < 32) (e : y = c.key + BitVec.ofNat 32 o) : TraceSpec.AeadEncryptReadRegion c y :=
-  Or.inr (Or.inr (Or.inl ⟨o, h, e⟩))
+  Or.inr (Or.inr (Or.inl (Region.mk h e)))
 
 theorem _root_.M0Crypto.Release.TraceSpec.AeadEncryptReadRegion.nonce {c : ACall} {y : Word} {o : Nat}
     (h : o < 12) (e : y = c.nonce + BitVec.ofNat 32 o) : TraceSpec.AeadEncryptReadRegion c y :=
-  Or.inr (Or.inr (Or.inr (Or.inl ⟨o, h, e⟩)))
+  Or.inr (Or.inr (Or.inr (Or.inl (Region.mk h e))))
 
 theorem _root_.M0Crypto.Release.TraceSpec.AeadEncryptReadRegion.out {c : ACall} {y : Word} {o : Nat}
     (h : o < c.len.toNat) (e : y = c.out + BitVec.ofNat 32 o) : TraceSpec.AeadEncryptReadRegion c y :=
-  Or.inr (Or.inr (Or.inr (Or.inr (Or.inl ⟨o, h, e⟩))))
+  Or.inr (Or.inr (Or.inr (Or.inr (Or.inl (Region.mk h e)))))
 
 theorem _root_.M0Crypto.Release.TraceSpec.AeadEncryptReadRegion.code {c : ACall} {y : Word} {o : Nat}
     (h : o < Artifacts.Release.size) (e : y = c.base + BitVec.ofNat 32 o) :
     TraceSpec.AeadEncryptReadRegion c y :=
-  Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inl ⟨o, h, e⟩)))))
+  Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inl (Region.mk h e))))))
 
 theorem _root_.M0Crypto.Release.TraceSpec.AeadEncryptReadRegion.stack {c : ACall} {y : Word} {o : Nat}
     (h : o < TraceSpec.aeadStackBytes + 16)
     (e : y = c.sp0 - BitVec.ofNat 32 TraceSpec.aeadStackBytes + BitVec.ofNat 32 o) :
     TraceSpec.AeadEncryptReadRegion c y :=
-  Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr ⟨o, h, e⟩)))))
+  Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Region.mk h e))))))
 
 theorem _root_.M0Crypto.Release.TraceSpec.AeadDecryptReadRegion.enc {c : ACall} {y : Word}
     (h : TraceSpec.AeadEncryptReadRegion c y) : TraceSpec.AeadDecryptReadRegion c y := Or.inl h
 
 theorem _root_.M0Crypto.Release.TraceSpec.AeadDecryptReadRegion.tag {c : ACall} {y : Word} {o : Nat}
     (h : o < 16) (e : y = c.tag + BitVec.ofNat 32 o) : TraceSpec.AeadDecryptReadRegion c y :=
-  Or.inr ⟨o, h, e⟩
+  Or.inr (Region.mk h e)
 
 /-- Stack offset, from `sp0 - aeadStackBytes`, of the 16-byte Poly1305 block at `A + 72`. -/
 def blkStackOff : Nat := TraceSpec.aeadStackBytes - aeadFrame + 72

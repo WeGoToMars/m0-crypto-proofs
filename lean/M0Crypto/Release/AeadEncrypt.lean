@@ -9,13 +9,6 @@ open M0Crypto.Thumb
 open M0Crypto.Release.Frame
 open M0Crypto.Spec.Aead (pad16 macData encrypt chacha20)
 
-/-- Ciphertext and tag, erasure and C ABI for encryption. -/
-structure EncryptResult (c : ACall) (t : State) : Prop extends RetPost c 0#32 t where
-  out : Ctx.bytesAt t.mem c.out c.len.toNat = (encrypt c.keyB c.nonceB c.aadB c.ptB).1
-  tag : Ctx.bytesAt t.mem c.tag 16 = (encrypt c.keyB c.nonceB c.aadB c.ptB).2
-  frame : ∀ y, ¬ AWr c y → t.mem y = c.m0 y
-  zero : ∀ o < 96, t.mem (c.A + BitVec.ofNat 32 (8+o)) = 0#8
-
 theorem out_not_mac {c : ACall} (hv : AValid c) (hb : ABuf c) {j : Nat} (hj : j < c.len.toNat) :
     ¬ MacWr c.A (c.out + BitVec.ofNat 32 j) :=
   fun h => hv.not_swr hb.outStack hj (macWr_swr _ _ h)
@@ -158,12 +151,12 @@ theorem encrypt_reach (c : ACall) (hv : AValid c) (hb : ABuf c) (s : State)
   (encrypt_reach_w (Pc := fun _ => True) c hv hb s he hlr (fun _ _ => trivial)).toReach
 
 /-- Encryption theorem in the single-memory ARMv6-M model. -/
-theorem encrypt_correct (c : ACall) (hv : AValid c) (hb : ABuf c) (s : State)
-    (he : AEntry c encOff s) (hlr : (c.regs0 14).getLsbD 0 = true)
-    (hret : ∀ i < Artifacts.Release.size, c.regs0 14 &&& ~~~1#32 ≠ c.base + BitVec.ofNat 32 i) :
+theorem encrypt_correct (c : ACall) (s : State) (hp : APre c encOff s) :
     ∃ n, ∀ fuel, n ≤ fuel → ∃ t tr,
-      Thumb.runUntil (c.regs0 14 &&& ~~~1#32) fuel s = .ok (t, tr) ∧
+      Thumb.runUntil c.ret fuel s = .ok (t, tr) ∧
       EncryptResult c t ∧ WritesTo (AWr c) tr := by
+  obtain ⟨hv, hb, he, hlr, hret⟩ := hp
+  replace hret := Region.ne hret
   apply Reach.runUntil (by rw [he.mem]; exact hv.code)
     (fun y hy i hi eq => by
       rw [B_len] at hi

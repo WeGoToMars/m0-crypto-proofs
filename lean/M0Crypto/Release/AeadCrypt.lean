@@ -15,26 +15,6 @@ open M0Crypto.Thumb
 open M0Crypto.Release.Frame
 open M0Crypto.Spec.Aead (chacha20)
 
-/-- Caller buffer placement. `in` is exactly `out` or disjoint from it; `out`, `in`,
-`aad` and `tag` stay clear of the stack region and caller arguments, and `out`,
-`tag` clear of the code. -/
-structure ABuf (c : ACall) : Prop where
-  outS : Disj c.out c.len.toNat (c.sp0 - 320#32) 336
-  inS : Disj c.inp c.len.toNat (c.sp0 - 320#32) 320
-  inOut : c.inp = c.out ∨ Disj c.inp c.len.toNat c.out c.len.toNat
-  codeO : Disj c.base Artifacts.Release.size c.out c.len.toNat
-  aadS : Disj c.aad c.alen.toNat (c.sp0 - 320#32) 320
-  aadO : Disj c.aad c.alen.toNat c.out c.len.toNat
-  tagS : Disj c.tag 16 (c.sp0 - 320#32) 336
-  tagO : Disj c.tag 16 c.out c.len.toNat
-  codeT : Disj c.base Artifacts.Release.size c.tag 16
-
-/-- Caller input bytes. -/
-def ACall.ptB (c : ACall) : List M0Crypto.Spec.ChaCha20.Byte := Ctx.bytesAt c.m0 c.inp c.len.toNat
-
-/-- Bytes of the output buffer. -/
-def OutR (c : ACall) (y : Word) : Prop := (y - c.out).toNat < c.len.toNat
-
 theorem ofNat_zero_add (A : Word) : A + BitVec.ofNat 32 0 = A := BitVec.add_zero A
 
 theorem rd_wr_0 (m : Mem) (A v : Word) (a : Nat) (ha : a % 4 = 0) (ha0 : a ≠ 0) (ha' : a < 2 ^ 30) :
@@ -57,9 +37,6 @@ theorem crypt_effect (t : State) :
     (by simp [crypt, Instr.dsts, Fin.ext_iff, h0, h1, h2]; omega)⟩ <;>
   simp [crypt, execAll, Instr.next, Instr.exec, M0Crypto.Armv6M.State.setReg, M0Crypto.Armv6M.State.setNZ,
     M0Crypto.Armv6M.State.sp, M0Crypto.Armv6M.State.reg]
-
-/-- The AEAD's writes: the stack region, `out` and `tag`. -/
-def AWr (c : ACall) (y : Word) : Prop := SWr c.A y ∨ OutR c y ∨ (y - c.tag).toNat < 16
 
 /-- After `CRYPT`. -/
 structure CryptPost (c : ACall) (off : Nat) (t u : State) : Prop where
@@ -191,10 +168,10 @@ theorem crypt_reach_select_gen {Pn : Word → Prop} {P : State → Event → Pro
       intro j
       by_cases hj : j < c.len.toNat
       · rw [Frame.bytesAt_get _ _ _ _ hj]
-        have hS : ChaCha20Xor.OutS xc (c.out + BitVec.ofNat 32 j) := fun o ho =>
+        have hS : ChaCha20Xor.OutS xc (c.out + BitVec.ofNat 32 j) := Region.not fun o ho =>
           ne_of_disj outD.1 outD.2.1 outD.2.2 hj ho
-        rw [hr.mem _ hS, Ctx.oidx, show xc.out = c.out from rfl, sub_off _ _ (by have := c.len.isLt; omega),
-          if_pos ⟨hok, hj⟩]
+        rw [hr.mem _ hS, if_pos ⟨hok, Region.mk hj rfl⟩, Ctx.oidx, show xc.out = c.out from rfl,
+          sub_off _ _ (by have := c.len.isLt; omega)]
         show some ((chacha20 xc.keyB (1#32 : Word).toNat xc.nonceB xc.msg)[j]!) = _
         rw [kB, nB, mB, show (1#32 : Word).toNat = 1 from rfl]
         have hl : j < (chacha20 c.keyB 1 c.nonceB c.ptB).length := by
@@ -203,11 +180,10 @@ theorem crypt_reach_select_gen {Pn : Word → Prop} {P : State → Event → Pro
       · rw [List.getElem?_eq_none (by rw [bytesAt_length]; omega), List.getElem?_eq_none (by
           rw [ChaCha20Spec.chacha20_length, ACall.ptB, bytesAt_length]; omega)]
     · intro y h1 h2 h3
-      rw [hr.mem y h1, if_neg (fun h => h3 h.2)]
+      rw [hr.mem y (Region.not h1), if_neg (fun h => h3 h.2)]
       show u.mem y = _
       rw [um, cm, write32_other' _ _ _ _ (fun q hq e => h2 q hq (by rw [e, ofNat_add_assoc]))]
   exact hselect xc u xv xe rfl rfl rfl rfl rfl rfl rfl rfl hrest
-
 
 /-- Expose the ChaCha call state while retaining its functional continuation. -/
 theorem crypt_reach_select_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (hb : ABuf c) (off : Nat) (i : BitVec 25)
@@ -227,8 +203,9 @@ theorem crypt_reach_select_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (h
   crypt_reach_select_gen c hv hb off i hseq hbl ht ho hox t tpc t13 thi tn tout Q hrc hrx (fun _ _ h => h)
     (fun xc u xv xe hlr hbase hout hlen hctr hsp _ _ _ _ => by
       have wr : ∀ y, ChaCha20Xor.WrOk xc y → CryptWr c y := by
-        rintro y (⟨o, ho, rfl⟩ | ⟨_, hy⟩)
-        · have : xc.fp = c.A - BitVec.ofNat 32 176 := by simp [Ctx.fp, hsp, ChaCha20Layout.chStackBytes_eq]
+        rintro y (hs | ⟨_, hy⟩)
+        · obtain ⟨o, ho, rfl⟩ := Region.exists hs
+          have : xc.fp = c.A - BitVec.ofNat 32 176 := by simp [Ctx.fp, hsp, ChaCha20Layout.chStackBytes_eq]
           rw [this]; exact .inl (swr_lo c.A o ho)
         · exact .inr (by simpa only [Ctx.oidx, OutR, hout, hlen] using hy)
       have h := (ChaCha20Xor.xor_reach_w xc xv (fun pc h => hPc pc (hbase ▸ h)) u xe hlr).monoW wr

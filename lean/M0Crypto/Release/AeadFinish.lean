@@ -15,17 +15,17 @@ def FinishWr (A tag y : Word) : Prop := InFrame (A - 20#32) 5 y ∨ InFrame tag 
 
 theorem finishWr_swr (A y : Word) (h : FinishWr A (A + 72#32) y) : SWr A y := by
   rcases h with ⟨o, ho, rfl⟩ | ⟨o, ho, rfl⟩
-  · refine ⟨156 + o, by omega, ?_⟩
+  · refine Region.mk (o := 156 + o) (by omega) ?_
     rw [BitVec.ofNat_add, ← BitVec.add_assoc]; congr 1; bv_omega
   · rw [ofNat_add_assoc]; exact swr_A A _ (by omega)
 
 theorem finishWr_awr (c : ACall) (y : Word) (h : FinishWr c.A c.tag y) : AWr c y := by
   rcases h with ⟨o, ho, rfl⟩ | ⟨o, ho, rfl⟩
   · left
-    refine ⟨156 + o, by omega, ?_⟩
+    refine Region.mk (o := 156 + o) (by omega) ?_
     rw [BitVec.ofNat_add, ← BitVec.add_assoc]; congr 1; bv_omega
   · right; right
-    rw [sub_off _ _ (by omega)]; exact ho
+    exact Region.mk ho rfl
 
 structure FinishPost (c : ACall) (tag : Word) (off : Nat) (msg : List M0Crypto.Spec.ChaCha20.Byte)
     (s t : State) : Prop where

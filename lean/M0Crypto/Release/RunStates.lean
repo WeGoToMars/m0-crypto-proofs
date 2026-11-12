@@ -1,4 +1,5 @@
 import M0Crypto.Thumb.Exec
+import M0Crypto.Release.Contract
 
 set_option linter.unusedSimpArgs false
 
@@ -6,22 +7,6 @@ namespace M0Crypto.Release
 
 open M0Crypto.Armv6M (Word State)
 open M0Crypto.Thumb
-
-/-- Run until PC = `stop` (checked before each step), with at most `fuel` steps.
-Returns the list of all visited states (starting with `s` and ending with the state
-where PC = `stop`) and the trace of executed events. -/
-def runStates (stop : Word) : Nat → State → Except Fault (List State × List Event)
-  | fuel, s =>
-    if s.pc = stop then .ok ([s], [])
-    else match fuel with
-      | 0 => .error .fuel
-      | n + 1 =>
-        match step s with
-        | .error e => .error e
-        | .ok (s', e) =>
-          match runStates stop n s' with
-          | .error e' => .error e'
-          | .ok (states, es) => .ok (s :: states, e :: es)
 
 theorem runStates_events (stop : Word) (fuel : Nat) (s : State) :
     (runStates stop fuel s).map Prod.snd = (Thumb.runUntil stop fuel s).map Prod.snd := by

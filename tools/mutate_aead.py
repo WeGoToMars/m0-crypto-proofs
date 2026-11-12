@@ -65,12 +65,12 @@ ARTIFACT = os.path.join(ROOT, "lean", "M0Crypto", "Artifacts", "Release.lean")
 
 def rebuild():
     """Build the library from the (mutated) source and regenerate the Lean artifact."""
-    b = subprocess.run([os.path.join(LIB, "tools", "build_lib.sh"), "speed"],
+    b = subprocess.run([os.path.join(LIB, "tools", "build_lib.sh")],
                        capture_output=True, text=True)
     if b.returncode:
         return b
     return subprocess.run([sys.executable, "-I", os.path.join(ROOT, "tools", "extract_release.py"),
-                           os.path.join(LIB, "build", "lib", "speed", "m0crypto.o"), ARTIFACT],
+                           os.path.join(LIB, "build", "lib", "m0crypto.o"), ARTIFACT],
                           capture_output=True, text=True)
 
 

@@ -106,7 +106,7 @@ theorem encrypt_reach_r {Rd : Word → Prop} (c : ACall) (hv : AValid c) (hb : A
     apply hz.frame
     rintro (⟨q, hq, eq⟩ | ⟨q, hq, eq⟩)
     · exact hv.not_swr hb.outStack hj (by
-        refine ⟨156+q, by omega, ?_⟩
+        refine Region.mk (o := 156+q) (by omega) ?_
         rw [eq, BitVec.ofNat_add, ← BitVec.add_assoc]; congr 1; bv_omega)
     · exact ne_of_disj hb.tagO.2.1 hb.tagO.1 (Or.symm hb.tagO.2.2) hj hq eq
   have zframe : ∀ a, ¬ AWr c a → z.mem a = c.m0 a := fun a ha =>

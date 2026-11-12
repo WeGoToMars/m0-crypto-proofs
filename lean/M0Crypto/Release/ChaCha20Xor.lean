@@ -349,13 +349,10 @@ theorem z_at : seqAt B zOff [.movImm 0 0] = true := by decide
 theorem err_at : seqAt B errOff [.movImm 0 0, .dp .mvns 0 0] = true := by decide
 theorem berr_at : instrAt B berrOff2 = some (.b (brImm11 berrOff2 epiOff)) := by decide +kernel
 
-/-- Outside the function's `chStackBytes` stack bytes. -/
-def OutS (c : Ctx) (y : Word) : Prop := ∀ o < chStackBytes, y ≠ c.fp + BitVec.ofNat 32 o
-
 theorem outS_outF {c : Ctx} {y : Word} (h : OutS c y) : c.OutF y := by
   have sSB := ChaCha20Layout.chStackBytes_eq
   have sFB := ChaCha20Layout.chFrameBytes_eq
-  exact fun o ho => h o (by omega)
+  exact fun o ho => Region.ne h o (by omega)
 
 theorem mP_outS (c : Ctx) (hv : Valid c) {y : Word} (h : OutS c y) : c.mP y = c.m0 y := by
   apply ChaCha20Return.mP_other
@@ -364,7 +361,7 @@ theorem mP_outS (c : Ctx) (hv : Valid c) {y : Word} (h : OutS c y) : c.mP y = c.
   have sSB := ChaCha20Layout.chStackBytes_eq
   have hs : c.sp0 - BitVec.ofNat 32 36 = c.fp + BitVec.ofNat 32 chFrameBytes := by
     rw [sFB]; simp only [Ctx.fp]; bv_omega
-  apply h (chFrameBytes + k) (by omega)
+  apply Region.ne h (chFrameBytes + k) (by omega)
   rw [e, hs, ofNat_add_assoc]
 
 /-- Saved-register slots are outside the frame (`chFrameBytes`) and the output. -/
@@ -392,18 +389,6 @@ theorem saved_memOk (c : Ctx) (hv : Valid c) {P : Nat} {m : Mem} (h : c.MemOk P 
   obtain ⟨h1, h2, h3⟩ := hv.outF
   exact ne_of_disj (i := c.oidx (c.fp + BitVec.ofNat 32 (chFrameBytes + 4 * i + q))) (j := chFrameBytes + 4 * i + q) h1 h2 h3
     (by omega) (by omega) (eq_add_sub c.out _).symm
-
-/-- The final state of a call. `ok` is the counter check of the C contract. -/
-structure Result (c : Ctx) (t : State) : Prop where
-  pc : t.pc = c.regs0 14 &&& ~~~1#32
-  sp : t.regs 13 = c.sp0
-  callee : ∀ r : Reg, 4 ≤ r.val → r.val < 12 → t.regs r = c.regs0 r
-  r0 : t.regs 0 = if M0Crypto.Spec.Aead.counterOk c.ctr.toNat c.len.toNat then 0 else ~~~0
-  mem : ∀ y, OutS c y → t.mem y =
-    if M0Crypto.Spec.Aead.counterOk c.ctr.toNat c.len.toNat ∧ c.oidx y < c.len.toNat
-    then c.outB (c.oidx y) else c.m0 y
-  wipe : M0Crypto.Spec.Aead.counterOk c.ctr.toNat c.len.toNat = true → c.len ≠ 0 →
-    ∀ i < chFrameWords, read32 t.mem (slot c.fp i) = 0
 
 theorem counterOk_zero (c : Ctx) (h : c.len = 0) : M0Crypto.Spec.Aead.counterOk c.ctr.toNat c.len.toNat = true := by
   have := c.ctr.isLt
@@ -452,15 +437,9 @@ theorem fin0 (c : Ctx) (hv : Valid c) {Wr : Word → Prop} (hlr : (c.regs0 14).g
 theorem mP_saved' (c : Ctx) (hv : Valid c) : ∀ i < 9, read32 c.mP (slot c.fp (slotSaved + i)) = Frame.saved c.regs0 i :=
   fun i hi => ChaCha20Return.mP_saved c hv i hi
 
-/-- Writes allowed to a call: its 176 stack bytes, and the output buffer only if the call is
-accepted. -/
-def WrOk (c : Ctx) (y : Word) : Prop :=
-  (∃ o < chStackBytes, y = c.fp + BitVec.ofNat 32 o) ∨
-    (M0Crypto.Spec.Aead.counterOk c.ctr.toNat c.len.toNat = true ∧ c.oidx y < c.len.toNat)
-
 theorem wrOk_wr {c : Ctx} {y : Word} (h : WrOk c y) : c.Wr y := by
   rcases h with h | h
-  · exact .inl h
+  · exact .inl (Region.exists h)
   · exact .inr h.2
 
 /-- **Whole function, as a run of the release bytes**: every call satisfying `Valid` and
@@ -474,7 +453,7 @@ theorem xor_reach_w {Pc : Word → Prop} (c : Ctx) (hv : Valid c) (hPc : ∀ pc,
   have sSB := ChaCha20Layout.chStackBytes_eq
   have sFB := ChaCha20Layout.chFrameBytes_eq
   have sJ : ChaCha20Layout.slotJ = 16 := by decide
-  apply ChaCha20Setup.checks_w c hv (WrOk c) (fun o ho => .inl ⟨o, ho, rfl⟩) hPc s h
+  apply ChaCha20Setup.checks_w c hv (WrOk c) (fun o ho => .inl (Region.mk ho rfl)) hPc s h
   · -- len = 0
     intro t pc sp mem hz
     have hok := counterOk_zero c hz
@@ -516,8 +495,8 @@ theorem xor_reach_w {Pc : Word → Prop} (c : Ctx) (hv : Valid c) (hPc : ∀ pc,
   · -- accepted
     intro t hacc
     apply ReachW.monoW (Wr := c.Wr) _ (fun y hy => by
-      rcases hy with h' | h'
-      · exact .inl h'
+      rcases hy with ⟨o, ho, rfl⟩ | h'
+      · exact .inl (Region.mk ho rfl)
       · exact .inr ⟨hacc.ok, h'⟩)
     apply ChaCha20Init.init_w c hv hPc t hacc
     intro t0 hb0
@@ -559,19 +538,19 @@ theorem xor_reach (c : Ctx) (hv : Valid c) (s : State) (h : ChaCha20Setup.Entry 
 
 /-! ## The whole-function theorem -/
 
-/-- **`m0c_chacha20_xor` (release bytes, Harvard model of the final artifact).** For every call
-context satisfying `Valid` (alignment, non-overlap, exact in-place or disjoint buffers, code in
-memory) and entry state `Entry`, if the return address is outside the function's code, then the
+/-- **`m0c_chacha20_xor` (release bytes, Harvard model of the final artifact).** For every
+valid call (`Pre`: `Valid`, that is alignment, non-overlap, exact in-place or disjoint buffers and
+code in memory; entry state `Entry`; a Thumb return address outside the artifact), the
 run to the return address terminates in a `Result` state: SP and r4-r11 restored, r0 = 0 iff the
 RFC 8439 counter range fits, the output buffer holds RFC 8439 ChaCha20 of the input (on success),
 all other memory outside the 176 stack bytes unchanged, the 140-byte frame zeroed after a
 non-empty call; and every write lies in the 176 stack bytes or, only if the call is accepted,
 the output buffer (`WrOk`). Reads and intermediate SP values are not bounded here. -/
-theorem xor_correct (c : Ctx) (hv : Valid c) (s : State) (h : ChaCha20Setup.Entry c s)
-    (hlr : (c.regs0 14).getLsbD 0 = true)
-    (hret : ∀ i < Artifacts.Release.size, c.regs0 14 &&& ~~~1#32 ≠ c.base + BitVec.ofNat 32 i) :
-    ∃ n, ∀ fuel, n ≤ fuel → ∃ s' tr, Thumb.runUntil (c.regs0 14 &&& ~~~1#32) fuel s = .ok (s', tr) ∧
+theorem xor_correct (c : Ctx) (s : State) (hp : Pre c s) :
+    ∃ n, ∀ fuel, n ≤ fuel → ∃ s' tr, Thumb.runUntil c.ret fuel s = .ok (s', tr) ∧
       Result c s' ∧ WritesTo (WrOk c) tr := by
+  obtain ⟨hv, h, hlr, hret⟩ := hp
+  replace hret := Region.ne hret
   have sSB := ChaCha20Layout.chStackBytes_eq
   have hc : CodeAt s.mem c.base B := by rw [h.mem]; exact hv.code
   obtain ⟨n, hn⟩ := Reach.runUntil (P := Result c) hc
@@ -599,11 +578,11 @@ theorem result_output (c : Ctx) (hv : Valid c) {t : State} (h : Result c t)
   intro i
   by_cases hi : i < c.len.toNat
   · rw [Frame.bytesAt_get _ _ _ _ hi, List.getElem?_eq_getElem (by rw [hl]; exact hi)]
-    have hy : OutS c (c.out + BitVec.ofNat 32 i) := fun o ho => by
+    have hy : OutS c (c.out + BitVec.ofNat 32 i) := Region.not fun o ho => by
       have sSB := ChaCha20Layout.chStackBytes_eq
       obtain ⟨h1, h2, h3⟩ := hv.outF
       exact ne_of_disj h1 h2 h3 hi (by omega)
-    rw [h.mem _ hy, ChaCha20Output.oidx_out c hv i hi, if_pos ⟨hok, hi⟩, Ctx.outB, getElem!_pos _ i (by rw [hl]; exact hi)]
+    rw [h.mem _ hy, ChaCha20Output.oidx_out c hv i hi, if_pos ⟨hok, Region.mk hi rfl⟩, Ctx.outB, getElem!_pos _ i (by rw [hl]; exact hi)]
   · rw [List.getElem?_eq_none (by rw [bytesAt_length]; omega), List.getElem?_eq_none (by rw [hl]; omega)]
 
 end M0Crypto.Release.ChaCha20Xor

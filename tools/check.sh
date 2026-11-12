@@ -1,7 +1,8 @@
 #!/bin/sh
 # Full check: pinned build, byte/artifact correspondence (proof fixtures and the
 # release library), ISA rejection, Lean proofs and release-artifact model checks
-# (lake build), model decoder vs llvm-objdump, axiom audit, QEMU tests. Exits non-zero on any failure.
+# (lake build), model decoder vs llvm-objdump, specification vs external vectors, axiom
+# audit, QEMU tests, model vs QEMU instruction by instruction. Exits non-zero on any failure.
 set -eu
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -27,15 +28,11 @@ done
 
 echo "== 2b. release library: relocation-free unit, checked-in Lean artifact matches"
 mkdir -p build
-"$LIB/tools/build_lib.sh" speed > build/lib-check.txt 2>&1 || {
+"$LIB/tools/build_lib.sh" > build/lib-check.txt 2>&1 || {
     cat build/lib-check.txt; echo "FAIL: release library" >&2; exit 1; }
-python3 -I tools/extract_release.py "$LIB/build/lib/speed/m0crypto.o" \
+python3 -I tools/extract_release.py "$LIB/build/lib/m0crypto.o" \
     lean/M0Crypto/Artifacts/Release.lean --check
 grep -E '^(text_sha256|text_bytes)' build/lib-check.txt
-if "$LIB/tools/build_lib.sh" protection 2>/dev/null; then
-    echo "FAIL: build_lib accepted the unimplemented protection profile" >&2; exit 1
-fi
-echo "refused: protection profile"
 
 echo "== 3. assembler rejects non-ARMv6-M instructions"
 TMP=$(mktemp -d)
@@ -61,7 +58,10 @@ END=$(date +%s)
 echo "lake build: $((END - START)) s (incremental if .lake is warm)"
 
 echo "== 4b. model decoder agrees with llvm-objdump on every release instruction"
-python3 -I tools/check_listing.py "$LLVM_BIN/llvm-objdump" "$LIB/build/lib/speed/m0crypto.o"
+python3 -I tools/check_listing.py "$LLVM_BIN/llvm-objdump" "$LIB/build/lib/m0crypto.o"
+
+echo "== 4c. specification agrees with the library's test vectors (RFC 8439, Wycheproof, pyca/cryptography)"
+python3 -I tools/spec_vectors.py "$LIB/tests/aead_vectors.h"
 
 echo "== 5. no admissions or custom axioms in sources"
 if grep -rnE '\b(sorry|admit|axiom|native_decide|implemented_by|extern)\b' lean/M0Crypto lean/M0Crypto.lean; then
@@ -244,7 +244,10 @@ M0Crypto.Release.Aead.encrypt_reads
 M0Crypto.Release.Aead.encrypt_stack
 M0Crypto.Release.Aead.decrypt_constant_time
 M0Crypto.Release.Aead.decrypt_reads
-M0Crypto.Release.Aead.decrypt_stack"
+M0Crypto.Release.Aead.decrypt_stack
+M0Crypto.Release.NonVacuity.xor_correct_nonvacuous
+M0Crypto.Release.NonVacuity.encrypt_correct_nonvacuous
+M0Crypto.Release.NonVacuity.decrypt_correct_nonvacuous"
 ALLOWED="(propext|Classical\.choice|Quot\.sound)"
 for name in $EXPECTED; do
     n=$(grep -c -F "'$name' " "$TMP/axioms.txt" || true)
@@ -272,6 +275,11 @@ diff -u tools/statements.golden "$TMP/statements.txt"
 echo "== 7. library primitive on QEMU Cortex-M0 (behaviour only, not timing)"
 "$LIB/tools/test_qemu.sh" > "$TMP/qemu.txt" 2>&1 || { cat "$TMP/qemu.txt"; echo "FAIL: QEMU primitive tests" >&2; exit 1; }
 grep -E 'peak stack|RESULT' "$TMP/qemu.txt"
+
+echo "== 7b. machine model agrees with QEMU after every instruction of sampled calls"
+python3 -I tools/qemu_steps.py "${QEMU:-qemu-system-arm}" "$LLVM_BIN/llvm-nm" "$LIB/build/lib/text.bin" \
+    "$LIB/build/test/test_chacha20.elf" m0c_chacha20_xor \
+    "$LIB/build/test/test_aead.elf" m0c_chacha20poly1305_encrypt,m0c_chacha20poly1305_decrypt
 
 echo "== 8. diagnostic disassembly (not part of the trusted chain)"
 echo "$KERNELS" | while read -r stem _symbol _module; do

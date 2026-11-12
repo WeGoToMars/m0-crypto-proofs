@@ -2,11 +2,15 @@
 """Compare the Lean model's decoding of the release artifact with llvm-objdump.
 
 Runs lean/DumpListing.lean (the model's decoder and renderer, Thumb/Listing.lean)
-and `llvm-objdump -d` on build/lib/speed/m0crypto.o, normalises both, and requires
+and `llvm-objdump -d` on the release object build/lib/m0crypto.o, normalises both, and requires
 the same instruction at the same offset for every instruction of every code range.
 Branch lines compare the target address only; PC-relative loads also compare the
 literal address. objdump's `.word` lines (literal pools) are skipped; the Lean
 side's ranges come from the same mapping symbols.
+
+It also requires every direct branch to target a listed instruction. The comparison
+does not cover an offset inside a `bl` or a literal pool, and with this no branch
+leads to one.
 
 Usage: check_listing.py OBJDUMP OBJECT
 """
@@ -16,6 +20,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+BRANCH = re.compile(r"bl|b(eq|ne|hs|lo|mi|pl|vs|vc|hi|ls|ge|lt|gt|le)?")
 
 
 def objdump_lines(objdump, obj):
@@ -35,7 +40,7 @@ def objdump_lines(objdump, obj):
         if "@" in ops:
             ops, comment = ops.split("@", 1)
         ops = " ".join(ops.split())
-        if mn == "bl" or re.fullmatch(r"b(eq|ne|hs|lo|mi|pl|vs|vc|hi|ls|ge|lt|gt|le)?", mn):
+        if BRANCH.fullmatch(mn):
             ops = ops.split()[0]
         elif mn == "ldr" and "[pc" in ops:
             ops += " @ " + comment.split()[0]
@@ -65,6 +70,13 @@ def main(argv):
     if bad:
         sys.exit(f"check_listing: {len(bad)} of {len(want)} instructions differ")
     print(f"ok: model decoding matches llvm-objdump at all {len(want)} instruction offsets")
+    branches = [(o, t.split()) for o, t in sorted(got.items()) if BRANCH.fullmatch(t.split()[0])]
+    stray = [(o, f) for o, f in branches if int(f[1], 16) not in got]
+    for o, f in stray[:20]:
+        print(f"  0x{o:x}: {' '.join(f)} targets an offset that is not a listed instruction")
+    if stray:
+        sys.exit(f"check_listing: {len(stray)} of {len(branches)} direct branches leave the listing")
+    print(f"ok: all {len(branches)} direct branches target a listed instruction")
 
 
 if __name__ == "__main__":

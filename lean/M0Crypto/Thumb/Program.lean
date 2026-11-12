@@ -20,9 +20,6 @@ open M0Crypto.Armv6M
 
 /-! ## Code placement -/
 
-def CodeAt (m : Mem) (base : Word) (bytes : List (BitVec 8)) : Prop :=
-  ∀ i (h : i < bytes.length), m (base + BitVec.ofNat 32 i) = bytes[i]
-
 /-- Little-endian halfword of the artifact at byte offset `off` (0 past the end). -/
 def hwAt (bytes : List (BitVec 8)) (off : Nat) : BitVec 16 :=
   bytes.getD (off + 1) 0 ++ bytes.getD off 0
@@ -88,10 +85,6 @@ theorem step_of_instrAt {s s' : State} {base : Word} {bytes : List (BitVec 8)}
   simp
 
 /-! ## Memory frame -/
-
-/-- Byte addresses written by an access list. -/
-def Writes (acc : List Access) (y : Word) : Prop :=
-  ∃ a ∈ acc, a.kind = .write ∧ ∃ k, k < a.width ∧ y = a.addr + BitVec.ofNat 32 k
 
 theorem write8_other (m : Mem) (a v y : Word) (h : y ≠ a) : write8 m a v y = m y := by
   simp [write8, h]

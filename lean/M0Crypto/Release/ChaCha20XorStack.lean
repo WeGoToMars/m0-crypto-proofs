@@ -59,7 +59,8 @@ theorem runStates_stop_last {stop : Word} {fuel : Nat} {s : State}
 
 /-- **Every state of `m0c_chacha20_xor` keeps SP in the stack window.** -/
 theorem _root_.M0Crypto.Release.ChaCha20Xor.xor_stack : TraceSpec.ChaCha20XorStack := by
-  intro c s hv he hlr hret
+  intro c s ⟨hv, he, hlr, hret⟩
+  replace hret := Region.ne hret
   have hc : CodeAt s.mem c.base B := by rw [he.mem]; exact hv.code
   obtain ⟨n, hn⟩ := reachEvents_runUntil hc
     (fun pc y hw i hi => by

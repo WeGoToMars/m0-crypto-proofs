@@ -1,5 +1,6 @@
 import M0Crypto.Release.ChaCha20Return
 import M0Crypto.Release.ChaCha20Layout
+import M0Crypto.Release.ChaCha20Contract
 
 set_option linter.unusedSimpArgs false
 
@@ -23,20 +24,6 @@ set_option maxRecDepth 100000
 
 theorem pro_at : seqAt B fnStart pro = true := by decide
 theorem bitCount_240 : bitCount 240#8 = 4 := by decide
-
-/-- Entry state of a call described by `c` (AAPCS: r0-r3 = out, in, len, key;
-`[sp] = nonce`, `[sp + 4] = counter`). -/
-structure Entry (c : Ctx) (s : State) : Prop where
-  regs : s.regs = c.regs0
-  mem : s.mem = c.m0
-  pc : c.regs0 15 = c.base
-  sp : c.regs0 13 = c.sp0
-  r0 : c.regs0 0 = c.out
-  r1 : c.regs0 1 = c.inp
-  r2 : c.regs0 2 = c.len
-  r3 : c.regs0 3 = c.key
-  argN : read32 c.m0 c.sp0 = c.nonce
-  argC : read32 c.m0 (c.sp0 + 4#32) = c.ctr
 
 theorem pro_effect (c : Ctx) (s : State) (h : Entry c s) :
     let t := execAll pro s

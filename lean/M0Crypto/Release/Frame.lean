@@ -1,6 +1,7 @@
 import M0Crypto.Release.Reach
 import M0Crypto.Release.ChaCha20Spec
 import M0Crypto.Release.ChaCha20Layout
+import M0Crypto.Release.ChaCha20Contract
 
 set_option linter.unusedSimpArgs false
 
@@ -42,6 +43,29 @@ theorem sub_ofNat_toNat (a : Word) (i : Nat) (hi : i < 2 ^ 32) :
 
 theorem eq_add_sub (a y : Word) : y = a + BitVec.ofNat 32 (y - a).toNat := by
   rw [BitVec.ofNat_toNat, BitVec.setWidth_eq]; bv_omega
+
+/-! ## `Region`: the offset reading -/
+
+/-- A byte at an offset below `n` is in the region. -/
+theorem _root_.M0Crypto.Release.Region.mk {a y : Word} {n o : Nat} (h : o < n)
+    (e : y = a + BitVec.ofNat 32 o) : Region a n y := by
+  subst e
+  have : a + BitVec.ofNat 32 o - a = BitVec.ofNat 32 o := by bv_omega
+  show (a + BitVec.ofNat 32 o - a).toNat < n
+  rw [this, BitVec.toNat_ofNat]
+  exact Nat.lt_of_le_of_lt (Nat.mod_le _ _) h
+
+/-- A byte of the region is at an offset below `n`. -/
+theorem _root_.M0Crypto.Release.Region.exists {a y : Word} {n : Nat} (h : Region a n y) :
+    ∃ o < n, y = a + BitVec.ofNat 32 o := ⟨_, h, eq_add_sub a y⟩
+
+/-- Outside the region: different from every byte of it. -/
+theorem _root_.M0Crypto.Release.Region.ne {a y : Word} {n : Nat} (h : ¬ Region a n y) :
+    ∀ o < n, y ≠ a + BitVec.ofNat 32 o := fun _ ho e => h (.mk ho e)
+
+theorem _root_.M0Crypto.Release.Region.not {a y : Word} {n : Nat}
+    (h : ∀ o < n, y ≠ a + BitVec.ofNat 32 o) : ¬ Region a n y := fun r =>
+  let ⟨o, ho, e⟩ := Region.exists r; h o ho e
 
 /-- Two addresses in non-overlapping, non-wrapping intervals differ. -/
 theorem ne_of_disj {a b : Word} {n m i j : Nat} (ha : a.toNat + n ≤ 2 ^ 32)
@@ -120,36 +144,9 @@ theorem byte_of_read32 (m : Mem) (a : Word) (p : Nat) (hp : p < 4) :
 
 /-! ## The call -/
 
-structure Ctx where
-  base : Word
-  sp0 : Word
-  out : Word
-  inp : Word
-  len : Word
-  key : Word
-  nonce : Word
-  ctr : Word
-  m0 : Mem
-  regs0 : Reg → Word
-
 namespace Ctx
 
 variable (c : Ctx)
-
-/-- Frame pointer after the prologue. -/
-def fp : Word := c.sp0 - BitVec.ofNat 32 chStackBytes
-
-/-- `n` bytes of `m` from `a`. -/
-def bytesAt (m : Mem) : Word → Nat → List Byte
-  | _, 0 => []
-  | a, n + 1 => m a :: bytesAt m (a + 1#32) n
-
-def keyB : List Byte := bytesAt c.m0 c.key 32
-def nonceB : List Byte := bytesAt c.m0 c.nonce 12
-def msg : List Byte := bytesAt c.m0 c.inp c.len.toNat
-
-/-- Expected output byte `i`. -/
-def outB (i : Nat) : Byte := (chacha20 c.keyB c.ctr.toNat c.nonceB c.msg)[i]!
 
 /-- Input state of block `k`, as a word function (0 beyond 16). -/
 def J (k : Nat) (i : Nat) : Word :=
@@ -166,9 +163,6 @@ def fw (s : State) (i : Nat) : Word := read32 s.mem (slot c.fp i)
 
 /-- `y` lies outside the 140-byte frame. -/
 def OutF (y : Word) : Prop := ∀ o < chFrameBytes, y ≠ c.fp + BitVec.ofNat 32 o
-
-/-- Output index of address `y`. -/
-def oidx (y : Word) : Nat := (y - c.out).toNat
 
 /-- Memory outside the frame: the first `P` output bytes are final, the rest is `mP`. -/
 def MemOk (P : Nat) (m : Mem) : Prop :=
@@ -383,29 +377,6 @@ theorem frameWB_mem {n : Nat} : ∀ (is : List Instr) (s : State), frameWB n is 
     exact exec_mem_other i s _ (exec_ok_of_falls hf.1 s) y (fun hw => hy ((frameWB_head h).2 s y hw))
 
 /-! ## Preconditions -/
-
-/-- `[a, a + n)` and `[b, b + m)` do not wrap and do not overlap. -/
-def Disj (a : Word) (n : Nat) (b : Word) (m : Nat) : Prop :=
-  a.toNat + n ≤ 2 ^ 32 ∧ b.toNat + m ≤ 2 ^ 32 ∧ (a.toNat + n ≤ b.toNat ∨ b.toNat + m ≤ a.toNat)
-
-structure Valid (c : Ctx) : Prop where
-  base4 : c.base.toNat % 4 = 0
-  sp8 : c.sp0.toNat % 8 = 0
-  spLo : 176 ≤ c.sp0.toNat
-  /-- code vs. the 184 bytes of frame, saved registers and stack arguments -/
-  codeF : Disj c.base Artifacts.Release.size c.fp 184
-  /-- code vs. output -/
-  codeO : Disj c.base Artifacts.Release.size c.out c.len.toNat
-  /-- output vs. frame, saved registers and stack arguments -/
-  outF : Disj c.out c.len.toNat c.fp 184
-  /-- input vs. frame and saved registers -/
-  inF : Disj c.inp c.len.toNat c.fp 176
-  /-- exact in-place or disjoint -/
-  inOut : c.inp = c.out ∨ Disj c.inp c.len.toNat c.out c.len.toNat
-  keyF : Disj c.key 32 c.fp chStackBytes
-  nonceF : Disj c.nonce 12 c.fp chStackBytes
-  /-- the artifact is in memory at `base` -/
-  code : CodeAt c.m0 c.base B
 
 /-- State at `.Lblock` (offset `bpreOff`) before block `k`. -/
 structure BlockInv (c : Ctx) (k : Nat) (t : State) : Prop where

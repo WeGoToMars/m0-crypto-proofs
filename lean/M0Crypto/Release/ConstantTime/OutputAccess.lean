@@ -128,11 +128,11 @@ theorem byte_prepare_contract_policy (c : Ctx) (t : State) (i : Nat) (hi : i < 1
   | read =>
     obtain ⟨j, hj, haddr | haddr⟩ := byte_prepare_read_addresses t i hi e he _ ⟨a, ha, hk, q, hq, rfl⟩
     · right; right; right; right
-      refine ⟨4 * (slotX + i) + j, ?_, ?_⟩
+      refine Region.mk (o := 4 * (slotX + i) + j) ?_ ?_
       · have hs := chStackBytes_eq; simp [slotX] at *; omega
       · rw [haddr, hsp, Ctx.fp, ofNat_add_assoc]
     · right; right; right; right
-      refine ⟨4 * (slotJ + i) + j, ?_, ?_⟩
+      refine Region.mk (o := 4 * (slotJ + i) + j) ?_ ?_
       · have hs := chStackBytes_eq; simp [slotJ] at *; omega
       · rw [haddr, hsp, Ctx.fp, ofNat_add_assoc]
   | write =>
@@ -177,13 +177,13 @@ theorem byte_tail_reads_contract (c : Ctx) (k : Nat) (t : State)
   have hword : BitVec.ofNat 32 (t.regs 0).toNat = t.regs 0 := by simp
   rcases byte_tail_read_addresses t e he y hy with ha | ha
   · left
-    refine ⟨64 * k + (t.regs 0).toNat, hbound, ?_⟩
+    refine Region.mk (o := 64 * k + (t.regs 0).toNat) hbound ?_
     calc
       y = (c.inp + BitVec.ofNat 32 (64 * k)) + t.regs 0 := by rw [ha, hin]
       _ = c.inp + BitVec.ofNat 32 (64 * k + (t.regs 0).toNat) := by
         rw [← ofNat_add_assoc, hword]
   · right; right; right; right
-    refine ⟨(t.regs 0).toNat, ?_, ?_⟩
+    refine Region.mk (o := (t.regs 0).toNat) ?_ ?_
     · have hs := chStackBytes_eq
       omega
     · rw [ha, hstack, Ctx.fp, hword]
@@ -215,19 +215,19 @@ theorem aligned_chunk_reads_contract (c : Ctx) (k i : Nat) (t : State)
   intro e he y hy
   obtain ⟨q, hq, ha | ha | ha⟩ := aligned_chunk_read_addresses t i hi e he y hy
   · right; right; right; right
-    refine ⟨4 * (slotX + i) + q, ?_, ?_⟩
+    refine Region.mk (o := 4 * (slotX + i) + q) ?_ ?_
     · have hs := chStackBytes_eq
       simp [slotX] at *
       omega
     · rw [ha, hsp, Ctx.fp, ofNat_add_assoc]
   · right; right; right; right
-    refine ⟨4 * (slotJ + i) + q, ?_, ?_⟩
+    refine Region.mk (o := 4 * (slotJ + i) + q) ?_ ?_
     · have hs := chStackBytes_eq
       simp [slotJ] at *
       omega
     · rw [ha, hsp, Ctx.fp, ofNat_add_assoc]
   · left
-    refine ⟨64 * k + 4 * i + q, by omega, ?_⟩
+    refine Region.mk (o := 64 * k + 4 * i + q) (by omega) ?_
     rw [ha, hin, ofNat_add_assoc, ofNat_add_assoc, Nat.add_assoc]
 
 /-- The aligned macro satisfies a PC-aware policy when that policy permits

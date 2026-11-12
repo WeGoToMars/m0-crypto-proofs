@@ -126,8 +126,9 @@ theorem encrypt_rd_recorded (c : ACall) (hv : AValid c) (hb : ABuf c) (s : State
 
 /-- **Every read of AEAD encryption is inside its permitted regions.** -/
 theorem _root_.M0Crypto.Release.Aead.encrypt_reads : TraceSpec.AeadEncryptReads := by
-  intro c s hv hb he hlr hret
-  obtain ⟨n, hcorrect⟩ := encrypt_correct c hv hb s he hlr hret
+  intro c s ⟨hv, hb, he, hlr, hret⟩
+  replace hret := Region.ne hret
+  obtain ⟨n, hcorrect⟩ := encrypt_correct c s ⟨hv, hb, he, hlr, Region.not hret⟩
   refine ⟨n, fun fuel hf => ?_⟩
   obtain ⟨t, tr, ht, -, -⟩ := hcorrect fuel hf
   refine ⟨t, tr, ht, ?_⟩
@@ -167,8 +168,9 @@ theorem decrypt_rd_recorded (c : ACall) (hv : AValid c) (hb : ABuf c) (s : State
 
 /-- **Every read of AEAD decryption is inside its permitted regions.** -/
 theorem _root_.M0Crypto.Release.Aead.decrypt_reads : TraceSpec.AeadDecryptReads := by
-  intro c s hv hb he hlr hret
-  obtain ⟨n, hcorrect⟩ := decrypt_correct c hv hb s he hlr hret
+  intro c s ⟨hv, hb, he, hlr, hret⟩
+  replace hret := Region.ne hret
+  obtain ⟨n, hcorrect⟩ := decrypt_correct c s ⟨hv, hb, he, hlr, Region.not hret⟩
   refine ⟨n, fun fuel hf => ?_⟩
   obtain ⟨t, tr, ht, -, -⟩ := hcorrect fuel hf
   refine ⟨t, tr, ht, ?_⟩

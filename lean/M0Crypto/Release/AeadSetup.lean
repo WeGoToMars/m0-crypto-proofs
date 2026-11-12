@@ -74,7 +74,7 @@ theorem copy_bytes (m : Mem) (A : Word) (j : Nat) (hj : j < 32) :
 
 theorem swr_sub {A : Word} (hA : 176 ≤ A.toNat) (hA' : A.toNat + 160 ≤ 2 ^ 32) (k o : Nat) (hk : k ≤ 176)
     (ho : o + 176 < 320 + k) : SWr A (A - BitVec.ofNat 32 k + BitVec.ofNat 32 o) := by
-  refine ⟨176 - k + o, by omega, ?_⟩
+  refine Region.mk (o := 176 - k + o) (by omega) ?_
   apply BitVec.eq_of_toNat_eq
   have h1 : (A - BitVec.ofNat 32 k).toNat = A.toNat - k := by simp [BitVec.toNat_sub]; omega
   have h2 : (A - 176#32).toNat = A.toNat - 176 := by simp [BitVec.toNat_sub]; omega

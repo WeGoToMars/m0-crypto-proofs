@@ -13,7 +13,7 @@ open M0Crypto.Spec.Aead (p leBytes)
 
 theorem macWr_swr (A y : Word) (h : MacWr A y) : SWr A y := by
   rcases h with ⟨o, ho, rfl⟩ | ⟨o, ho, rfl⟩ | ⟨o, ho, rfl⟩
-  · refine ⟨112 + o, by omega, ?_⟩
+  · refine Region.mk (o := 112 + o) (by omega) ?_
     rw [BitVec.ofNat_add, ← BitVec.add_assoc]
     congr 1; bv_omega
   · rw [ofNat_add_assoc]; exact swr_A A _ (by omega)

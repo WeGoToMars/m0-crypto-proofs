@@ -293,6 +293,16 @@ def runUntil (stop : Word) : Nat → State → Except Fault (State × List Event
           | .error e' => .error e'
           | .ok (s'', es) => .ok (s'', e :: es)
 
+/-! ## Code placement and written bytes -/
+
+/-- The bytes `bytes` are in memory at `base`. -/
+def CodeAt (m : Mem) (base : Word) (bytes : List (BitVec 8)) : Prop :=
+  ∀ i (h : i < bytes.length), m (base + BitVec.ofNat 32 i) = bytes[i]
+
+/-- Byte addresses written by an access list. -/
+def Writes (acc : List Access) (y : Word) : Prop :=
+  ∃ a ∈ acc, a.kind = .write ∧ ∃ k, k < a.width ∧ y = a.addr + BitVec.ofNat 32 k
+
 /-! Helper checks against the pseudocode boundary cases. -/
 
 -- LSRS #32 (imm5 = 0): result 0, carry = bit 31.

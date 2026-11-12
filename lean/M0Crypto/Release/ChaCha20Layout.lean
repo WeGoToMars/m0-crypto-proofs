@@ -1,6 +1,7 @@
 import M0Crypto.Release.Layout
 import M0Crypto.Release.ChaCha20RoundDefs
 import M0Crypto.Artifacts.Release
+import M0Crypto.Release.ChaCha20Contract
 
 /-!
 # Release ChaCha20 layout: piece lists and derived offsets
@@ -37,8 +38,6 @@ def slotLen : Nat := 32
 def slotOutp : Nat := 33
 /-- Input pointer (`INP`). -/
 def slotInp : Nat := 34
-/-- Words of the frame (`FRAME`). -/
-def chFrameWords : Nat := 35
 /-- The one central value of `chFrameWords`. Proofs that need the exact size use this lemma. -/
 theorem chFrameWords_eq : chFrameWords = 35 := by decide
 /-- Frame bytes (`FRAME`). -/
@@ -47,12 +46,8 @@ def chFrameBytes : Nat := 4 * chFrameWords
 theorem chFrameBytes_eq : chFrameBytes = 140 := by decide
 /-- First saved-register word: r4-r11, then lr (`SAVED`). -/
 def slotSaved : Nat := chFrameWords
-/-- Words of the frame plus saved registers: the stack words of the call. -/
-def chStackWords : Nat := 44
 /-- The one central value of `chStackWords`. -/
 theorem chStackWords_eq : chStackWords = 44 := by decide
-/-- Stack bytes of the call: `sp0 - fp`, that is `FRAME` plus `SAVED`. -/
-def chStackBytes : Nat := 4 * chStackWords
 /-- The one central value of `chStackBytes`; the caller's `Valid` window uses the same 176. -/
 theorem chStackBytes_eq : chStackBytes = 176 := by decide
 /-- Caller's nonce argument word (`ARG_NONCE`). -/

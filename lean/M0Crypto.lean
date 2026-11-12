@@ -97,7 +97,11 @@ import M0Crypto.Thumb.Diagnose
 import M0Crypto.Release.Diagnose
 import M0Crypto.Release.RunStates
 import M0Crypto.Release.TraceSpecDefs
+import M0Crypto.Release.Contract
+import M0Crypto.Release.ChaCha20Contract
+import M0Crypto.Release.AeadContract
 import M0Crypto.Release.TraceSpec
+import M0Crypto.Release.NonVacuity
 
 -- Reachability with a step condition on the pre-state and event.
 import M0Crypto.Release.ReachSteps

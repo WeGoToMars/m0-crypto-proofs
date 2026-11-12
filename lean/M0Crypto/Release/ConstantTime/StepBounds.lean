@@ -1,6 +1,14 @@
 import M0Crypto.Release.ConstantTime.StateSem
 import M0Crypto.Release.ConstantTime.Transfer
 import M0Crypto.Release.TraceSpec
+import M0Crypto.Release.Frame
+import M0Crypto.Release.ChaCha20Setup
+import M0Crypto.Release.ChaCha20Layout
+import M0Crypto.Release.AeadPrologue
+import M0Crypto.Release.AeadCrypt
+import M0Crypto.Release.AeadDecrypt
+import M0Crypto.Release.RunStates
+import M0Crypto.Release.TraceSpecDefs
 
 /-! Stack-window facts implied by successful abstract instruction transfers. -/
 namespace M0Crypto.Release.ConstantTime
