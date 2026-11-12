@@ -13,6 +13,17 @@ lake build +M0Crypto.Thumb.ReleaseCheck
 
 The second command runs the executable release checks in parallel shards. Their case descriptors are defined once; coverage checks require all 83 ChaCha20 cases, 45 AEAD cases and every shard, and the five pairwise guards remain required. Use a Lake build to refresh these checks after changing the artifact or model: executing the import root with `lake env lean` alone does not rebuild imports. The full `tools/check.sh` remains the release gate.
 
+## Memory-aware build runner
+
+Lake starts one Lean process per core and does not account for memory; four modules of this tree need about 5 GB each. To keep the machine from thrashing while still building in parallel, run the build through the memory-aware runner, which takes the same arguments as `lake build`:
+
+```sh
+tools/membuild.py
+tools/membuild.py +M0Crypto.Release.Poly1305Mac
+```
+
+It pauses the newest Lean processes when the build would exceed its budget (half of physical memory, or `M0C_BUILD_MEM_GB`) and resumes them as others finish. It kills nothing and does not change what Lake builds. `tools/check.sh` calls `lake build` directly.
+
 ## Clean-build profiling
 
 For a clean-build profile, run these commands in an isolated source copy with no existing `.lake/build`, preserving the working checkout's incremental cache:
