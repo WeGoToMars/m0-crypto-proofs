@@ -15,6 +15,10 @@ counts compressed and swapped pages; resident size alone shrinks under pressure.
 first build reacts to memory as it grows, and later builds hold a known-heavy module back
 before it starts.
 
+Pausing makes Lake's per-module times include the pauses. The runner therefore also writes
+each module's CPU time (user + system, sampled once a second, so up to a second low) to
+`.lake/membuild-times.json` for this run; `tools/build_profile.py --times` reads it.
+
 Budget: half of physical memory, or M0C_BUILD_MEM_GB. Standard library only; macOS and
 Linux.
 """
@@ -27,6 +31,16 @@ import sys
 import time
 
 PEAKS = os.path.join(".lake", "membuild-peaks.json")
+TIMES = os.path.join(".lake", "membuild-times.json")
+
+
+def cpu_seconds(s):
+    """`ps` cputime, `[[dd-]hh:]mm:ss[.ss]`, in seconds."""
+    days, _, s = s.rpartition("-")
+    total = 0.0
+    for part in s.split(":"):
+        total = total * 60 + float(part)
+    return total + (int(days) * 86400 if days else 0)
 
 
 def physical_bytes():
@@ -51,20 +65,20 @@ def footprint(pid, rss):
 
 
 def processes():
-    """pid -> (ppid, rss bytes, command line)."""
-    out = subprocess.run(["ps", "-axo", "pid=,ppid=,rss=,command="], capture_output=True, text=True).stdout
+    """pid -> (ppid, rss bytes, command line, cpu seconds)."""
+    out = subprocess.run(["ps", "-axo", "pid=,ppid=,rss=,time=,command="], capture_output=True, text=True).stdout
     res = {}
     for line in out.splitlines():
-        f = line.split(None, 3)
-        if len(f) == 4:
-            res[int(f[0])] = (int(f[1]), int(f[2]) * 1024, f[3])
+        f = line.split(None, 4)
+        if len(f) == 5:
+            res[int(f[0])] = (int(f[1]), int(f[2]) * 1024, f[4], cpu_seconds(f[3]))
     return res
 
 
 def lean_children(root, procs):
-    """Lean compiler processes descended from `root`: pid -> (memory, module source path)."""
+    """Lean compiler processes descended from `root`: pid -> (memory, module source path, cpu s)."""
     res = {}
-    for pid, (ppid, rss, cmd) in procs.items():
+    for pid, (ppid, rss, cmd, cpu) in procs.items():
         argv = cmd.split()
         if not argv or os.path.basename(argv[0]) != "lean":
             continue
@@ -75,7 +89,7 @@ def lean_children(root, procs):
             continue
         src = next((a for a in argv[1:] if a.endswith(".lean")), None)
         if src:
-            res[pid] = (footprint(pid, rss), os.path.relpath(src))
+            res[pid] = (footprint(pid, rss), os.path.relpath(src), cpu)
     return res
 
 
@@ -86,7 +100,7 @@ def main():
     except (OSError, ValueError):
         peaks = {}
     build = subprocess.Popen(["lake", "build"] + sys.argv[1:])
-    stopped, order, held = set(), [], set()
+    stopped, order, held, times = set(), [], set(), {}
     try:
         while build.poll() is None:
             lean = lean_children(build.pid, processes())
@@ -94,7 +108,8 @@ def main():
             stopped &= set(lean)
             total = 0
             for i, pid in enumerate(order):
-                mem, src = lean[pid]
+                mem, src, cpu = lean[pid]
+                times[src] = max(times.get(src, 0), cpu)
                 peaks[src] = max(peaks.get(src, 0), mem)
                 total += peaks[src]
                 fits = i == 0 or total <= budget  # the oldest process always runs
@@ -118,6 +133,7 @@ def main():
             build.terminate()
         os.makedirs(".lake", exist_ok=True)
         json.dump(peaks, open(PEAKS, "w"), indent=0, sort_keys=True)
+        json.dump(times, open(TIMES, "w"), indent=0, sort_keys=True)
     return build.returncode
 
 

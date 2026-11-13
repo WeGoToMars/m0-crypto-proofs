@@ -5,6 +5,10 @@ Run in the same source snapshot that produced LOG:
   /usr/bin/time -p lake --no-ansi build > build.log 2>&1
   python3 -I /path/to/tools/build_profile.py build.log --json profile.json
 A partial/incremental log is rejected rather than reporting a false critical path.
+
+Under tools/membuild.py, Lake's module times include the time a module was paused; pass
+`--times .lake/membuild-times.json` to weight modules by their CPU time instead (Lake's time
+is kept for modules too short to be sampled).
 """
 import argparse
 from functools import lru_cache
@@ -19,6 +23,8 @@ def main():
     parser.add_argument("log", type=Path)
     parser.add_argument("--json", type=Path, dest="json_path")
     parser.add_argument("--root", default="M0Crypto")
+    parser.add_argument("--times", type=Path, dest="times_path",
+                        help="membuild-times.json: per-module CPU seconds replace Lake's times")
     args = parser.parse_args()
     log = re.sub(r"\x1b\[[0-9;]*m", "", args.log.read_text())
     if "Build completed successfully" not in log or "error: build failed" in log:
@@ -32,6 +38,11 @@ def main():
                           for n, u in parts)
     sources = {".".join(p.relative_to("lean").with_suffix("").parts): p
                for p in Path("lean").rglob("*.lean")}
+    if args.times_path:
+        cpu = json.loads(args.times_path.read_text())
+        # modules that finished between two samples have no CPU time; keep Lake's for them
+        times.update({".".join(Path(src).relative_to("lean").with_suffix("").parts): s
+                      for src, s in cpu.items()})
     imports = {name: re.findall(r"^import\s+(M0Crypto[\w.]*)", p.read_text(), re.M)
                for name, p in sources.items()}
     reachable = set()
@@ -78,6 +89,9 @@ def main():
     print(f"Weighted import critical path: {critical:.2f} s ({len(chain)} modules)")
     print(" → ".join(chain))
     print("Module times are rounded and depend on concurrent work; this is a scheduling estimate.")
+    print("Slowest modules:")
+    for name in sorted(reachable, key=lambda n: -times[n])[:15]:
+        print(f"  {times[name]:8.1f} s  {name}")
 
 
 if __name__ == "__main__":
