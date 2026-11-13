@@ -218,4 +218,12 @@ def runEntryShard (shard : Fin entryShardCount) : IO Unit :=
   run s!"x25519 shard {shard.val}" ((partitionCases entryShardCount shard.val entryInputs).map
     fun ((t, o, k, u, kb, ub), _) => entryCase t o k u kb ub)
 
+def runRoutines : IO Unit := do
+  run "x25519 fe_mul" (mulCases ())
+  run "x25519 fe_sqr" (sqrCases ())
+  run "x25519 fe_mulc_add" (mulcCases ())
+
+/-- Every check that `X25519Routines` and the entry shards `#eval`. -/
+def allChecks : List (IO Unit) := runRoutines :: (List.finRange entryShardCount).map runEntryShard
+
 end M0Crypto.Thumb.ReleaseCheck.X25519

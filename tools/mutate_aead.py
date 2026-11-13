@@ -8,9 +8,9 @@ release asset src/m0crypto_chacha20poly1305.S), one at a time, and runs both che
 
 * QEMU: tools/test_qemu.sh;
 * model: rebuild the asset (the library's tools/build_lib.sh chacha20poly1305), regenerate
-  assets/chacha20poly1305/artifact/M0Crypto/Artifacts/Release.lean and build
-  M0Crypto.Thumb.ReleaseCheck.ChaCha20Poly1305 (all access-audit and secret-residue shards)
-  in that asset's workspace.
+  assets/chacha20poly1305/artifact/M0Crypto/Artifacts/Release.lean and run the asset's native
+  `release_check` executable: the access-audit, secret-residue and pairwise checks that the
+  proofs build runs in Lean's interpreter (M0Crypto.Thumb.ReleaseCheck.ChaCha20Poly1305).
 
 A check DETECTS a mutant only if it ran and reported a failing case. A build or
 tool error is reported as such and fails the run; it never counts as detection.
@@ -20,8 +20,7 @@ by the model check itself.
 The source is restored byte for byte afterwards, also on error or Ctrl-C, its
 sha256 is checked, and the library artifact is regenerated from it and checked
 against its original content. Exit status 1 if any mutant is MISSED, does not
-apply, does not change the library bytes, or hits a build/tool error. Takes about
-a minute per mutant.
+apply, does not change the library bytes, or hits a build/tool error.
 """
 import hashlib
 import os
@@ -29,6 +28,8 @@ import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(ROOT, "tools"))   # python3 -I leaves the script directory out
+from native_check import native_check
 LIB = os.path.abspath(os.environ.get("M0C_LIB", os.path.join(ROOT, "..")))
 SRC = os.path.join(LIB, "src", "chacha20poly1305.S")
 
@@ -85,17 +86,7 @@ def model_check():
         return "ERROR", "library build failed: " + (b.stdout + b.stderr).strip()[-200:]
     if open(ARTIFACT, "rb").read() == ORIG_ARTIFACT:
         return "ERROR", "mutant did not change the library bytes"
-    # Building the root invalidates every shard when the artifact changes.
-    # `lake env lean` on an import-only root would reuse stale compiled checks.
-    r = subprocess.run(["lake", "build", "+M0Crypto.Thumb.ReleaseCheck.ChaCha20Poly1305"],
-                       cwd=WORKSPACE, capture_output=True, text=True)
-    out = (r.stdout + r.stderr).strip().splitlines()
-    failed = next((l for l in out if "release check FAILED" in l), None)
-    if r.returncode == 0 and failed is None:
-        return "PASS", out[-1] if out else ""
-    if r.returncode != 0 and failed is not None:
-        return "DETECTED", failed
-    return "ERROR", "model check did not run cleanly: " + " | ".join(out[-3:])
+    return native_check(WORKSPACE)
 
 
 ORIG_ARTIFACT = b""

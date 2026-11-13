@@ -5,13 +5,15 @@
 
 Works on copies; neither the library nor the proofs tree is modified. For each deliberate
 bug below it applies the edit to src/blake2s_*.S in a copy of the library, rebuilds the
-release object, then runs two checks:
+release object, then runs three checks:
 
 * QEMU: tools/test_qemu.sh of the copy (does a test image see the bug?);
-* proofs: regenerates assets/blake2s/artifact/M0Crypto/Artifacts/Release.lean in a copy of
-  the proofs tree and builds, in that asset's workspace, every module with `Blake2s` in its name (the BLAKE2s proofs, certificates and
-  release checks; the ChaCha20 and AEAD proofs are not rebuilt). The modules that fail are
-  listed. A mutant is REJECTED by the proofs when that build fails.
+* executable checks: regenerates assets/blake2s/artifact/M0Crypto/Artifacts/Release.lean in a
+  copy of the proofs tree and runs that asset's native `release_check` executable (the checks
+  the proofs build runs in Lean's interpreter, Thumb/ReleaseCheck/Blake2s*);
+* proofs: builds, in that asset's workspace, every module with `Blake2s` in its name except
+  the interpreted release-check modules (the BLAKE2s proofs and certificates). The modules
+  that fail are listed. A mutant is REJECTED by the proofs when that build fails.
 
 Every mutant must be rejected by the proofs. Mutants marked "qemu-blind" are expected to pass
 QEMU (they show that tests alone would miss them). The first run builds the copy from
@@ -26,6 +28,8 @@ import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(ROOT, "tools"))   # python3 -I leaves the script directory out
+from native_check import native_check
 LIB = os.path.abspath(os.environ.get("M0C_LIB", os.path.join(ROOT, "..")))
 WORK = sys.argv[1] if len(sys.argv) > 1 else "/tmp/m0c-mut-b2s"
 CS, CP, ST, CPY = "blake2s_compress.S", None, "blake2s_stream.S", "blake2s_copy.S"
@@ -96,12 +100,20 @@ def extract(obj, pdir):
     return run([sys.executable, "-I", os.path.join(pdir, "tools", "extract_release.py"), obj, out])
 
 
+# Seconds for one run of the executable checks (they take about 10 s on the release object).
+# A mutant can make the model run to the step limit, which the evaluator handles slowly; that
+# is reported as TIMEOUT. It is not a detection and not an error: the proofs decide.
+EXEC_TIMEOUT = 300
+
+
 def blake2s_modules(pdir):
-    """Every Lean module with `Blake2s` in its file name."""
+    """Every Lean module with `Blake2s` in its file name, except the interpreted release
+    checks (the native executable runs those) and the asset root, which imports them."""
     base = os.path.join(pdir, "lean")
     return sorted(os.path.relpath(os.path.join(d, f), base)[:-5].replace(os.sep, ".")
                   for d, _, fs in os.walk(os.path.join(base, "M0Crypto")) for f in fs
-                  if f.endswith(".lean") and "Blake2s" in f)
+                  if f.endswith(".lean") and "Blake2s" in f and os.path.basename(d) != "Assets"
+                  and not re.match(r"Blake2s(Shard\d+|Pairwise)\.lean$", f))
 
 
 def lake_build(pdir):
@@ -139,6 +151,9 @@ def main():
     rc, failed, out = lake_build(prd)
     if rc:
         sys.exit("baseline proofs do not build: " + " ".join(failed))
+    ex, why = native_check(workspace(prd))
+    if ex != "PASS":
+        sys.exit("baseline executable checks do not pass: " + why)
     print("baseline: proofs build, library object %d bytes" % len(base_obj))
     bad = 0
     rows = []
@@ -157,22 +172,27 @@ def main():
             q, qk = qemu(libd)
             if extract(obj, prd).returncode:
                 print(f"ERROR {name}: extract failed"); bad += 1; continue
+            ex, why = native_check(workspace(prd), EXEC_TIMEOUT)
+            if ex == "ERROR" and "timed out" in why:
+                ex = "TIMEOUT"
             rc, failed, out = lake_build(prd)
             verdict = "REJECTED" if rc else "ACCEPTED"
-            if not rc or q == "ERROR":
+            if not rc or "ERROR" in (q, ex):
                 bad += 1
+                if ex == "ERROR":
+                    print(f"ERROR {name}: {why}")
             if expect == "qemu-blind" and q != "PASS":
                 print(f"NOTE {name}: expected QEMU to miss it, but it reported {q}")
-            rows.append((name, q, ",".join(qk), verdict, " ".join(m.replace("M0Crypto.", "") for m in failed[:6])))
-            print(f"{verdict:9} qemu={q:8} {name}\n    first failing modules: {rows[-1][4]}")
+            rows.append((name, q, ",".join(qk), verdict, " ".join(m.replace("M0Crypto.", "") for m in failed[:6]), ex))
+            print(f"{verdict:9} qemu={q:8} exec={ex:8} {name}\n    first failing modules: {rows[-1][4]}", flush=True)
         finally:
             open(path, "w").write(orig)
     # Leave the copy at the baseline artifact.
     obj, _ = build_lib(libd)
     extract(obj, prd)
-    print("\n| Mutant | QEMU | Proofs | Failing modules (first six) |\n|---|---|---|---|")
+    print("\n| Mutant | QEMU | Executable checks | Proofs | Failing modules (first six) |\n|---|---|---|---|---|")
     for r in rows:
-        print(f"| {r[0]} | {r[1]} | {r[3]} | {r[4]} |")
+        print(f"| {r[0]} | {r[1]} | {r[5]} | {r[3]} | {r[4]} |")
     sys.exit(1 if bad else 0)
 
 

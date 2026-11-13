@@ -122,4 +122,68 @@ def b2sSeqTrace (len inOff outOff : Nat) (parts : List Nat) (msgSeed ctxSeed : N
       | .error e => .error e
       | .ok o => .ok (tr ++ o.trace)
 
+/-! ## The cases, grouped as the shard modules run them -/
+
+/-- `len` cut into pieces of `k` bytes (the last one shorter). -/
+def cut (len k : Nat) : List Nat :=
+  (List.range ((len + k - 1) / k)).map fun i => min k (len - i * k)
+
+/-- compress: chosen counters and finalization words, including carries. -/
+def b2sCompressCases : List (Unit → Option String) :=
+  [(0, 0), (64, 0), (0xffffffc0, 0), (0xffffffc0, 1), (0xffffffff, 0xffffffff), (128, 5)].flatMap
+    fun (t0, t1) => [0, 0xffffffff].map fun f0 _ => b2sCompressCase t0 t1 f0 (t0 + f0)
+
+/-- hash: one-shot lengths 0-70 at input/output offsets 0-3. -/
+def b2sShard0Cases : List (Unit → Option String) :=
+  (List.range 71).flatMap fun len =>
+    [0, 1, 2, 3].map fun off _ => b2sStreamCase len off ((off + 1) % 4) [len] (len + off)
+
+/-- hash: lengths 71-200, one-shot and partitions 1, 17, 64. -/
+def b2sShard1Cases : List (Unit → Option String) :=
+  (List.range' 71 130).flatMap fun len =>
+    ([0, 3].map fun off _ => b2sStreamCase len off (3 - off) [len] (len + off)) ++
+    [fun _ => b2sStreamCase len 1 2 (cut len 17) len, fun _ => b2sStreamCase len 2 1 (cut len 64) len]
+
+/-- hash: lengths 1024 and 1025, every partition, all offsets; then the partition boundary
+cases of the buffering logic. -/
+def b2sShard2Cases : List (Unit → Option String) :=
+  ([1024, 1025].flatMap fun len =>
+    ([0, 1, 2, 3].map fun off _ => b2sStreamCase len off ((off + 2) % 4) [len] (len + off)) ++
+    ([1, 17, 64].map fun k _ => b2sStreamCase len 3 1 (cut len k) (len + k))) ++
+  ([(63, 1), (64, 64), (1, 64), (65, 63), (0, 64), (64, 0), (127, 1), (1, 127), (128, 1)].map
+    fun (a, b) _ => b2sStreamCase (a + b) 1 1 [a, b] (a * 7 + b))
+
+/-- hash: length 4096, one-shot, 17-byte and 64-byte pieces. -/
+def b2sShard3Cases : List (Unit → Option String) :=
+  [fun _ => b2sStreamCase 4096 0 0 [4096] 4096, fun _ => b2sStreamCase 4096 1 3 (cut 4096 17) 4097,
+   fun _ => b2sStreamCase 4096 2 2 (cut 4096 64) 4098]
+
+/-- Same pointers and same sequence of lengths; different message bytes, different context
+garbage, different caller registers: the traces must be equal. -/
+def b2sSameTrace (len inOff outOff : Nat) (parts : List Nat) : Bool :=
+  match b2sSeqTrace len inOff outOff parts 1 2 sentinel,
+        b2sSeqTrace len inOff outOff parts 101 202 sentinel2 with
+  | .ok a, .ok b => a == b
+  | _, _ => false
+
+def b2sPairwiseCases : List (Unit → Option String) :=
+  [(0, 0, 0, [0]), (1, 1, 2, [1]), (63, 0, 0, [63]), (64, 3, 1, [64]), (65, 2, 2, [65]),
+   (200, 1, 3, [200]), (200, 0, 0, [63, 1, 64, 72]), (130, 3, 1, [17, 17, 17, 17, 17, 17, 17, 11]),
+   (1025, 1, 1, [1025]), (1025, 2, 3, [500, 525]), (129, 0, 0, [64, 1, 64])].map
+    fun (len, inOff, outOff, parts) _ =>
+      guardCase s!"traces differ: len {len} in+{inOff} out+{outOff} parts {parts}"
+        (b2sSameTrace len inOff outOff parts)
+
+def runB2sShard0 : IO Unit := do
+  runLazy "blake2s compress" b2sCompressCases
+  runLazy "blake2s shard 0" b2sShard0Cases
+def runB2sShard1 : IO Unit := runLazy "blake2s shard 1" b2sShard1Cases
+def runB2sShard2 : IO Unit := runLazy "blake2s shard 2" b2sShard2Cases
+def runB2sShard3 : IO Unit := runLazy "blake2s shard 3" b2sShard3Cases
+def runB2sPairwise : IO Unit := runLazy "blake2s pairwise" b2sPairwiseCases
+
+/-- Every check that the shard modules and `Blake2sPairwise` `#eval`. -/
+def b2sAllChecks : List (IO Unit) :=
+  [runB2sShard0, runB2sShard1, runB2sShard2, runB2sShard3, runB2sPairwise]
+
 end M0Crypto.Thumb.ReleaseCheck

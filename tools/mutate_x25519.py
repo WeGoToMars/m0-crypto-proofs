@@ -20,13 +20,13 @@ Modes:
   symbol and check that exactly one instruction changed, at the target, into the expected text;
   then run tools/extract_release.py on the patched object (its structural checks) into WORK.
   Nothing else is run. This is the part that needs no Lean.
-* --exec: the dry run, then the executable release checks (the `#guard`s of the modules below) on each mutant, in a
-  copy of the proofs tree under WORK (rsync, .lake included, so only the modules that import
-  the artifact rebuild): regenerate the X25519 asset's Artifacts/Release.lean from the patched
-  object and build, in that asset's workspace (assets/x25519),
-  M0Crypto.Thumb.ReleaseCheck.X25519Routines and .X25519Shard0-3. A mutant is DETECTED when
-  one of those modules fails with "release check FAILED" or a failing `#guard`. Any other
-  failure (an upstream module, a timeout) is a tool ERROR, never a detection.
+* --exec: the dry run, then the executable release checks on each mutant, in a copy of the
+  proofs tree under WORK (rsync, .lake included): regenerate the X25519 asset's
+  Artifacts/Release.lean from the patched object and run, in that asset's workspace
+  (assets/x25519), its native `release_check` executable. It runs the checks that the proofs
+  build runs in Lean's interpreter (M0Crypto.Thumb.ReleaseCheck.X25519Routines and
+  .X25519Shard0-3). A mutant is DETECTED when the executable reports "release check FAILED".
+  Any other failure (a build error, a crash, a timeout) is a tool ERROR, never a detection.
   --cert also builds M0Crypto.Release.ConstantTime.X25519Entry (the constant-time
   certificate; about 5 minutes and up to 6 GB per mutant).
 * --list SYMBOL: print the symbol's instructions in the normalised form the patterns use.
@@ -50,13 +50,13 @@ import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(ROOT, "tools"))   # python3 -I leaves the script directory out
+from native_check import native_check
 LIB = os.path.abspath(os.environ.get("M0C_LIB", os.path.join(ROOT, "..")))
 LLVM = os.environ.get("M0C_LLVM_BIN", "/opt/homebrew/opt/llvm/bin")
 CASES = os.path.join(ROOT, "lean", "M0Crypto", "Thumb", "ReleaseCheck", "X25519Cases.lean")
 WS = os.path.join("assets", "x25519")
 REL = os.path.join(WS, "artifact", "M0Crypto", "Artifacts", "Release.lean")
-EXEC_MODULES = ["M0Crypto.Thumb.ReleaseCheck.X25519Routines"] + [
-    f"M0Crypto.Thumb.ReleaseCheck.X25519Shard{i}" for i in range(4)]
 CERT_MODULES = ["M0Crypto.Release.ConstantTime.X25519Entry"]
 SYMBOLS = ["m0c_fe_mul", "m0c_fe_sqr", "m0c_fe_mulc_add", "m0c_x25519"]
 
@@ -277,18 +277,6 @@ def lake_build(pdir, modules, timeout):
     return r.returncode, failed, out
 
 
-def classify(rc, failed, out, modules):
-    """PASS / DETECTED / ERROR for one build of `modules`."""
-    if rc == 0:
-        return "PASS", ""
-    caught = re.search(r"release check FAILED: [^\n]*|#guard[^\n]*|did not evaluate to `true`[^\n]*", out)
-    if failed and set(failed) <= set(modules) and caught:
-        return "DETECTED", caught.group(0)[:160]
-    if rc in (-14, 142) or "Alarm clock" in out:
-        return "ERROR", "timeout"
-    return "ERROR", f"rc {rc}, failing {failed[:4]}: " + " | ".join(out.strip().splitlines()[-3:])[:200]
-
-
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     g = ap.add_mutually_exclusive_group(required=True)
@@ -347,13 +335,17 @@ def main():
     def extract(o):
         return run([sys.executable, "-I", os.path.join(pdir, "tools", "extract_release.py"), o, rel]).returncode
 
-    modules = EXEC_MODULES + (CERT_MODULES if args.cert else [])
+    ws = os.path.join(pdir, WS)
     if extract(obj):
         sys.exit("baseline extract failed")
-    rc, failed, out = lake_build(pdir, modules, args.timeout)
-    if rc:
-        sys.exit("baseline checks do not build: " + " ".join(failed) + "\n" + out[-600:])
-    print("baseline: executable checks" + (" and certificate" if args.cert else "") + " build")
+    ex, why = native_check(ws, args.timeout)
+    if ex != "PASS":
+        sys.exit("baseline executable checks do not pass: " + why)
+    if args.cert:
+        rc, failed, out = lake_build(pdir, CERT_MODULES, args.timeout)
+        if rc:
+            sys.exit("baseline certificate does not build: " + " ".join(failed) + "\n" + out[-600:])
+    print("baseline: executable checks pass" + (" and the certificate builds" if args.cert else ""))
     rows = []
     try:
         for m, path in built:
@@ -361,8 +353,8 @@ def main():
                 rows.append((m, "NOAPPLY", "", "")); continue
             if extract(path):
                 print(f"ERROR {m['name']}: extract failed"); bad += 1; continue
-            rc, failed, out = lake_build(pdir, EXEC_MODULES, args.timeout)
-            ex, why = classify(rc, failed, out, EXEC_MODULES)
+            ex, why = native_check(ws, args.timeout)
+            why = why[:160]
             ce = "not run"
             if args.cert:
                 rc2, failed2, out2 = lake_build(pdir, CERT_MODULES, args.timeout)

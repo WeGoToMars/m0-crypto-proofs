@@ -6,9 +6,7 @@ function, a smaller stack and a narrower write range. -/
 
 namespace M0Crypto.Thumb.ReleaseCheck.X25519
 
-#eval run "x25519 fe_mul" (mulCases ())
-#eval run "x25519 fe_sqr" (sqrCases ())
-#eval run "x25519 fe_mulc_add" (mulcCases ())
+#eval runRoutines
 
 -- Non-vacuity: a wrong function, a smaller frame and a narrower `dst` are rejected.
 #guard (routineCase "mul+1" feMul feMulSize 148 true (fun x y => x * y + 1) rd ra rb

@@ -18,6 +18,8 @@ lake build +M0Crypto.Thumb.ReleaseCheck.ChaCha20Poly1305
 
 The second command runs the asset's executable release checks in parallel shards (`M0Crypto.Thumb.ReleaseCheck.X25519` for X25519; for BLAKE2s, `Blake2sShard0` to `Blake2sShard3` and `Blake2sPairwise`, which the asset root imports). Their case descriptors are defined once; coverage checks require all 83 ChaCha20 cases, 45 AEAD cases and every shard, and the five pairwise guards remain required. Use a Lake build to refresh these checks after changing the artifact or model: executing the import root with `lake env lean` alone does not rebuild imports. The full `tools/check.sh` remains the release gate.
 
+For a quick run of the same checks while developing, each asset's lakefile also has a native target: `lake build release_check && .lake/build/bin/release_check` (seconds, where the interpreted X25519 shards take minutes). The mutation scripts use it. The release gate does not: there the asset root runs the checks in Lean's interpreter.
+
 ## Memory-aware build runner
 
 Lake starts one Lean process per core and does not account for memory; four modules of this tree need about 5 GB each. To keep the machine from thrashing while still building in parallel, run the build through the memory-aware runner, which takes the same arguments as `lake build`:

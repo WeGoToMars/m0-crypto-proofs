@@ -33,7 +33,7 @@ Needs Lean v4.35.0 (via `elan`), LLVM/LLD 23.1.4 and QEMU 11.1.3. Set `M0C_LIB` 
 6. runs the library's QEMU tests for the selected assets.
 7. single-steps sampled calls in QEMU and requires the model to have the same registers and flags after every instruction, and the same RAM at the return (for X25519, six sampled windows of one call, since a whole call is about three million instructions).
 
-`tools/mutate_aead.py`, `tools/mutate_blake2s.py` and `tools/mutate_x25519.py` apply deliberate bugs to the assembly or the object and check that the tests, the model checks or (for BLAKE2s) the proofs detect each one. They are not part of `check.sh`. On the release objects (2026-11-13) all 19 AEAD mutants were detected, and the BLAKE2s proofs rejected all 13 BLAKE2s mutants; for X25519 see [docs/REVIEW.md](docs/REVIEW.md) section 9.4. For development builds, release check sharding, and memory budgeting, see [docs/BUILD.md](docs/BUILD.md).
+`tools/mutate_aead.py`, `tools/mutate_blake2s.py` and `tools/mutate_x25519.py` apply deliberate bugs to the assembly or the object and check that the tests, the model checks or (for BLAKE2s) the proofs detect each one. They are not part of `check.sh`. They run each asset's executable release checks as a native program (the `release_check` target of the asset's lakefile); the proofs build runs the same checks in Lean's interpreter. On the release objects (2026-11-13) all 19 AEAD mutants were detected, the BLAKE2s proofs rejected all 13 BLAKE2s mutants, and all 14 X25519 mutants were detected (13 by the executable checks, the timing mutant by the constant-time certificate). For development builds, release check sharding, and memory budgeting, see [docs/BUILD.md](docs/BUILD.md).
 
 ## Contents
 

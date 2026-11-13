@@ -148,6 +148,28 @@ def run (name : String) (cases : List (Option String)) : IO Unit := do
   | some e => throw (IO.userError s!"release check FAILED: {e}")
   | none => IO.println s!"release check {name}: {cases.length} cases pass"
 
+/-- `run` for cases that are evaluated one at a time, stopping at the first failure: a broken
+artifact can make every case run to the step limit. -/
+def runLazy (name : String) (cases : List (Unit → Option String)) : IO Unit := do
+  match cases.findSome? (· ()) with
+  | some e => throw (IO.userError s!"release check FAILED: {e}")
+  | none => IO.println s!"release check {name}: {cases.length} cases pass"
+
+/-- A named boolean check in the form `run` takes. -/
+def guardCase (name : String) (ok : Bool) : Option String := if ok then none else some name
+
+/-- `main` of an asset's native release-check executable: runs the same checks the shard
+modules `#eval`, as parallel tasks, and returns 1 if any of them failed. The mutation scripts
+use it; the proofs build keeps the interpreted `#eval`s. -/
+def exeMain (checks : List (IO Unit)) : IO UInt32 := do
+  let tasks ← checks.mapM fun c => IO.asTask c
+  let mut rc : UInt32 := 0
+  for t in tasks do
+    if let .error e := t.get then
+      IO.eprintln e
+      rc := 1
+  return rc
+
 /-- Keep original indices so duplicate or missing descriptors are detectable. -/
 def partitionCases {α : Type} (count shard : Nat) (xs : List α) : List (α × Nat) :=
   xs.zipIdx.filter fun (_, i) => i % count == shard

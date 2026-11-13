@@ -22,3 +22,10 @@ roots = ["M0Crypto.Artifacts.Release"]
 name = "Asset"
 srcDir = "../../lean"
 roots = ["M0Crypto.Assets.ChaCha20Poly1305"]
+
+# Native build of the executable release checks, for the mutation script. The proofs build
+# does not use it: the asset root runs the same checks in Lean's interpreter.
+[[lean_exe]]
+name = "release_check"
+srcDir = "../../lean"
+root = "M0Crypto.Thumb.ReleaseCheck.ChaCha20Poly1305Main"
