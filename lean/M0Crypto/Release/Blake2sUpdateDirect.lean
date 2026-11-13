@@ -156,7 +156,7 @@ theorem direct_loop {base : Word} {s : State} {st0 : SState} (e : UpdateEntry ba
   have hsn := (s.regs 13).isLt
   have hsp4 : (t2.regs 13).toNat % 4 = 0 := by
     have := e.sp4; have := e.spLo; rw [r13]; bv_omega
-  have hspLo : 176 ≤ (t2.regs 13).toNat := by
+  have hspLo : COMPRESS_FRAME ≤ (t2.regs 13).toNat := by
     have := e.spLo; rw [r13]; bv_omega
   have hc4 : (t2.regs 4).toNat % 4 = 0 := by rw [r4]; exact e.c4
   have hcF := e.cF

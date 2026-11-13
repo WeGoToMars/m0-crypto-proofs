@@ -176,9 +176,11 @@ import M0Crypto.Release.Blake2sFinalReads
 import M0Crypto.Release.Blake2sLd
 import M0Crypto.Release.ReachPcR2
 import M0Crypto.Release.Blake2sUpdateReads
-import M0Crypto.Release.Blake2sTotal
 import M0Crypto.Release.Blake2sStatements
 import M0Crypto.Release.Blake2sNonVacuity
+import M0Crypto.Release.Blake2sContract
+import M0Crypto.Release.Blake2sTraceSpec
+import M0Crypto.Release.Blake2sClaims
 
 /-! Root of the BLAKE2s-256 (RFC 7693) release asset: every proof and check about the bytes of
 `src/m0crypto_blake2s.S` in the library. Built by the asset's Lake workspace

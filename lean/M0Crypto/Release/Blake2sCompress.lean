@@ -61,7 +61,7 @@ structure Entry (base : Word) (s : State) : Prop where
   pc : s.pc = base + BitVec.ofNat 32 fnStart
   code : CodeAt s.mem base B
   sp4 : (s.regs 13).toNat % 4 = 0
-  spLo : 176 ≤ (s.regs 13).toNat
+  spLo : COMPRESS_FRAME ≤ (s.regs 13).toNat
   hp4 : (s.regs 0).toNat % 4 = 0
   blk4 : (s.regs 1).toNat % 4 = 0
   lr : (s.regs 14).getLsbD 0 = true

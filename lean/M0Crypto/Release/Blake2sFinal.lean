@@ -45,7 +45,7 @@ structure FinalEntry (base : Word) (s : State) (st : M0Crypto.Spec.Blake2s.State
   pc : s.pc = base + BitVec.ofNat 32 fStart
   code : CodeAt s.mem base B
   sp4 : (s.regs 13).toNat % 4 = 0
-  spLo : 200 ≤ (s.regs 13).toNat
+  spLo : STREAM_FRAME ≤ (s.regs 13).toNat
   c4 : (s.regs 0).toNat % 4 = 0
   lr : (s.regs 14).getLsbD 0 = true
   ctx : Ctx s.mem (s.regs 0) st

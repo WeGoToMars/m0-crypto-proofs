@@ -1,45 +1,95 @@
-import M0Crypto.Release.Blake2sHash
-import M0Crypto.Release.Blake2sInitConstantTime
-import M0Crypto.Release.Blake2sUpdateConstantTime
-import M0Crypto.Release.Blake2sFinalConstantTime
+import M0Crypto.Release.Blake2sClaims
+import M0Crypto.Release.Blake2sStatements
 
 set_option linter.unusedSimpArgs false
 
 /-!
-# The streaming hash: a trace independent of the message (composed C4)
+# The streaming hash composed: claims C1 and C4
 
-Two executions of `init; update*; final` on the same context and output pointers, with the same
-sequence of lengths, run every library call with equal event traces, whatever the message bytes
-and the contexts' other words. The single-call theorems take the context's `used` word as
-a hypothesis; here it is derived: it is the length of the pending bytes, and that depends on the
-lengths of the inputs alone (`absorb_pend`).
+`hash_correct` (C1) chains the per-function correctness claims: each call's `Result` gives the
+stream the next call's context holds, and the digest follows from
+`Spec.Blake2s.stream_partition`. `hash_constant_time` (C4) chains the per-function
+constant-time claims: the only stream-dependent public input, the number of pending bytes,
+depends on the input lengths alone (`absorb_pend`).
 -/
 
-namespace M0Crypto.Release.Blake2sHash
+namespace M0Crypto.Release.Blake2s
 
-open M0Crypto.Armv6M (Word State Reg Mem read32)
+open M0Crypto.Armv6M (Word Reg State Mem)
 open M0Crypto.Thumb
-open M0Crypto.Release.Blake2sStream (Ctx bytesAt_length)
-open M0Crypto.Release.Blake2sUpdate (LL nn SState UpdateEntry UpdatePost)
 open M0Crypto.Spec.Blake2s (absorb Byte)
+open M0Crypto.Release.Blake2sHash (total total_absorb runUntil_unique)
 
-/-- Two lists related elementwise. -/
-inductive All2 {α β : Type} (R : α → β → Prop) : List α → List β → Prop
-  | nil : All2 R [] []
-  | cons {a b as bs} : R a b → All2 R as bs → All2 R (a :: as) (b :: bs)
+/-! ## The context across calls -/
 
-/-- The public inputs of a call: entry pc, `sp`, `lr` and the first `np` argument registers
-agree (`np` = the entry's parameter count: init 1, update 3, final 2). These are the pointer and length arguments. -/
-def PubEq (np : Nat) (s s' : State) : Prop :=
-  s'.pc = s.pc ∧ s'.regs 13 = s.regs 13 ∧ s'.regs 14 = s.regs 14 ∧
-    ∀ r : Reg, r.val < np → s'.regs r = s.regs r
+/-- A context is a property of its 112 bytes only. -/
+theorem holds_congr {m m' : Mem} {c : Word} {st : Spec.Blake2s.State} (h : ContextHolds m c st)
+    (hm : ∀ o < contextBytes, m' (c + BitVec.ofNat 32 o) = m (c + BitVec.ofNat 32 o)) :
+    ContextHolds m' c st :=
+  Blake2sClaims.ctx_holds (Blake2sHash.ctx_congr (Blake2sClaims.holds_ctx h) hm)
 
-/-- The two calls execute the same event trace for every fuel. -/
-def TraceEq (s s' : State) : Prop :=
-  ∀ fuel, (runUntil (s.regs 14 &&& ~~~1#32) fuel s).map Prod.snd =
-    (runUntil (s.regs 14 &&& ~~~1#32) fuel s').map Prod.snd
+theorem inputAt_length (s : State) : (inputAt s).length = (s.regs 2).toNat := by
+  simp [inputAt, bytesAt]
 
-theorem push_pend (st : SState) (b : Byte) :
+theorem Init.returns {c : Init.Ctx} {s t : State} {fuel : Nat} {tr : List Event}
+    (hp : Init.Pre c s) (hrun : runUntil c.ret fuel s = .ok (t, tr)) : Init.Result c t := by
+  obtain ⟨n, hn⟩ := Init.init_correct c s hp
+  obtain ⟨t', _, hr, R, _⟩ := hn (max n fuel) (Nat.le_max_left _ _)
+  rw [runUntil_unique hrun hr]; exact R
+
+theorem Update.returns {c : Update.Ctx} {s w : State} {fuel : Nat} {tr : List Event}
+    (hp : Update.Pre c s) (hrun : runUntil c.ret fuel s = .ok (w, tr)) : Update.Result c w := by
+  obtain ⟨n, hn⟩ := Update.update_correct c s hp
+  obtain ⟨w', _, hr, R, _⟩ := hn (max n fuel) (Nat.le_max_left _ _)
+  rw [runUntil_unique hrun hr]; exact R
+
+/-! ## C1 -/
+
+/-- Every chain of `update` calls meeting their obligations returns, and the context then holds
+the stream with all inputs absorbed. -/
+theorem updates_return {base c : Word} : ∀ (calls : List State) (m : Mem)
+    (st : Spec.Blake2s.State) (K : Mem → Prop), ContextHolds m c st →
+    total st + (calls.map fun s => (s.regs 2).toNat).sum < 2 ^ 64 →
+    (∀ m', ContextHolds m' c ((calls.map inputAt).foldl absorb st) →
+      total ((calls.map inputAt).foldl absorb st) =
+        total st + (calls.map fun s => (s.regs 2).toNat).sum → K m') →
+    UpdatesReturn base c m calls K
+  | [], m, st, K, hc, _, hK => hK m (by simpa using hc) (by simp)
+  | s :: rest, m, st, K, hc, hb, hK => by
+    intro hm ⟨h0, he⟩
+    rw [List.map_cons, List.sum_cons] at hb
+    have ht := total_absorb (inputAt s) st
+    have hP := he st (holds_congr hc hm) (by unfold total at hb; omega)
+    obtain ⟨n, hn⟩ := Update.update_correct _ _ hP
+    obtain ⟨w, tr, hru, R, -⟩ := hn n (Nat.le_refl n)
+    have hc' : ContextHolds w.mem c (absorb st (inputAt s)) := by rw [← h0]; exact R.holds
+    refine ⟨n, w, tr, hru, updates_return rest w.mem _ K hc' (by rw [ht, inputAt_length]; omega)
+      (fun m' h1 h2 => hK m' ?_ ?_)⟩
+    · simpa [List.foldl_cons] using h1
+    · simp only [List.map_cons, List.foldl_cons, List.sum_cons] at h2 ⊢
+      rw [h2, ht, inputAt_length]; omega
+
+/-- **Claim C1, total correctness.** From a valid `init` call, `init` returns; then every chain
+of `update` calls meeting their obligations returns; then every `final` call meeting its
+obligations returns, with the RFC 7693 BLAKE2s-256 digest of the concatenated inputs at its
+output pointer. -/
+theorem hash_correct : HashCorrect := by
+  intro ci s0 calls ⟨hp, hlen⟩
+  obtain ⟨n, hn⟩ := Init.init_correct ci s0 hp
+  obtain ⟨t0, tr, hru, R0, -⟩ := hn n (Nat.le_refl n)
+  refine ⟨n, t0, tr, hru, ?_⟩
+  have htot0 : total Spec.Blake2s.State.init = 0 := rfl
+  refine updates_return calls t0.mem _ _ R0.holds (by rw [htot0]; omega) (fun m' h1 h2 => ?_)
+  intro sf hfm ⟨_, hfe⟩
+  rw [htot0] at h2
+  have hPf := hfe _ (holds_congr h1 hfm) (by unfold total at h2; omega)
+  obtain ⟨nf, hnf⟩ := Final.final_correct _ _ hPf
+  obtain ⟨tf, trf, hruf, Rf, -⟩ := hnf nf (Nat.le_refl nf)
+  exact ⟨nf, tf, trf, hruf, Rf.out.trans (Spec.Blake2s.stream_partition (calls.map inputAt))⟩
+
+/-! ## C4 -/
+
+theorem push_pend (st : Spec.Blake2s.State) (b : Byte) :
     (st.push b).pending.length = if st.pending.length = 64 then 1 else st.pending.length + 1 := by
   unfold M0Crypto.Spec.Blake2s.State.push
   split
@@ -47,8 +97,8 @@ theorem push_pend (st : SState) (b : Byte) :
   · simp_all
 
 /-- The length of the pending bytes after absorbing depends only on the lengths. -/
-theorem absorb_pend : ∀ (bs bs' : List Byte) (st st' : SState), bs.length = bs'.length →
-    st.pending.length = st'.pending.length →
+theorem absorb_pend : ∀ (bs bs' : List Byte) (st st' : Spec.Blake2s.State),
+    bs.length = bs'.length → st.pending.length = st'.pending.length →
     (absorb st bs).pending.length = (absorb st' bs').pending.length
   | [], [], st, st', _, hp => by simpa [absorb] using hp
   | [], _ :: _, _, _, hl, _ => by simp at hl
@@ -57,127 +107,111 @@ theorem absorb_pend : ∀ (bs bs' : List Byte) (st st' : SState), bs.length = bs
     show (absorb (st.push b) bs).pending.length = (absorb (st'.push b') bs').pending.length
     exact absorb_pend bs bs' _ _ (by simpa using hl) (by rw [push_pend, push_pend, hp])
 
-theorem foldl_pend {xs ys : List (List Byte)}
-    (h : All2 (fun a b => a.length = b.length) xs ys) :
-    ∀ st st' : SState, st.pending.length = st'.pending.length →
-      (xs.foldl absorb st).pending.length = (ys.foldl absorb st').pending.length := by
-  induction h with
-  | nil => intro st st' hp; simpa using hp
-  | cons hab _ ih =>
-    intro st st' hp
-    exact ih _ _ (absorb_pend _ _ _ _ hab hp)
+theorem foldl_pend : ∀ (xs ys : List (List Byte)), xs.map List.length = ys.map List.length →
+    ∀ st st' : Spec.Blake2s.State, st.pending.length = st'.pending.length →
+      (xs.foldl absorb st).pending.length = (ys.foldl absorb st').pending.length
+  | [], [], _, _, _, hp => by simpa using hp
+  | [], _ :: _, h, _, _, _ => by simp at h
+  | _ :: _, [], h, _, _, _ => by simp at h
+  | x :: xs, y :: ys, h, st, st', hp => by
+    simp only [List.map_cons, List.cons.injEq] at h
+    exact foldl_pend xs ys h.2 _ _ (absorb_pend _ _ _ _ h.1 hp)
 
-theorem pubEq_nn {s s' : State} (h : PubEq 3 s s') : nn s' = nn s := by
-  simp [nn, h.2.2.2 2 (by decide)]
+/-- After a chain of `update` calls that ran, the context holds the stream with all inputs
+absorbed. -/
+theorem updates_ctx {base c : Word} : ∀ (calls : List (State × State)) (m : Mem)
+    (st : Spec.Blake2s.State), UpdatesRan base c m calls → ContextHolds m c st →
+    total st + (calls.map fun p => (p.1.regs 2).toNat).sum < 2 ^ 64 →
+    ContextHolds (lastMem m calls) c ((calls.map fun p => inputAt p.1).foldl absorb st) ∧
+      total ((calls.map fun p => inputAt p.1).foldl absorb st) =
+        total st + (calls.map fun p => (p.1.regs 2).toNat).sum
+  | [], m, st, _, hc, _ => ⟨by simpa [lastMem] using hc, by simp⟩
+  | (s, w) :: rest, m, st, ⟨hm, ⟨h0, he⟩, ⟨_, _, hrun⟩, hrest⟩, hc, hb => by
+    simp only [List.map_cons, List.sum_cons, List.foldl_cons] at hb ⊢
+    have ht := total_absorb (inputAt s) st
+    have hP := he st (holds_congr hc hm) (by unfold total at hb; omega)
+    have R := Update.returns hP hrun
+    have hc2 : ContextHolds w.mem c (absorb st (inputAt s)) := by rw [← h0]; exact R.holds
+    obtain ⟨h1, h2⟩ := updates_ctx rest w.mem _ hrest hc2 (by rw [ht, inputAt_length]; omega)
+    exact ⟨h1, by rw [h2, ht, inputAt_length]; omega⟩
 
-theorem inputs_len_eq : ∀ {calls calls' : List (State × State)},
-    All2 (fun p q => PubEq 3 p.1 q.1) calls calls' →
-    All2 (fun a b => a.length = b.length) (inputs calls) (inputs calls')
-  | [], [], _ => All2.nil
-  | [], _ :: _, h => by cases h
-  | _ :: _, [], h => by cases h
-  | (s, w) :: rest, (s', w') :: rest', h => by
-    cases h with
-    | cons hp hr =>
-      refine All2.cons ?_ (inputs_len_eq hr)
-      have hl : (LL s).length = nn s := by simp [LL, bytesAt_length]
-      have hl' : (LL s').length = nn s' := by simp [LL, bytesAt_length]
-      rw [hl, hl', pubEq_nn hp]
-
-/-- Every `update` call of two equal-length sequences runs the same trace. -/
-theorem calls_trace_eq {base c : Word} : ∀ (calls calls' : List (State × State)) (m m' : Mem)
-    (st st' : SState), Calls base c m calls → Calls base c m' calls' → Ctx m c st → Ctx m' c st' →
-    st.pending.length = st'.pending.length →
-    total st + ((inputs calls).map List.length).sum < 2 ^ 64 →
-    total st' + ((inputs calls').map List.length).sum < 2 ^ 64 →
-    All2 (fun p q => PubEq 3 p.1 q.1) calls calls' →
-    All2 (fun p q => TraceEq p.1 q.1) calls calls'
-  | [], [], _, _, _, _, _, _, _, _, _, _, _, _ => All2.nil
-  | [], _ :: _, _, _, _, _, _, _, _, _, _, _, _, hF => by cases hF
-  | _ :: _, [], _, _, _, _, _, _, _, _, _, _, _, hF => by cases hF
+/-- Every `update` call of two chains with equal public inputs runs the same trace. -/
+theorem updates_trace {base c : Word} : ∀ (calls calls' : List (State × State)) (m m' : Mem)
+    (st st' : Spec.Blake2s.State), UpdatesRan base c m calls → UpdatesRan base c m' calls' →
+    ContextHolds m c st → ContextHolds m' c st' → st.pending.length = st'.pending.length →
+    total st + (calls.map fun p => (p.1.regs 2).toNat).sum < 2 ^ 64 →
+    total st' + (calls'.map fun p => (p.1.regs 2).toNat).sum < 2 ^ 64 →
+    calls.map (fun p => Update.pubAt p.1) = calls'.map (fun p => Update.pubAt p.1) →
+    calls.map (fun p => traceOf p.1) = calls'.map (fun p => traceOf p.1)
+  | [], [], _, _, _, _, _, _, _, _, _, _, _, _ => rfl
+  | [], _ :: _, _, _, _, _, _, _, _, _, _, _, _, h => by simp at h
+  | _ :: _, [], _, _, _, _, _, _, _, _, _, _, _, h => by simp at h
   | (s, w) :: rest, (s', w') :: rest', m, m', st, st',
-      ⟨h0, hm, he, hret, ⟨_, _, hrun⟩, hrest⟩, ⟨h0', hm', he', hret', ⟨_, _, hrun'⟩, hrest'⟩,
-      hc, hc', hp, hb, hb', hF => by
-    cases hF with
-    | cons hpub hFrest =>
-      rw [inputs_cons, List.map_cons, List.sum_cons] at hb hb'
-      have hl : (LL s).length = nn s := by simp [LL, bytesAt_length]
-      have hl' : (LL s').length = nn s' := by simp [LL, bytesAt_length]
-      have hnn := pubEq_nn hpub
-      have ht := total_absorb (LL s) st
-      have ht' := total_absorb (LL s') st'
-      have hcs : Ctx s.mem (s.regs 0) st := by rw [h0]; exact ctx_congr hc hm
-      have hcs' : Ctx s'.mem (s'.regs 0) st' := by rw [h0']; exact ctx_congr hc' hm'
-      have e₁ := he st hcs (by omega)
-      have e₂ := he' st' hcs' (by omega)
-      have hr0 : s'.regs 0 = s.regs 0 := hpub.2.2.2 0 (by decide)
-      have hused : read32 s.mem (s.regs 0 + 104#32) = read32 s'.mem (s.regs 0 + 104#32) := by
-        have a := hcs.used
-        have b := hcs'.used
-        rw [hr0] at b
-        rw [a, b, hp]
-      have hup := update_returns e₁ hret hrun
-      have hup' := update_returns e₂ hret' hrun'
-      have hc2 : Ctx w.mem c (absorb st (LL s)) := by rw [← h0]; exact hup.ctx
-      have hc2' : Ctx w'.mem c (absorb st' (LL s')) := by rw [← h0']; exact hup'.ctx
-      refine All2.cons (fun fuel =>
-        Blake2sUpdate.update_constant_time e₁ e₂ hret hpub.1 hpub.2.1 hpub.2.2.1 hpub.2.2.2 hused fuel) ?_
-      exact calls_trace_eq rest rest' w.mem w'.mem _ _ hrest hrest' hc2 hc2'
-        (absorb_pend _ _ _ _ (by rw [hl, hl', hnn]) hp)
-        (by rw [ht]; omega) (by rw [ht']; omega) hFrest
+      ⟨hm, ⟨h0, he⟩, ⟨_, _, hrun⟩, hrest⟩, ⟨hm', ⟨h0', he'⟩, ⟨_, _, hrun'⟩, hrest'⟩,
+      hc, hc', hp, hb, hb', hpub => by
+    simp only [List.map_cons, List.cons.injEq] at hpub
+    obtain ⟨hq, hpubr⟩ := hpub
+    simp only [List.map_cons, List.sum_cons] at hb hb'
+    simp only [Update.pubAt, Prod.mk.injEq] at hq
+    obtain ⟨q13, q14, q0, q1, q2⟩ := hq
+    have hl : (inputAt s).length = (inputAt s').length := by
+      rw [inputAt_length, inputAt_length, q2]
+    have hP := he st (holds_congr hc hm) (by unfold total at hb; omega)
+    have hP' := he' st' (holds_congr hc' hm') (by unfold total at hb'; omega)
+    have htr : traceOf s = traceOf s' := funext fun fuel =>
+      Update.update_constant_time _ _ _ _ hP hP'
+        (by simp only [Update.Ctx.pub, Update.callAt, q13, q14, q0, q1, q2, hp]) fuel
+    have R := Update.returns hP hrun
+    have R' := Update.returns hP' hrun'
+    have hc2 : ContextHolds w.mem c (absorb st (inputAt s)) := by rw [← h0]; exact R.holds
+    have hc2' : ContextHolds w'.mem c (absorb st' (inputAt s')) := by rw [← h0']; exact R'.holds
+    have ht := total_absorb (inputAt s) st
+    have ht' := total_absorb (inputAt s') st'
+    simp only [List.map_cons, htr]
+    rw [updates_trace rest rest' w.mem w'.mem _ _ hrest hrest' hc2 hc2'
+      (absorb_pend _ _ _ _ hl hp) (by rw [ht, inputAt_length]; omega)
+      (by rw [ht', inputAt_length]; omega) hpubr]
 
-/-- **Composed C4.** Two executions of `init; update*; final` on the same context and output
-pointers, whose calls have equal public inputs (pointers, lengths, `sp`, `lr`), run every call
-with equal event traces, whatever the message bytes. -/
-theorem hash_constant_time {base c : Word} {s0 t0 s0' t0' sf sf' : State}
-    {calls calls' : List (State × State)}
-    (ei : Blake2sInit.InitEntry base s0) (ei' : Blake2sInit.InitEntry base s0')
-    (hi0 : s0.regs 0 = c)
-    (hreti : ∀ i < Artifacts.Release.size, s0.regs 14 &&& ~~~1#32 ≠ base + BitVec.ofNat 32 i)
-    (hruni : ∃ fuel tr, Thumb.runUntil (s0.regs 14 &&& ~~~1#32) fuel s0 = .ok (t0, tr))
-    (hi0' : s0'.regs 0 = c)
-    (hruni' : ∃ fuel tr, Thumb.runUntil (s0'.regs 14 &&& ~~~1#32) fuel s0' = .ok (t0', tr))
-    (hpubi : PubEq 1 s0 s0')
-    (hcalls : Calls base c t0.mem calls) (hcalls' : Calls base c t0'.mem calls')
-    (hpubc : All2 (fun p q => PubEq 3 p.1 q.1) calls calls')
-    (hlen : ((inputs calls).map List.length).sum < 2 ^ 64)
-    (hlen' : ((inputs calls').map List.length).sum < 2 ^ 64)
-    (hf0 : sf.regs 0 = c) (hf0' : sf'.regs 0 = c)
-    (hfm : ∀ o < 112, sf.mem (c + BitVec.ofNat 32 o) = lastMem t0.mem calls (c + BitVec.ofNat 32 o))
-    (hfm' : ∀ o < 112, sf'.mem (c + BitVec.ofNat 32 o) = lastMem t0'.mem calls' (c + BitVec.ofNat 32 o))
-    (hfe : ∀ st, Ctx sf.mem (sf.regs 0) st → total st < 2 ^ 64 → Blake2sFinal.FinalEntry base sf st)
-    (hfe' : ∀ st, Ctx sf'.mem (sf'.regs 0) st → total st < 2 ^ 64 → Blake2sFinal.FinalEntry base sf' st)
-    (hretf : ∀ i < Artifacts.Release.size, sf.regs 14 &&& ~~~1#32 ≠ base + BitVec.ofNat 32 i)
-    (hpubf : PubEq 2 sf sf') :
-    TraceEq s0 s0' ∧ All2 (fun p q => TraceEq p.1 q.1) calls calls' ∧ TraceEq sf sf' := by
-  obtain ⟨_, _, hruni⟩ := hruni
-  obtain ⟨_, _, hruni'⟩ := hruni'
-  have hp0 := init_returns ei hreti hruni
-  have hreti' : ∀ i < Artifacts.Release.size, s0'.regs 14 &&& ~~~1#32 ≠ base + BitVec.ofNat 32 i := by
-    rw [hpubi.2.2.1]; exact hreti
-  have hp0' := init_returns ei' hreti' hruni'
-  have hc0 : Ctx t0.mem c M0Crypto.Spec.Blake2s.State.init := by rw [← hi0]; exact hp0.ctx
-  have hc0' : Ctx t0'.mem c M0Crypto.Spec.Blake2s.State.init := by rw [← hi0']; exact hp0'.ctx
-  have htot0 : total M0Crypto.Spec.Blake2s.State.init = 0 := rfl
-  refine ⟨fun fuel => Blake2sInit.init_constant_time ei ei' hreti hpubi.1 hpubi.2.1 hpubi.2.2.1
-    hpubi.2.2.2 fuel, calls_trace_eq calls calls' _ _ _ _ hcalls hcalls' hc0 hc0' rfl
-      (by rw [htot0]; omega) (by rw [htot0]; omega) hpubc, ?_⟩
-  obtain ⟨h1, h2⟩ := calls_ctx calls t0.mem _ hcalls hc0 (by rw [htot0]; omega)
-  obtain ⟨h1', h2'⟩ := calls_ctx calls' t0'.mem _ hcalls' hc0' (by rw [htot0]; omega)
-  have hcf := ctx_congr h1 hfm
-  have hcf' := ctx_congr h1' hfm'
-  rw [← hf0] at hcf; rw [← hf0'] at hcf'
-  have hpend := foldl_pend (inputs_len_eq hpubc) M0Crypto.Spec.Blake2s.State.init
-    M0Crypto.Spec.Blake2s.State.init rfl
-  have e₁ := hfe _ hcf (by rw [h2, htot0]; omega)
-  have e₂ := hfe' _ hcf' (by rw [h2', htot0]; omega)
-  have hr0 : sf'.regs 0 = sf.regs 0 := hpubf.2.2.2 0 (by decide)
-  have hused : read32 sf.mem (sf.regs 0 + 104#32) = read32 sf'.mem (sf.regs 0 + 104#32) := by
-    have a := hcf.used
-    have b := hcf'.used
-    rw [hr0] at b
-    rw [a, b, hpend]
-  exact fun fuel => Blake2sFinal.final_constant_time e₁ e₂ hretf hpubf.1 hpubf.2.1 hpubf.2.2.1
-    hpubf.2.2.2 hused fuel
+/-- **Claim C4, constant time composed.** Two executions of `init; update*; final` whose calls
+have equal public inputs (pointers, lengths, SP, LR), call by call, run every call with the
+same event trace, whatever the message bytes. -/
+theorem hash_constant_time : HashConstantTime := by
+  intro ci ci' s0 s0' t0 t0' sf sf' calls calls' H
+  obtain ⟨_, _, hrun⟩ := H.run
+  obtain ⟨_, _, hrun'⟩ := H.run'
+  have hpub := H.pub
+  simp only [Init.Ctx.pub, Prod.mk.injEq] at hpub
+  obtain ⟨-, -, -, hc⟩ := hpub
+  have hc0 : ContextHolds t0.mem ci.context Spec.Blake2s.State.init :=
+    (Init.returns H.pre hrun).holds
+  have hc0' : ContextHolds t0'.mem ci.context Spec.Blake2s.State.init := by
+    rw [hc]; exact (Init.returns H.pre' hrun').holds
+  have htot0 : total Spec.Blake2s.State.init = 0 := rfl
+  have hlen := H.lengthLt
+  have hlens : calls.map (fun p => (p.1.regs 2).toNat) = calls'.map (fun p => (p.1.regs 2).toNat) := by
+    have := congrArg (List.map fun q : Word × Word × Word × Word × Word => q.2.2.2.2.toNat)
+      H.updatesPub
+    simpa [List.map_map, Function.comp_def, Update.pubAt] using this
+  have hlen' : (calls'.map fun p => (p.1.regs 2).toNat).sum < 2 ^ 64 := by rw [← hlens]; exact hlen
+  refine ⟨?_, updates_trace calls calls' _ _ _ _ H.updates H.updates' hc0 hc0' rfl
+    (by rw [htot0]; omega) (by rw [htot0]; omega) H.updatesPub, ?_⟩
+  · funext fuel
+    have := Init.init_constant_time ci ci' s0 s0' H.pre H.pre' H.pub fuel
+    simp only [traceOf, returnAddr]
+    rw [H.pre.ret_eq, H.pre'.ret_eq]; exact this
+  · obtain ⟨h1, h2⟩ := updates_ctx calls t0.mem _ H.updates hc0 (by rw [htot0]; omega)
+    obtain ⟨h1', h2'⟩ := updates_ctx calls' t0'.mem _ H.updates' hc0' (by rw [htot0]; omega)
+    have hpend := foldl_pend (calls.map fun p => inputAt p.1) (calls'.map fun p => inputAt p.1)
+      (by simpa [List.map_map, Function.comp_def, inputAt_length] using hlens)
+      Spec.Blake2s.State.init Spec.Blake2s.State.init rfl
+    rw [htot0] at h2 h2'
+    have hP := H.final.2 _ (holds_congr h1 H.finalKept) (by unfold total at h2; omega)
+    have hP' := H.final'.2 _ (holds_congr h1' H.finalKept') (by unfold total at h2'; omega)
+    have hfp := H.finalPub
+    simp only [Final.pubAt, Prod.mk.injEq] at hfp
+    obtain ⟨f13, f14, f0, f1⟩ := hfp
+    funext fuel
+    exact Final.final_constant_time _ _ _ _ hP hP'
+      (by simp only [Final.Ctx.pub, Final.callAt, f13, f14, f0, f1, hpend]) fuel
 
-end M0Crypto.Release.Blake2sHash
+end M0Crypto.Release.Blake2s

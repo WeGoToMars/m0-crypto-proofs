@@ -65,7 +65,7 @@ def roundS (sch : Nat → Nat) (first : Bool) : List Instr := (List.range 8).fla
 def roundInstrs (r : Nat) : List Instr := roundS (sg r) (r == 0)
 
 /-- Five-word batches of the frame clear (`LOCALS/20` in the assembly). -/
-def clearBatches : Nat := localsBytes / 20
+def clearBatches : Nat := M0Crypto.Release.Blake2s.compressLocalsBytes / 20
 
 /-- The frame clear: zero r0-r4, point r5 at the frame, store `clearBatches` five-word batches of
 zeros, zero r12. -/

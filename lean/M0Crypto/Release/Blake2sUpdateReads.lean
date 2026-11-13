@@ -53,12 +53,12 @@ theorem update_hPR {base : Word} {s : State} {st0 : SState}
 
 /-- **Every byte `m0c_blake2s_update` reads is in its stack window, the artifact, the context
 window or the input.** -/
-theorem update_reads {base : Word} {s : State} {st0 : SState}
+theorem update_reads_of_entry {base : Word} {s : State} {st0 : SState}
     (e : UpdateEntry base s st0)
     (hret : ∀ i < Artifacts.Release.size, s.regs 14 &&& ~~~1#32 ≠ base + BitVec.ofNat 32 i) :
     ∃ n, ∀ fuel, n ≤ fuel → ∃ t tr, Thumb.runUntil (s.regs 14 &&& ~~~1#32) fuel s = .ok (t, tr) ∧
       TraceSpec.ReadsFrom (fun y => ReadOk (params base s) b2uEnv y ∨ UR s y) tr := by
-  obtain ⟨n, hn⟩ := Blake2sHash.update_correct e hret
+  obtain ⟨n, hn⟩ := Blake2sHash.update_correct_of_entry e hret
   refine ⟨n, fun fuel hf => ?_⟩
   obtain ⟨t, tr, hru, -⟩ := hn fuel hf
   refine ⟨t, tr, hru, ?_⟩

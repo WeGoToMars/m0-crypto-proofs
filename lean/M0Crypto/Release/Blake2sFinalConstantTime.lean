@@ -219,7 +219,7 @@ theorem final_hlocal {base : Word} {s₁ s₂ : State} {st₁ st₂ : M0Crypto.S
 satisfying the entry contract, agreeing on `r0`-`r3` (context pointer, output pointer and the
 unused `r2`, `r3`), `sp`, `lr` and the context's `used` word, have equal event traces for every
 fuel. -/
-theorem final_constant_time {base : Word} {s₁ s₂ : State} {st₁ st₂ : M0Crypto.Spec.Blake2s.State}
+theorem final_constant_time_of_entry {base : Word} {s₁ s₂ : State} {st₁ st₂ : M0Crypto.Spec.Blake2s.State}
     (e₁ : FinalEntry base s₁ st₁) (e₂ : FinalEntry base s₂ st₂)
     (hret : ∀ i < Artifacts.Release.size, s₁.regs 14 &&& ~~~1#32 ≠ base + BitVec.ofNat 32 i)
     (hpc : s₂.pc = s₁.pc) (hsp : s₂.regs 13 = s₁.regs 13) (hlr : s₂.regs 14 = s₁.regs 14)
@@ -246,8 +246,8 @@ theorem final_constant_time {base : Word} {s₁ s₂ : State} {st₁ st₂ : M0C
   have hcert := certAt_initial b2f_certOk b2f_indicesFailure_eq_none hLow
   have hret₂ : ∀ i < Artifacts.Release.size, s₂.regs 14 &&& ~~~1#32 ≠ base + BitVec.ofNat 32 i := by
     rw [hlr]; exact hret
-  obtain ⟨n₁, hn₁⟩ := Blake2sHash.final_correct e₁ hret
-  obtain ⟨n₂, hn₂⟩ := Blake2sHash.final_correct e₂ hret₂
+  obtain ⟨n₁, hn₁⟩ := Blake2sHash.final_correct_of_entry e₁ hret
+  obtain ⟨n₂, hn₂⟩ := Blake2sHash.final_correct_of_entry e₂ hret₂
   obtain ⟨t₁, tr₁, hru₁, -⟩ := hn₁ n₁ (Nat.le_refl n₁)
   obtain ⟨t₂, tr₂, hru₂, -⟩ := hn₂ n₂ (Nat.le_refl n₂)
   obtain ⟨states₁, hrun₁, -, -⟩ := M0Crypto.Release.runStates_of_runUntil hru₁
@@ -263,13 +263,13 @@ theorem final_constant_time {base : Word} {s₁ s₂ : State} {st₁ st₂ : M0C
     (final_hlocal e₁ e₂ hret hlr (hpub 0 (by decide)) hused hrun₁ hrun₂) fuel hcert
 
 /-- **`final` keeps `sp` within 160 bytes below its entry value** in every state of the call. -/
-theorem final_stack {base : Word} {s : State} {st0 : M0Crypto.Spec.Blake2s.State}
+theorem final_stack_of_entry {base : Word} {s : State} {st0 : M0Crypto.Spec.Blake2s.State}
     (e : FinalEntry base s st0)
     (hret : ∀ i < Artifacts.Release.size, s.regs 14 &&& ~~~1#32 ≠ base + BitVec.ofNat 32 i) :
     ∃ n, ∀ fuel, n ≤ fuel → ∃ states tr,
       M0Crypto.Release.runStates (s.regs 14 &&& ~~~1#32) fuel s = .ok (states, tr) ∧
       ∀ u ∈ states, TraceSpec.InStackWindow (s.regs 13) STREAM_FRAME (u.regs 13) := by
-  obtain ⟨n, hn⟩ := Blake2sHash.final_correct e hret
+  obtain ⟨n, hn⟩ := Blake2sHash.final_correct_of_entry e hret
   refine ⟨n, fun fuel hf => ?_⟩
   obtain ⟨t, tr, hru, hpost, -⟩ := hn fuel hf
   obtain ⟨states, hrun, -, -⟩ := M0Crypto.Release.runStates_of_runUntil hru

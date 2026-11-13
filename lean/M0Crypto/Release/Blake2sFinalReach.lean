@@ -347,7 +347,7 @@ theorem final_k {base : Word} {s : State} {st : M0Crypto.Spec.Blake2s.State} (e 
   have hr1 : t.regs 1 = t.regs 4 + 40#32 := by rw [po.r1, po.r4]
   have hsp4 : (t.regs 13).toNat % 4 = 0 := by
     have := e.sp4; have := e.spLo; rw [po.sp]; bv_omega
-  have hspLo : 176 ≤ (t.regs 13).toNat := by
+  have hspLo : COMPRESS_FRAME ≤ (t.regs 13).toNat := by
     have := e.spLo; rw [po.sp]; bv_omega
   have hc4 : (t.regs 4).toNat % 4 = 0 := by rw [po.r4]; exact e.c4
   have hv13' : s.regs 13 - 24#32 + 24#32 = s.regs 13 := by bv_omega

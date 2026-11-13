@@ -53,12 +53,12 @@ theorem final_hPR {base : Word} {s : State} {st : M0Crypto.Spec.Blake2s.State}
 
 /-- **Every byte `m0c_blake2s_final` reads is in its stack window, the artifact or the context
 window.** -/
-theorem final_reads {base : Word} {s : State} {st : M0Crypto.Spec.Blake2s.State}
+theorem final_reads_of_entry {base : Word} {s : State} {st : M0Crypto.Spec.Blake2s.State}
     (e : FinalEntry base s st)
     (hret : ∀ i < Artifacts.Release.size, s.regs 14 &&& ~~~1#32 ≠ base + BitVec.ofNat 32 i) :
     ∃ n, ∀ fuel, n ≤ fuel → ∃ t tr, Thumb.runUntil (s.regs 14 &&& ~~~1#32) fuel s = .ok (t, tr) ∧
       TraceSpec.ReadsFrom (fun y => ReadOk (params base s) b2fEnv y ∨ CtxRF s y) tr := by
-  obtain ⟨n, hn⟩ := Blake2sHash.final_correct e hret
+  obtain ⟨n, hn⟩ := Blake2sHash.final_correct_of_entry e hret
   refine ⟨n, fun fuel hf => ?_⟩
   obtain ⟨t, tr, hru, -⟩ := hn fuel hf
   refine ⟨t, tr, hru, ?_⟩

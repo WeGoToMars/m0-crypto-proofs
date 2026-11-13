@@ -1,17 +1,15 @@
-/-!
-# The one number the BLAKE2s frame sizes derive from
+import M0Crypto.Release.Blake2sContract
 
-`src/blake2s_compress.S` reserves `LOCALS` bytes of locals and saves r4-r11 and lr (36 bytes).
-Every frame size and frame slot the proofs name (`Blake2sFrames.lean`) is computed from the
-value here. Changing `LOCALS` in the assembly means changing this number (and regenerating the
-artifact), not editing the proofs that use the slots.
+/-!
+# Frame numbers of the BLAKE2s routines
+
+The frame sizes are named in the contract (`Blake2sContract.lean`: `compressLocalsBytes`,
+`compressSavedBytes`, `streamSavedBytes`, `streamPadBytes`, `streamStackBytes`); every frame size
+and slot the proofs use (`Blake2sFrames.lean`) is computed from them. The one slot named here is
+internal to the compression. Changing `LOCALS` in `src/blake2s_compress.S` means changing
+`compressLocalsBytes` (and regenerating the artifact), not editing the proofs that use the slots.
 -/
 
-/-- `LOCALS` of `src/blake2s_compress.S`, in bytes. -/
-def localsBytes : Nat := 100
-
-/-- Registers saved by the compression prologue (r4-r11, lr), in bytes. -/
-def savedBytes : Nat := 36
-
-/-- Offset of the saved `H_PTR` word (`H_PTR` in the assembly). -/
+/-- Byte offset of the saved `H_PTR` word in the compression's locals (`H_PTR` of
+`src/blake2s_compress.S`). -/
 def hptrBytes : Nat := 96

@@ -123,7 +123,7 @@ theorem init_hlocal {base : Word} {s₁ s₂ : State} (e : InitEntry base s₁)
 /-- **`m0c_blake2s_init` runs with a trace independent of the caller's secret state.** Two
 calls satisfying the entry contract, agreeing on `r0`-`r3` (the context pointer and three unused
 argument registers), `sp` and `lr`, have equal event traces for every fuel. -/
-theorem init_constant_time {base : Word} {s₁ s₂ : State}
+theorem init_constant_time_of_entry {base : Word} {s₁ s₂ : State}
     (e₁ : InitEntry base s₁) (e₂ : InitEntry base s₂)
     (hret : ∀ i < Artifacts.Release.size, s₁.regs 14 &&& ~~~1#32 ≠ base + BitVec.ofNat 32 i)
     (hpc : s₂.pc = s₁.pc) (hsp : s₂.regs 13 = s₁.regs 13) (hlr : s₂.regs 14 = s₁.regs 14)
@@ -146,7 +146,7 @@ theorem init_constant_time {base : Word} {s₁ s₂ : State}
     · exact e₁.code
     · exact e₂.code
   have hcert := certAt_initial b2i_certOk b2i_indicesFailure_eq_none hLow
-  obtain ⟨n, hn⟩ := Blake2sHash.init_correct e₁ hret
+  obtain ⟨n, hn⟩ := Blake2sHash.init_correct_of_entry e₁ hret
   obtain ⟨s', tr, hru, -⟩ := hn n (Nat.le_refl n)
   obtain ⟨states, hrun, -, -⟩ := M0Crypto.Release.runStates_of_runUntil hru
   exact certificate_reachable_trace_eq (env := b2iEnv) (bytes := Artifacts.Release.bytes)
@@ -160,12 +160,12 @@ theorem init_constant_time {base : Word} {s₁ s₂ : State}
     (init_hlocal e₁ hret hrun) fuel hcert
 
 /-- **`init` keeps `sp` within four bytes below its entry value** in every state of the call. -/
-theorem init_stack {base : Word} {s : State} (e : InitEntry base s)
+theorem init_stack_of_entry {base : Word} {s : State} (e : InitEntry base s)
     (hret : ∀ i < Artifacts.Release.size, s.regs 14 &&& ~~~1#32 ≠ base + BitVec.ofNat 32 i) :
     ∃ n, ∀ fuel, n ≤ fuel → ∃ states tr,
       M0Crypto.Release.runStates (s.regs 14 &&& ~~~1#32) fuel s = .ok (states, tr) ∧
       ∀ u ∈ states, TraceSpec.InStackWindow (s.regs 13) 4 (u.regs 13) := by
-  obtain ⟨n, hn⟩ := Blake2sHash.init_correct e hret
+  obtain ⟨n, hn⟩ := Blake2sHash.init_correct_of_entry e hret
   refine ⟨n, fun fuel hf => ?_⟩
   obtain ⟨t, tr, hru, hpost, -⟩ := hn fuel hf
   obtain ⟨states, hrun, -, -⟩ := M0Crypto.Release.runStates_of_runUntil hru
@@ -208,12 +208,12 @@ theorem init_stack {base : Word} {s : State} (e : InitEntry base s)
 
 /-- **Every byte `init` reads is in its stack window or the artifact.** `init` has no load
 through a caller pointer: its reads are the eight literal-pool words and the saved `lr`. -/
-theorem init_reads {base : Word} {s : State} (e : InitEntry base s)
+theorem init_reads_of_entry {base : Word} {s : State} (e : InitEntry base s)
     (hret : ∀ i < Artifacts.Release.size, s.regs 14 &&& ~~~1#32 ≠ base + BitVec.ofNat 32 i) :
     ∃ n, ∀ fuel, n ≤ fuel → ∃ t tr,
       Thumb.runUntil (s.regs 14 &&& ~~~1#32) fuel s = .ok (t, tr) ∧
       TraceSpec.ReadsFrom (ReadOk (params base s) b2iEnv) tr := by
-  obtain ⟨n, hn⟩ := Blake2sHash.init_correct e hret
+  obtain ⟨n, hn⟩ := Blake2sHash.init_correct_of_entry e hret
   refine ⟨n, fun fuel hf => ?_⟩
   obtain ⟨t, tr, hru, hpost, -⟩ := hn fuel hf
   refine ⟨t, tr, hru, ?_⟩

@@ -118,7 +118,7 @@ theorem call_reach {base : Word} {W : Word → Word → Prop} {Rd : Word → Pro
     (hcode : CodeAt t.mem base B)
     (hr0 : t.regs 0 = 0#32) (hr1 : t.regs 1 = t.regs 4 + 40#32)
     (hT : (t.regs 2).toNat + 2 ^ 32 * (t.regs 3).toNat = T)
-    (hsp4 : (t.regs 13).toNat % 4 = 0) (hspLo : 176 ≤ (t.regs 13).toNat)
+    (hsp4 : (t.regs 13).toNat % 4 = 0) (hspLo : COMPRESS_FRAME ≤ (t.regs 13).toNat)
     (hc4 : (t.regs 4).toNat % 4 = 0)
     (codeC : Disj base Artifacts.Release.size (t.regs 4) 112)
     (codeF : Disj base Artifacts.Release.size (t.regs 13 - COMPRESS_FRAME_W) STREAM_FRAME)
