@@ -29,7 +29,7 @@ the offset. The instance checks bind the lists to the artifact at the first `mul
 namespace M0Crypto.Release.X25519Mul
 open M0Crypto.Armv6M (Word Reg LowReg State addWithCarry)
 open M0Crypto.Thumb
-open M0Crypto.Release.Blake2s (toReg_ne15 regs_eors regs_movHi regs_movImm)
+open M0Crypto.Release.InstrNext (toReg_ne15 regs_eors regs_movHi regs_movImm)
 
 theorem regs_subs (s : State) (d n m : LowReg) (r : Reg) (hr : r ≠ 15) :
     ((Instr.subReg d n m).next s).regs r =

@@ -41,7 +41,7 @@ def WCu (base : Word) (u : State) (pc y : Word) : Prop :=
 theorem bl_copyS {base : Word} {W : Word → Word → Prop} {R : Word → Prop} {u : State} (off : Nat)
     (hb4 : base.toNat % 4 = 0) (hpc : u.pc = base + BitVec.ofNat 32 off) (ho : off % 2 = 0)
     (hbl : instrAt B off = some (.bl (blImm off copyStart))) (hsz : off + 4 < Artifacts.Release.size)
-    (ht : Aead.blTarget off (blImm off copyStart) = BitVec.ofNat 32 copyStart)
+    (ht : Release.blTarget off (blImm off copyStart) = BitVec.ofNat 32 copyStart)
     (hcode : CodeAt u.mem base B) (hsp4 : (u.regs 13).toNat % 4 = 0) (hspLo : 20 ≤ (u.regs 13).toNat)
     (n1 : 1 ≤ (u.regs 2).toNat) (n64 : (u.regs 2).toNat ≤ 64)
     (dj : Disj (u.regs 0) (u.regs 2).toNat (u.regs 1) (u.regs 2).toNat)

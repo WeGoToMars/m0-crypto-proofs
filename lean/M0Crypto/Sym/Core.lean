@@ -1,5 +1,4 @@
 import M0Crypto.Thumb.Seq
-import M0Crypto.Spec.ChaCha20
 
 /-!
 # Symbolic executor, layer 1: mirror semantics
@@ -25,6 +24,10 @@ namespace M0Crypto.Sym
 
 open M0Crypto.Armv6M (Word Reg LowReg State Mem read32 write32 addWithCarry)
 open M0Crypto.Thumb
+
+/-- Left rotation `(x << n) | (x >> (32 - n))` (RFC 8439 `<<<`), the denotation of
+`SExpr.rotl`. Definitionally equal to `Spec.ChaCha20.rotl`. -/
+def rotlWord (x : Word) (n : Nat) : Word := (x <<< n) ||| (x >>> (32 - n))
 
 mutual
 /-- Word-valued syntax over an unknown initial state. -/
@@ -93,7 +96,7 @@ def SExpr.denote (s0 : State) : SExpr → Word
   | .ld32 m a => read32 (m.denote s0) (a.denote s0)
   | .ld16 m a => read16 (m.denote s0) (a.denote s0)
   | .ld8 m a => read8 (m.denote s0) (a.denote s0)
-  | .rotl a n => M0Crypto.Spec.ChaCha20.rotl (a.denote s0) n
+  | .rotl a n => rotlWord (a.denote s0) n
 
 def SBool.denote (s0 : State) : SBool → Bool
   | .n0 => s0.n

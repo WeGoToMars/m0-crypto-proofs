@@ -60,12 +60,12 @@ theorem selPair_exec (s : State) (hm : s.regs 7 = 0 ∨ s.regs 7 = BitVec.allOne
   generalize execAll ld34 s = s1 at l3 l4 l5 l6 l1 l2 lm lo l7 l0
   refine ⟨?_, ?_, ?_, ?_, ?_⟩
   · simp (config := {decide := true}) only [execAll, X25519Mem.mem_stm, X25519MulcWord.mem_dp,
-      X25519Mem.regs_stm, Blake2s.regs_eors, regs_ands, listRegs_18, List.map, State.reg,
+      X25519Mem.regs_stm, InstrNext.regs_eors, regs_ands, listRegs_18, List.map, State.reg,
       toReg0, toReg3, toReg4, toReg5, toReg6, toReg7, ite_true, ite_false, l3, l4, l5, l6, l7, l0,
       lm]
     rw [X25519Word.select_word _ _ _ hm, X25519Word.select_word _ _ _ hm, selVs, sel, sel]
   all_goals
-    try simp (config := {decide := true}) only [execAll, X25519Mem.regs_stm, Blake2s.regs_eors,
+    try simp (config := {decide := true}) only [execAll, X25519Mem.regs_stm, InstrNext.regs_eors,
       regs_ands, State.reg, toReg0, toReg1, toReg2, toReg3, toReg4, toReg5, toReg6, ite_true,
       ite_false, l0, l1, l2, bitCount_18]
   · simp only [slot, Nat.mul_comm]
@@ -73,7 +73,7 @@ theorem selPair_exec (s : State) (hm : s.regs 7 = 0 ∨ s.regs 7 = BitVec.allOne
     have hr' := hr
     simp only [List.mem_cons, List.not_mem_nil, or_false, not_or] at hr'
     obtain ⟨h0, h1, h2, h3, h4, h5, h6⟩ := hr'
-    simp only [execAll, X25519Mem.regs_stm _ _ _ _ h15, Blake2s.regs_eors _ _ _ _ h15,
+    simp only [execAll, X25519Mem.regs_stm _ _ _ _ h15, InstrNext.regs_eors _ _ _ _ h15,
       regs_ands _ _ _ _ h15, toReg0, toReg3, toReg4, toReg5, toReg6, h0, h3, h4, h5, h6,
       ite_false]
     exact lo r h15 (by simp [h1, h2, h3, h4, h5, h6])

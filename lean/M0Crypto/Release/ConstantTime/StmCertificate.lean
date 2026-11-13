@@ -1,5 +1,4 @@
 import M0Crypto.Release.ConstantTime.InstructionCases
-import M0Crypto.Release.ConstantTime.AeadDecryptEntry
 
 /-! Checking the abstract bases of multiple-register stores. -/
 namespace M0Crypto.Release.ConstantTime
@@ -38,20 +37,6 @@ theorem certPoint_stmStack {env : Env} {cert : Cert} {b : Blk} {off : Nat}
   simp only [walkStmStack, Bool.and_eq_true] at hw
   have hs : (st.get n.val).isSp = true := hw.1
   cases h : st.get n.val <;> simp [h, AbsVal.isSp] at hs ⊢
-
-theorem decrypt_stmStack : certStmStack decryptEnv decryptCert = true := by
-  decide +kernel
-
-/-- Multiple-store sites in the checked decryption certificate require no
-untracked-buffer separation premise. -/
-theorem decrypt_stm_bufferStoreOk {p : Params} {bytes : List (BitVec 8)} {s : M0Crypto.Armv6M.State}
-    {b : Blk} {off : Nat} {st : AbsState} {n : M0Crypto.Armv6M.LowReg} {l : BitVec 8}
-    {is : List Instr} (hm : b ∈ decryptCert)
-    (hp : BlockPoint decryptEnv b off st (.stm n l :: is)) :
-    BufferStoreOk decryptEnv p bytes st s (.stm n l) := by
-  obtain ⟨lo, hi, hs⟩ := certPoint_stmStack decrypt_stmStack hm hp
-  intro h
-  exact False.elim (h lo hi hs)
 
 end M0Crypto.Release.ConstantTime
 

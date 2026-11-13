@@ -234,6 +234,6 @@ theorem regs_addSp (s : State) (i : BitVec 7) (r : Reg) (hr : r ≠ 15) :
 
 theorem regs_addImm8_16 (s : State) (d : LowReg) :
     ((Instr.addImm8 d 16).next s).regs d.toReg = s.regs d.toReg + BitVec.ofNat 32 16 := by
-  rw [X25519Mem.regs_addImm8 _ _ _ _ (Blake2s.toReg_ne15 d), if_pos rfl, M0Crypto.Release.add_flags]; rfl
+  rw [X25519Mem.regs_addImm8 _ _ _ _ (InstrNext.toReg_ne15 d), if_pos rfl, M0Crypto.Release.add_flags]; rfl
 
 end M0Crypto.Release.X25519FeSteps

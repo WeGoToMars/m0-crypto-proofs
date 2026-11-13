@@ -1,3 +1,4 @@
+import M0Crypto.Spec.ChaCha20
 import M0Crypto.Sym.Known
 import M0Crypto.Release.ChaCha20RoundDefs
 

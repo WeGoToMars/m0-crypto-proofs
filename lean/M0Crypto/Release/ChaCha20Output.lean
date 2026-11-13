@@ -296,13 +296,6 @@ theorem bpost_before_output {Pc : Word → Prop} (c : Ctx) (hv : Valid c) (hPc :
 
 /-! ## Aligned path: `achOff` to `b38eOff` -/
 
-theorem sub_carry (x y : Word) : (M0Crypto.Armv6M.addWithCarry x (~~~y) true).2.1 = decide (y.toNat ≤ x.toNat) := by
-  simp only [M0Crypto.Armv6M.addWithCarry, BitVec.toNat_ofNat, BitVec.toNat_not, Bool.toNat_true]
-  have := x.isLt; have := y.isLt
-  by_cases h : y.toNat ≤ x.toNat
-  · simp only [h, decide_true, decide_eq_true_eq]; omega
-  · simp only [h, decide_false, decide_eq_false_iff_not, Decidable.not_not]; omega
-
 theorem ach_at : (List.range 16).all (fun i => seqAt B (achOff + achSize * i) (ach i)) = true := by
   simp only [seqAt_eq_scan]; cbv
 

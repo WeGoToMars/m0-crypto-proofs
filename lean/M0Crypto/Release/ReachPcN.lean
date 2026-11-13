@@ -88,7 +88,7 @@ theorem ReachS.blPcN {s : State} {Q : State → Prop}
     (hb : base.toNat % 2 = 0) (off tgt : Nat) (imm : BitVec 25)
     (hpc : s.pc = base + BitVec.ofNat 32 off) (ho : off % 2 = 0)
     (hi : instrAt B off = some (.bl imm)) (hsz : off + 4 ≤ Artifacts.Release.size)
-    (ht : Aead.blTarget off imm = BitVec.ofNat 32 tgt)
+    (ht : Release.blTarget off imm = BitVec.ofNat 32 tgt)
     (hq : ReachS base (PN W) ((s.setReg 14 ((base + BitVec.ofNat 32 (off + 4)) ||| 1#32)).setReg 15
       (base + BitVec.ofNat 32 tgt)) Q) : ReachS base (PN W) s Q :=
   ReachS.bl hb off tgt imm hpc ho hi hsz ht (PN.nil (by simp [ldrU1]) (by simp [ldrU2])) hq

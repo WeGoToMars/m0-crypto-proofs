@@ -27,7 +27,7 @@ open M0Crypto.Release.X25519Mul (mul64 mul64_exec mul64_regOnly mul64_noW High D
 open M0Crypto.Release.X25519Absd (absd64 absd64_exec)
 open M0Crypto.Release.X25519Comb
 open M0Crypto.Release.X25519Slot (ld read32_storeWords_disj ld_store_same storeWords_frame SlotOut slotOut_store)
-open M0Crypto.Release.Blake2s (toReg_ne15 regs_eors regs_movHi)
+open M0Crypto.Release.InstrNext (toReg_ne15 regs_eors regs_movHi)
 
 def m1 : List Instr := [.movHi 12 1, .movHi 11 2, .ldm 1 0x50, .ldm 2 0xa0]
 

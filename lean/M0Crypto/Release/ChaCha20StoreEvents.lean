@@ -1,6 +1,6 @@
 import M0Crypto.Release.ChaCha20Xor
-import M0Crypto.Release.ConstantTime.OutputSelect
-import M0Crypto.Release.ConstantTime.OutputPcBounds
+import M0Crypto.Release.ConstantTime.ChaCha20OutputSelect
+import M0Crypto.Release.ConstantTime.ChaCha20OutputPcBounds
 
 set_option linter.unusedSimpArgs false
 set_option maxRecDepth 100000

@@ -20,7 +20,7 @@ open M0Crypto.Release.X25519W4
 open M0Crypto.Release.X25519Macros (sl SH SP_ SPP SN reducePhaseB reducePhaseC xorN)
 open M0Crypto.Release.X25519Mul (regs_adcs regs_adds c_adcs c_adds c_movImm c_movHi)
 open M0Crypto.Release.X25519Carry (adc_nat carry_le)
-open M0Crypto.Release.Blake2s (regs_eors regs_movImm regs_movHi)
+open M0Crypto.Release.InstrNext (regs_eors regs_movImm regs_movHi)
 
 /-- The first block of phase B: load `P4..P7`, apply the mask, put the mask word in `r6`, add
 the phase-A carry count `r4`. -/

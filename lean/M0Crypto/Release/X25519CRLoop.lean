@@ -19,7 +19,7 @@ open M0Crypto.Release.X25519W4 (w4)
 open M0Crypto.Release.X25519Macros (sl SH SP_ reduceWord reduceLoop)
 open M0Crypto.Release.X25519Mul (regs_adds toReg_inj Dist8)
 open M0Crypto.Release.X25519Carry (adc_nat carry_le)
-open M0Crypto.Release.Blake2s (toReg_ne15 regs_movHi)
+open M0Crypto.Release.InstrNext (toReg_ne15 regs_movHi)
 
 theorem storeWords_snoc (m : Mem) (a : Word) (vs : List Word) (v : Word) :
     storeWords m a (vs ++ [v]) = write32 (storeWords m a vs) (a + BitVec.ofNat 32 (4 * vs.length)) v := by

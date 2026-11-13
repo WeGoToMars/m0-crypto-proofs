@@ -25,7 +25,7 @@ open M0Crypto.Release.X25519Comb (cw coff cregs)
 open M0Crypto.Release.X25519CombSq
 open M0Crypto.Release.X25519Slot
 open M0Crypto.Release.X25519Mul128 (hi_ne absd64_runs listRegs_50 listRegs_65 opv lt64 lt128)
-open M0Crypto.Release.Blake2s (toReg_ne15 regs_movHi)
+open M0Crypto.Release.InstrNext (toReg_ne15 regs_movHi)
 
 /-- `add d, sp, #4k; stm d!, l`: the registers of `l` to slot `k`. -/
 theorem sst_run {Wr : Word → Prop} (s : State) (d : LowReg) (k : Nat) (l : BitVec 8)

@@ -1,4 +1,4 @@
-import M0Crypto.Thumb.ReleaseCheck.Cases
+import M0Crypto.Thumb.ReleaseCheck.ChaCha20Cases
 
 namespace M0Crypto.Thumb.ReleaseCheck
 

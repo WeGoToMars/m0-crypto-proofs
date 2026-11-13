@@ -14,7 +14,7 @@ namespace M0Crypto.Thumb.ReleaseCheck
 
 open M0Crypto.Armv6M (Word Reg State Mem)
 open M0Crypto.Thumb
-open M0Crypto.Spec.ChaCha20 (Byte)
+open M0Crypto.Spec.Blake2s (Byte)
 open M0Crypto.Artifacts
 
 /-- Call the function at artifact offset `entry` on an explicit memory. -/

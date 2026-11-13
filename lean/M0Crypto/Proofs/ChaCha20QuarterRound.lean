@@ -1,7 +1,7 @@
 import M0Crypto.Spec.ChaCha20
 import M0Crypto.Spec.ChaCha20Vectors
 import M0Crypto.Armv6M.StraightLine
-import M0Crypto.Proofs.Common
+import M0Crypto.Proofs.ChaCha20Common
 import M0Crypto.Artifacts.ChaCha20QuarterRound
 
 /-!

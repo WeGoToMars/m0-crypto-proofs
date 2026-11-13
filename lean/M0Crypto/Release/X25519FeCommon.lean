@@ -90,7 +90,7 @@ theorem ldrSp_run {Wr : Word → Prop} (s : State) (d : LowReg) {k : Nat} (hk : 
       fun h => by cases h⟩
   · simp only [execAll]
     refine ⟨X25519Mem.mem_ldrSp _ _ _, ?_, fun r h15 hd => ?_⟩
-    · rw [X25519Mem.regs_ldrSp _ _ _ _ (Blake2s.toReg_ne15 d), ite_eq_left_of_eq_true _ _ (eq_true rfl), sl_slot _ hk]
+    · rw [X25519Mem.regs_ldrSp _ _ _ _ (InstrNext.toReg_ne15 d), ite_eq_left_of_eq_true _ _ (eq_true rfl), sl_slot _ hk]
     · rw [X25519Mem.regs_ldrSp _ _ _ _ h15, if_neg hd]
 
 /-! ### The frame -/

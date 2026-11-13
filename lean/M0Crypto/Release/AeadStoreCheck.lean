@@ -1,6 +1,7 @@
-import M0Crypto.Release.ConstantTime.ExactStoreSites
+import M0Crypto.Release.ConstantTime.ChaCha20ExactStoreSites
 import M0Crypto.Release.ConstantTime.AeadEncryptEntry
 import M0Crypto.Release.ConstantTime.AeadDecryptEntry
+import M0Crypto.Release.Poly1305FinishCode
 
 set_option maxRecDepth 100000
 set_option maxHeartbeats 8000000

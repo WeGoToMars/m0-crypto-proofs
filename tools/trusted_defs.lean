@@ -6,42 +6,18 @@ It starts from each root theorem's *statement* (its type), follows the bodies of
 definitions, structures and constructors transitively, and never enters a theorem's
 proof. Proofs are checked by the Lean kernel and need no review.
 
-Run from the proofs root, after `lake build`:
-  lake env lean tools/trusted_defs.lean
+Run for one release asset, after its `lake build` (in assets/ASSET):
+  tools/trusted_defs.sh ASSET
+which imports the asset root `M0Crypto.Assets.*` and evaluates `report` on the asset's claims:
+every theorem in `assets/ASSET/Audit.lean` except the non-vacuity witnesses (`*_nonvacuous`),
+whose witness values are checked by the kernel, not trusted. `tools/statements.sh` evaluates
+`printTrusted` on the same roots to print every trusted definition into `statements.golden`.
 Output: one line per declaration, `module<TAB>first line<TAB>last line<TAB>kind<TAB>name`,
 then one `FILE` line per module with its number of declarations and source lines.
 docs/REVIEW.md section 3 names the files a reviewer reads; the `FILE` lines must name the same
-files. Update `roots` when a headline theorem is added or renamed (it fails if a root is
-missing).
+files. The roots come from `Audit.lean`, so there is no second list to update.
 -/
-import M0Crypto
 open Lean Meta
-
-def roots : List Name :=
-  [`M0Crypto.Release.ChaCha20Xor.xor_correct, `M0Crypto.Release.Aead.encrypt_correct,
-   `M0Crypto.Release.Aead.decrypt_correct,
-   `M0Crypto.Release.ChaCha20Xor.xor_constant_time, `M0Crypto.Release.ChaCha20Xor.xor_reads,
-   `M0Crypto.Release.ChaCha20Xor.xor_stack, `M0Crypto.Release.Aead.encrypt_constant_time,
-   `M0Crypto.Release.Aead.encrypt_reads, `M0Crypto.Release.Aead.encrypt_stack,
-   `M0Crypto.Release.Aead.decrypt_constant_time, `M0Crypto.Release.Aead.decrypt_reads,
-   `M0Crypto.Release.Aead.decrypt_stack,
-   `M0Crypto.Release.Blake2sCompress.compress_correct,
-   `M0Crypto.Release.Blake2sCompress.compress_constant_time,
-   `M0Crypto.Release.Blake2sCompress.compress_reads, `M0Crypto.Release.Blake2sCompress.compress_stack,
-   `M0Crypto.Release.Blake2sCopy.copy_correct, `M0Crypto.Release.Blake2sCopy.copy_constant_time,
-   `M0Crypto.Release.Blake2sCopy.copy_reads, `M0Crypto.Release.Blake2sCopy.copy_stack,
-   `M0Crypto.Release.Blake2sInit.init_constant_time, `M0Crypto.Release.Blake2sInit.init_reads,
-   `M0Crypto.Release.Blake2sInit.init_stack,
-   `M0Crypto.Release.Blake2sUpdate.update_constant_time, `M0Crypto.Release.Blake2sUpdate.update_reads,
-   `M0Crypto.Release.Blake2sUpdate.update_stack,
-   `M0Crypto.Release.Blake2sFinal.final_constant_time, `M0Crypto.Release.Blake2sFinal.final_reads,
-   `M0Crypto.Release.Blake2sFinal.final_stack,
-   `M0Crypto.Release.Blake2sHash.init_correct, `M0Crypto.Release.Blake2sHash.update_correct,
-   `M0Crypto.Release.Blake2sHash.final_correct, `M0Crypto.Release.Blake2sHash.hash_machine,
-   `M0Crypto.Release.Blake2sHash.hash_correct, `M0Crypto.Release.Blake2sHash.hash_constant_time,
-   `M0Crypto.Release.Blake2sStatements.c1, `M0Crypto.Release.Blake2sStatements.c4,
-   `M0Crypto.Release.X25519.x25519_correct, `M0Crypto.Release.X25519.x25519_constant_time,
-   `M0Crypto.Release.X25519.x25519_reads, `M0Crypto.Release.X25519.x25519_stack]
 
 /-- Constants reachable from `start` through types, and through the bodies of everything
 except theorems. -/
@@ -65,8 +41,9 @@ partial def closure (env : Environment) (start : List Name) : NameSet := Id.run 
         if !seen.contains c then todo := c :: todo
   return seen
 
-def report : MetaM Unit := do
+def report (roots : List Name) : MetaM Unit := do
   let env ← getEnv
+  if roots.isEmpty then throwError "no roots: unknown asset"
   for r in roots do
     if (env.find? r).isNone then throwError s!"missing root {r}"
   let mut out : Array (String × Nat × Nat × String × String) := #[]
@@ -102,4 +79,42 @@ def report : MetaM Unit := do
     let lines := ds.foldl (fun acc (_, a, b, _, _) => acc + (b - a + 1)) 0
     IO.println s!"FILE\t{m}\t{ds.size} declarations\t{lines} lines"
 
-#eval report
+
+/-- The trusted declarations printed into `statements.golden`: every definition, opaque and
+inductive type of `M0Crypto` reached from the statements of `roots`, except the artifact module
+(its bytes are pinned by `tools/extract_release.py --check`) and compiler-generated helpers
+(matchers, recursion and constructor-index helpers, projections; they are part of what they
+belong to).
+Ordered by module and source line. -/
+def printTrusted (roots : List Name) : MetaM Unit := do
+  let env ← getEnv
+  for r in roots do
+    if (env.find? r).isNone then throwError s!"missing root {r}"
+  let mut out : Array (String × Nat × Name) := #[]
+  for n in (closure env roots).toList do
+    let some mi := env.getModuleIdxFor? n | continue
+    let m := env.header.moduleNames[mi.toNat]!
+    if !(`M0Crypto).isPrefixOf m || m == `M0Crypto.Artifacts.Release then continue
+    if n.isInternalDetail || isAuxRecursor env n || isNoConfusion env n || env.isProjectionFn n
+        || n.getString! == "ctorIdx" then continue
+    let some ci := env.find? n | continue
+    match ci with
+    | .defnInfo _ | .inductInfo _ | .opaqueInfo _ | .axiomInfo _ => pure ()
+    | _ => continue
+    let line := ((← findDeclarationRanges? n).map (·.range.pos.line)).getD 0
+    out := out.push (m.toString, line, n)
+  let sorted := out.qsort fun (m, a, n) (m', a', n') =>
+    if m != m' then m < m' else if a != a' then a < a' else n.toString < n'.toString
+  for (_, _, n) in sorted do
+    let some ci := env.find? n | continue
+    let ty ← ppExpr ci.type
+    match ci with
+    | .defnInfo d => IO.println s!"def {n} : {ty} :=\n  {← ppExpr d.value}"
+    | .opaqueInfo d => IO.println s!"opaque {n} : {ty} :=\n  {← ppExpr d.value}"
+    | .axiomInfo _ => IO.println s!"axiom {n} : {ty}"
+    | .inductInfo i =>
+      IO.println s!"inductive {n} : {ty}"
+      for c in i.ctors do
+        let some cc := env.find? c | continue
+        IO.println s!"  | {c} : {← ppExpr cc.type}"
+    | _ => pure ()

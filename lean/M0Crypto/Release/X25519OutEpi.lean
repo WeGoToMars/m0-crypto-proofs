@@ -55,7 +55,7 @@ theorem bitCount_240 : bitCount 240#8 = 4 := by decide
 
 /-! ## One instruction at a time -/
 
-open M0Crypto.Release.Blake2s (regs_movHi regs_movImm)
+open M0Crypto.Release.InstrNext (regs_movHi regs_movImm)
 
 theorem regs_addSp (s : State) (i : BitVec 7) (r : Reg) (hr : r ≠ 15) :
     ((Instr.addSp i).next s).regs r =

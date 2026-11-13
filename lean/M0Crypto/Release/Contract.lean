@@ -47,7 +47,12 @@ end M0Crypto.Release
 
 namespace M0Crypto.Release.Frame
 
-open M0Crypto.Armv6M (Word)
+open M0Crypto.Armv6M (Word Mem)
+
+/-- `n` bytes of `m` from `a`. -/
+def Ctx.bytesAt (m : Mem) : Word → Nat → List (BitVec 8)
+  | _, 0 => []
+  | a, n + 1 => m a :: Ctx.bytesAt m (a + 1#32) n
 
 /-- `[a, a + n)` and `[b, b + m)` do not wrap and do not overlap. -/
 def Disj (a : Word) (n : Nat) (b : Word) (m : Nat) : Prop :=

@@ -1,6 +1,7 @@
 import M0Crypto.Release.ConstantTime.EntriesDefs
 import M0Crypto.Release.ConstantTime.StackCertificates
 import M0Crypto.Release.ConstantTime.IndexCertificates
+import M0Crypto.Release.ConstantTime.ChaCha20Poly1305Envs
 
 /-! # Certificate for `m0c_chacha20poly1305_decrypt` -/
 

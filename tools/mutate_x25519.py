@@ -7,7 +7,7 @@
 
 Unlike tools/mutate_aead.py and tools/mutate_blake2s.py, which edit the assembly source and
 rebuild, each mutant here is a single 16-bit instruction patched into a copy of the release
-object (default: the library's build/lib/m0crypto.o). The patch keeps every size and offset, so
+object (default: the library's build/lib/x25519/m0crypto_x25519.o). The patch keeps every size and offset, so
 the routine offsets that `Thumb/ReleaseCheck/X25519Cases.lean` and the certificate take from
 `llvm-nm -S` stay valid, and src/x25519.S (a generated file compared by tools/check.sh) is never
 touched. Targets are found by pattern: a window of consecutive instructions, as `llvm-objdump`
@@ -22,7 +22,8 @@ Modes:
   Nothing else is run. This is the part that needs no Lean.
 * --exec: the dry run, then the executable release checks of plan phase 5 on each mutant, in a
   copy of the proofs tree under WORK (rsync, .lake included, so only the modules that import
-  the artifact rebuild): regenerate Artifacts/Release.lean from the patched object and build
+  the artifact rebuild): regenerate the X25519 asset's Artifacts/Release.lean from the patched
+  object and build, in that asset's workspace (assets/x25519),
   M0Crypto.Thumb.ReleaseCheck.X25519Routines and .X25519Shard0-3. A mutant is DETECTED when
   one of those modules fails with "release check FAILED" or a failing `#guard`. Any other
   failure (an upstream module, a timeout) is a tool ERROR, never a detection.
@@ -52,7 +53,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LIB = os.path.abspath(os.environ.get("M0C_LIB", os.path.join(ROOT, "..")))
 LLVM = os.environ.get("M0C_LLVM_BIN", "/opt/homebrew/opt/llvm/bin")
 CASES = os.path.join(ROOT, "lean", "M0Crypto", "Thumb", "ReleaseCheck", "X25519Cases.lean")
-REL = os.path.join("lean", "M0Crypto", "Artifacts", "Release.lean")
+WS = os.path.join("assets", "x25519")
+REL = os.path.join(WS, "artifact", "M0Crypto", "Artifacts", "Release.lean")
 EXEC_MODULES = ["M0Crypto.Thumb.ReleaseCheck.X25519Routines"] + [
     f"M0Crypto.Thumb.ReleaseCheck.X25519Shard{i}" for i in range(4)]
 CERT_MODULES = ["M0Crypto.Release.ConstantTime.X25519Entry"]
@@ -269,7 +271,7 @@ def lake_build(pdir, modules, timeout):
     mb = os.path.join(pdir, "tools", "membuild.py")
     cmd = [sys.executable, mb] if os.path.exists(mb) else ["lake", "build"]
     full = ["nice", "-n", "5", "perl", "-e", f"alarm {timeout}; exec @ARGV"] + cmd + modules
-    r = run(full, cwd=pdir, env=env)
+    r = run(full, cwd=os.path.join(pdir, WS), env=env)
     out = r.stdout + r.stderr
     failed = sorted(set(re.findall(r"^✖ \[\d+/\d+\] Building (\S+)", out, re.M)))
     return r.returncode, failed, out
@@ -293,7 +295,7 @@ def main():
     g.add_argument("--dry-run", action="store_true")
     g.add_argument("--exec", action="store_true")
     g.add_argument("--list", metavar="SYMBOL")
-    ap.add_argument("--obj", default=os.path.join(LIB, "build", "lib", "m0crypto.o"))
+    ap.add_argument("--obj", default=os.path.join(LIB, "build", "lib", "x25519", "m0crypto_x25519.o"))
     ap.add_argument("--work", default="/tmp/m0c-mut-x25519")
     ap.add_argument("--cert", action="store_true")
     ap.add_argument("--only", nargs="*", default=None, help="substrings of mutant names")
@@ -312,7 +314,7 @@ def main():
     chk = run([sys.executable, "-I", os.path.join(ROOT, "tools", "extract_release.py"), obj,
                os.path.join(ROOT, REL), "--check"])
     if chk.returncode:
-        sys.exit("the object differs from lean/M0Crypto/Artifacts/Release.lean: " + chk.stdout + chk.stderr)
+        sys.exit(f"the object differs from {REL}: " + chk.stdout + chk.stderr)
     check_offsets(syms)
     base = open(obj, "rb").read()
     os.makedirs(args.work, exist_ok=True)
@@ -336,7 +338,7 @@ def main():
         return 1 if bad else 0
 
     pdir = os.path.join(args.work, "proofs")
-    excl = [".git", "build", "__pycache__"] + ([".lake"] if os.path.isdir(os.path.join(pdir, ".lake")) else [])
+    excl = [".git", "build", "__pycache__"] + ([".lake"] if os.path.isdir(os.path.join(pdir, WS, ".lake")) else [])
     r = run(["rsync", "-a", "--delete"] + [f"--exclude={e}" for e in excl] + [ROOT + "/", pdir + "/"])
     if r.returncode:
         sys.exit("rsync failed: " + r.stderr)

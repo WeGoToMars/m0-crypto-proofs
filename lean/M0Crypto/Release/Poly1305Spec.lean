@@ -1,5 +1,5 @@
 import M0Crypto.Release.Poly1305Arith
-import M0Crypto.Release.Frame
+import M0Crypto.Release.ChaCha20Frame
 
 set_option linter.unusedSimpArgs false
 

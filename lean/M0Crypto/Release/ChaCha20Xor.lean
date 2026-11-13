@@ -15,7 +15,7 @@ open M0Crypto.Release.ConstantTime
 open M0Crypto.Armv6M (Word Reg State Mem read32 write32 slot)
 open M0Crypto.Thumb
 open M0Crypto.Release.Frame
-open M0Crypto.Release.ChaCha20Output (Out sub_carry)
+open M0Crypto.Release.ChaCha20Output (Out)
 open M0Crypto.Release.ChaCha20Layout (n1Off blsOff nxtOff bbackOff clrOff zOff epiOff errOff berrOff2 bpreOff
   slotLen slotInp slotOutp slotCtr slotJ chFrameWords chFrameBytes chStackBytes slotSaved)
 

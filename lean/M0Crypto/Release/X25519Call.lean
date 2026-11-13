@@ -1,7 +1,7 @@
 import M0Crypto.Release.X25519FeMul
 import M0Crypto.Release.X25519FeSqr
 import M0Crypto.Release.X25519MulcAdd
-import M0Crypto.Release.AeadCall
+import M0Crypto.Release.Call
 
 /-!
 Calls of the three field routines from `m0c_x25519` (plan `x25519-proofs.md`, phase 9).

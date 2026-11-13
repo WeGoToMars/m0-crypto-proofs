@@ -1,6 +1,4 @@
 import M0Crypto.Release.ConstantTime.Elab
-import M0Crypto.Release.TraceSpecDefs
-import M0Crypto.Release.AeadCode
 
 /-!
 # Entry environments and states
@@ -17,13 +15,6 @@ def chacha20ArgWords : Nat := 2
 
 /-- Stack arguments of the AEAD entries: `aad`, `alen`, `key`, `nonce`. -/
 def aeadArgWords : Nat := 4
-
-def chacha20Env : Env := ⟨⟨TraceSpec.chacha20StackBytes, 4 * chacha20ArgWords⟩, Release.size, none, [], false⟩
-
-def encryptEnv : Env := ⟨⟨TraceSpec.aeadStackBytes, 4 * aeadArgWords⟩, Release.size, none, [], false⟩
-
-def decryptEnv : Env :=
-  ⟨⟨TraceSpec.aeadStackBytes, 4 * aeadArgWords⟩, Release.size, some Aead.decRejectBrAt, [], false⟩
 
 /-- Entry registers: the first `np` register arguments are public, LR is the entry LR, all other
 registers (including unused argument registers) are secret. -/

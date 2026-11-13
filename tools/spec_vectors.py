@@ -42,8 +42,8 @@ def main(argv):
     with tempfile.NamedTemporaryFile("w", suffix=".txt") as f:
         f.write("\n".join(lines) + "\n")
         f.flush()
-        sys.exit(subprocess.run(["lake", "env", "lean", "--run", "lean/SpecVectors.lean", f.name],
-                                cwd=ROOT).returncode)
+        sys.exit(subprocess.run(["lake", "env", "lean", "--run", str(ROOT / "lean/SpecVectors.lean"), f.name],
+                                cwd=ROOT / "assets" / "chacha20poly1305").returncode)
 
 
 if __name__ == "__main__":

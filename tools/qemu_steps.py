@@ -13,8 +13,10 @@ summary line says how many of the artifact's instructions that is.
 
 QEMU is driven through its gdb stub (remote serial protocol over a Unix socket).
 
-Usage: qemu_steps.py QEMU NM TEXT_BIN ELF FUNCTION[,FUNCTION...] [ELF FUNCTIONS ...]
-  TEXT_BIN  the release artifact (build/lib/text.bin); the image must contain these bytes
+Usage: qemu_steps.py ASSET QEMU NM TEXT_BIN ELF FUNCTION[,FUNCTION...] [ELF FUNCTIONS ...]
+  ASSET     the release asset whose built Lake workspace (assets/ASSET) runs the model
+  TEXT_BIN  the asset's release artifact (build/lib/ASSET/text.bin); the image must contain
+            these bytes
   ELF       a test image (build/test/*.elf)
   FUNCTION  an exported function to trace in that image
 """
@@ -141,8 +143,10 @@ def trace_image(qemu, nm, text, elf, functions, cases, qemu_states):
 
 
 def main(argv):
-    if len(argv) < 6 or len(argv) % 2:
+    if len(argv) < 7 or len(argv) % 2 == 0 or not (ROOT / "assets" / argv[1]).is_dir():
         sys.exit(__doc__)
+    workspace = ROOT / "assets" / argv[1]
+    argv = argv[1:]
     qemu, nm, text = argv[1], argv[2], Path(argv[3]).read_bytes()
     cases, qemu_states, pcs = [], {}, set()
     for elf, functions in zip(argv[4::2], argv[5::2]):
@@ -150,8 +154,8 @@ def main(argv):
     with tempfile.NamedTemporaryFile("w", suffix=".txt") as f:
         f.write("\n".join(cases) + "\n")
         f.flush()
-        model = subprocess.run(["lake", "env", "lean", "--run", "lean/StepTrace.lean", f.name],
-                               cwd=ROOT, check=True, capture_output=True, text=True).stdout
+        model = subprocess.run(["lake", "env", "lean", "--run", str(ROOT / "lean/StepTrace.lean"), f.name],
+                               cwd=workspace, check=True, capture_output=True, text=True).stdout
     model_states, name = {}, None
     for line in model.splitlines():
         if line.startswith("case "):

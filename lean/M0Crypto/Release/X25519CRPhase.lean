@@ -22,7 +22,7 @@ open M0Crypto.Release.X25519W4
 open M0Crypto.Release.X25519Macros (sl SH SP_ SPP SN reducePhaseA reducePhaseB reducePhaseC xorN)
 open M0Crypto.Release.X25519Mul (regs_adcs regs_adds c_adcs c_adds c_movImm c_movHi c_lsr1 regs_lsr)
 open M0Crypto.Release.X25519Carry (adc_nat carry_le)
-open M0Crypto.Release.Blake2s (toReg_ne15 regs_eors regs_movImm regs_movHi)
+open M0Crypto.Release.InstrNext (toReg_ne15 regs_eors regs_movImm regs_movHi)
 
 /-- The sign of the middle term: all ones for a square, the mask in slot `SN` otherwise. -/
 def NOk (sq : Bool) (s : State) (neg : Bool) : Prop :=

@@ -2,7 +2,7 @@ import M0Crypto.Release.ReachInv
 import M0Crypto.Release.ChaCha20StoreEvents
 import M0Crypto.Release.AeadEncrypt
 import M0Crypto.Release.AeadDecrypt
-import M0Crypto.Release.ConstantTime.ExactStoreSites
+import M0Crypto.Release.ConstantTime.ChaCha20ExactStoreSites
 
 set_option linter.unusedSimpArgs false
 set_option maxRecDepth 100000

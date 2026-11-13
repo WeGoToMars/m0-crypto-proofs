@@ -1,5 +1,5 @@
 import M0Crypto.Release.AeadDecryptStack
-import M0Crypto.Release.ConstantTime.AfterBranchCert
+import M0Crypto.Release.ConstantTime.DecryptAfterBranchCert
 import M0Crypto.Release.ConstantTime.DecryptVerdict
 import M0Crypto.Release.ConstantTime.EntrySound
 import M0Crypto.Release.ConstantTime.Alignment

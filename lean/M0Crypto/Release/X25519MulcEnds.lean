@@ -21,7 +21,7 @@ open M0Crypto.Armv6M (Word Reg LowReg State Mem addWithCarry read32 write32)
 open M0Crypto.Thumb
 open M0Crypto.Release (ReachW InRegion)
 open M0Crypto.Release.X25519Mem (regs_strImm mem_strImm)
-open M0Crypto.Release.Blake2s (regs_movHi regs_movImm)
+open M0Crypto.Release.InstrNext (regs_movHi regs_movImm)
 open M0Crypto.Release.X25519Mul (regs_lsr regs_lsl regs_muls regs_adds toReg_inj)
 open M0Crypto.Release.X25519Block
 open M0Crypto.Release.X25519MulcWord (mem_dp mem_lsl mem_lsr mem_adds)

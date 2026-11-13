@@ -1,4 +1,5 @@
 import M0Crypto.Release.ConstantTime.FunctionalReach
+import M0Crypto.Release.ConstantTime.DecryptVerdict
 
 /-! Functional entry-to-comparison execution. -/
 set_option linter.unusedSimpArgs false

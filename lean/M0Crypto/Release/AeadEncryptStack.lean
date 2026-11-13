@@ -198,7 +198,7 @@ theorem _root_.M0Crypto.Release.Aead.encrypt_stack : TraceSpec.AeadEncryptStack 
   intro u hu
   by_cases hpc : u.pc = c.regs0 14 &&& ~~~1#32
   · obtain ⟨last, hlast, hw⟩ := encrypt_final_stack_window c hv hb s he hlr hret hrun
-    have := ChaCha20XorStack.runStates_stop_last hrun u hu hpc
+    have := Release.runStates_stop_last hrun u hu hpc
     rw [hlast] at this
     cases this
     simpa [encryptEnv, M0Crypto.Release.TraceSpec.aeadStackBytes] using hw

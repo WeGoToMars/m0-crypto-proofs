@@ -27,7 +27,7 @@ open M0Crypto.Release.X25519Block
 open M0Crypto.Release.X25519Carry (adc_nat)
 open M0Crypto.Release.X25519Macros (combine128 sl)
 open M0Crypto.Release.X25519Mul (regs_adcs regs_adds c_adcs c_adds regs_lsr c_movImm c_lsr1)
-open M0Crypto.Release.Blake2s (toReg_ne15 regs_eors regs_movImm)
+open M0Crypto.Release.InstrNext (toReg_ne15 regs_eors regs_movImm)
 
 theorem listRegs_60 : listRegs 0x60 = [5, 6] := by decide
 theorem bitCount_60 : bitCount 0x60 = 2 := by decide

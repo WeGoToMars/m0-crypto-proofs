@@ -1,4 +1,4 @@
-import M0Crypto.Release.Blake2sInstr
+import M0Crypto.Release.InstrNext
 import M0Crypto.Release.X25519Carry
 import M0Crypto.Release.X25519Word
 
@@ -20,7 +20,7 @@ namespace M0Crypto.Release.X25519Mul
 open M0Crypto.Armv6M (Word Reg LowReg State addWithCarry)
 open M0Crypto.Thumb
 
-open M0Crypto.Release.Blake2s (toReg_ne15)
+open M0Crypto.Release.InstrNext (toReg_ne15)
 open M0Crypto.Release.X25519Carry (adc_nat carry_le)
 
 theorem lo16 (A : Word) : (BitVec.setWidth 32 (BitVec.setWidth 16 A)).toNat = A.toNat % 2 ^ 16 := by

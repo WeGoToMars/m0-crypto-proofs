@@ -1,5 +1,5 @@
 import M0Crypto.Spec.ChaCha20
-import M0Crypto.Proofs.Common
+import M0Crypto.Proofs.ChaCha20Common
 import M0Crypto.Artifacts.ChaCha20DoubleRound
 
 /-!

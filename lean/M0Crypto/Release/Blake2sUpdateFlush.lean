@@ -39,12 +39,12 @@ theorem Ag.of_mem {s t u : State} (h : Ag s t) (hm : u.mem = t.mem) : Ag s u :=
 theorem pad_len64 (l : List (BitVec 8)) (h : l.length = 64) : pad l = l := by
   simp [pad, h]
 
-theorem blFlush : Aead.blTarget oFlushBl (blImm oFlushBl cmpStart) = BitVec.ofNat 32 cmpStart := by
-  unfold Aead.blTarget; decide +kernel
-theorem blDirect : Aead.blTarget oDirectBl (blImm oDirectBl cmpStart) = BitVec.ofNat 32 cmpStart := by
-  unfold Aead.blTarget; decide +kernel
-theorem blCopy : Aead.blTarget oCopyBl (blImm oCopyBl copyStart) = BitVec.ofNat 32 copyStart := by
-  unfold Aead.blTarget; decide +kernel
+theorem blFlush : Release.blTarget oFlushBl (blImm oFlushBl cmpStart) = BitVec.ofNat 32 cmpStart := by
+  unfold Release.blTarget; decide +kernel
+theorem blDirect : Release.blTarget oDirectBl (blImm oDirectBl cmpStart) = BitVec.ofNat 32 cmpStart := by
+  unfold Release.blTarget; decide +kernel
+theorem blCopy : Release.blTarget oCopyBl (blImm oCopyBl copyStart) = BitVec.ofNat 32 copyStart := by
+  unfold Release.blTarget; decide +kernel
 
 /-- Registers and memory after a compress site: the new chain, count and an empty buffer. -/
 theorem nf_inv {base : Word} {s t t2 v : State} {st0 : SState} {k : Nat} {st : SState} {o : Nat}

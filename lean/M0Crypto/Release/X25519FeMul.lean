@@ -170,8 +170,8 @@ theorem body_runs (c : Call) (s : State) (hp : Pre feMul feMulSize mulFrame true
   -- mov r8, r0
   refine cons (one _ s12 rfl rfl) fun s13 e13 => ?_
   have o13 : ∀ r : Reg, r ≠ 15 → r ≠ 8 → s13.regs r = s12.regs r := fun r h h8 => by
-    rw [e13, Blake2s.regs_movHi _ _ _ _ h, if_neg h8]
-  have r813 : s13.regs 8 = s12.regs 0 := by rw [e13, Blake2s.regs_movHi _ _ _ _ (by decide), if_pos rfl]
+    rw [e13, InstrNext.regs_movHi _ _ _ _ h, if_neg h8]
+  have r813 : s13.regs 8 = s12.regs 0 := by rw [e13, InstrNext.regs_movHi _ _ _ _ (by decide), if_pos rfl]
   have sp13 : s13.sp = fp c := by show s13.regs 13 = _; rw [o13 13 (by decide) (by decide)]; exact sp12
   have fr13 : FrameOk (fp c) 37 c.m0 (upd F11 SDA [s12.regs 4, s12.regs 5, s12.regs 6, s12.regs 7])
       s13.mem := by rw [e13]; exact fr12

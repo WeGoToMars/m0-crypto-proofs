@@ -24,7 +24,7 @@ open M0Crypto.Release.X25519Carry (adc_nat)
 open M0Crypto.Release.X25519Macros (combine128sq sl)
 open M0Crypto.Release.X25519Mul (regs_adcs regs_adds c_adcs c_adds c_movImm)
 open M0Crypto.Release.X25519Comb
-open M0Crypto.Release.Blake2s (toReg_ne15 regs_movImm regs_movHi)
+open M0Crypto.Release.InstrNext (toReg_ne15 regs_movImm regs_movHi)
 
 /-- Everything but the final store. -/
 def sqcore (k : Nat) : List Instr :=

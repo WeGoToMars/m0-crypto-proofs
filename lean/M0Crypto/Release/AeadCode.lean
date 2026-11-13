@@ -1,4 +1,4 @@
-import M0Crypto.Release.Reach
+import M0Crypto.Release.Call
 import M0Crypto.Release.Layout
 import M0Crypto.Release.AeadContract
 set_option linter.unusedSimpArgs false
@@ -38,9 +38,6 @@ def finishOff : Nat := Artifacts.Release.poly1305_finish
 address. The chacha20 proofs use this as the entry point of the XOR routine; it is the one
 layout fact they need, and it is proved from the artifact symbol, not from a pin. -/
 theorem xorOff_base : xorOff = 0 := by decide
-
-/-- Byte offset reached by `bl imm` placed at `off`. -/
-def blTarget (off : Nat) (imm : BitVec 25) : Word := BitVec.ofNat 32 off + 4#32 + imm.signExtend 32
 
 /-! ## Shared prologue and setup -/
 

@@ -112,7 +112,7 @@ end M0Crypto.Release.X25519Kara
 namespace M0Crypto.Release.X25519Mul
 open M0Crypto.Armv6M (Word Reg LowReg State addWithCarry)
 open M0Crypto.Thumb
-open M0Crypto.Release.Blake2s (toReg_ne15 regs_movImm)
+open M0Crypto.Release.InstrNext (toReg_ne15 regs_movImm)
 
 /-- The tail of `sqr64`: `t3:t2:t1 -= 0:o1:a0`, `o3:a1:o1 += o3:a1` at word 1,
 then `o3:a1:o1 -= t3:t2:t1`. -/

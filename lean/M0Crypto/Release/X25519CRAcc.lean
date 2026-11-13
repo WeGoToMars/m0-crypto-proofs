@@ -180,7 +180,7 @@ theorem phaseC_acc (s : State) (hs : s.sp.toNat % 4 = 0)
     intro a ha
     have e : ((Instr.subImm8 7 16).next ((Instr.movHi 9 6).next s1)).reg 7 = slot s.sp SH := by
       simp only [State.reg, toReg7, regs_subImm8 _ _ _ _ (by decide : (7 : Reg) ≠ 15), ite_true,
-        Blake2s.regs_movHi _ _ _ _ (by decide : (7 : Reg) ≠ 15), ite_eq_right_of_eq_false _ _ (by decide : ((7 : Reg) = 9) = False)]
+        InstrNext.regs_movHi _ _ _ _ (by decide : (7 : Reg) ≠ 15), ite_eq_right_of_eq_false _ _ (by decide : ((7 : Reg) = 9) = False)]
       rw [r7, slot_sub16]
     simp only [Instr.accesses, e, bitCount_0f] at ha
     have hal : (slot s.sp SH).toNat % 4 = 0 := word_add_aligned hs (by omega)

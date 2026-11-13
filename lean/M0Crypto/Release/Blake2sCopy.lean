@@ -1,6 +1,6 @@
 import M0Crypto.Release.Blake2sCopyCode
-import M0Crypto.Release.Frame
 import M0Crypto.Release.SymReach
+import M0Crypto.Release.FrameBase
 
 set_option linter.unusedSimpArgs false
 set_option maxRecDepth 100000

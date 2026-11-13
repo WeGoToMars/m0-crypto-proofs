@@ -1,4 +1,4 @@
-import M0Crypto.Release.Frame
+import M0Crypto.Release.ChaCha20Frame
 import M0Crypto.Release.Poly1305BlocksCorrect
 set_option linter.unusedSimpArgs false
 set_option maxRecDepth 100000

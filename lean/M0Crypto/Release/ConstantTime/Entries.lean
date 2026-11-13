@@ -1,6 +1,3 @@
-import M0Crypto.Release.ConstantTime.ChaCha20Entry
-import M0Crypto.Release.ConstantTime.AeadEncryptEntry
-import M0Crypto.Release.ConstantTime.AeadDecryptEntry
 
 /-!
 # Certificates for the three entry points

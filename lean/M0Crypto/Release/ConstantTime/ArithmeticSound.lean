@@ -1,5 +1,6 @@
 import M0Crypto.Release.ConstantTime.MovSound
 import M0Crypto.Release.ConstantTime.AddResSound
+import M0Crypto.Release.Reach
 
 /-! Paired execution of arithmetic instructions. -/
 namespace M0Crypto.Release.ConstantTime

@@ -1,5 +1,5 @@
 import M0Crypto.Release.SymReachW
-import M0Crypto.Release.AeadCall
+import M0Crypto.Release.Call
 
 /-!
 `Reach`-style combinators for `ReachS base (PcWr W)`.
@@ -38,7 +38,7 @@ theorem ReachS.blPc {s : State} {Q : State → Prop}
     (hb : base.toNat % 2 = 0) (off tgt : Nat) (imm : BitVec 25)
     (hpc : s.pc = base + BitVec.ofNat 32 off) (ho : off % 2 = 0)
     (hi : instrAt B off = some (.bl imm)) (hsz : off + 4 ≤ Artifacts.Release.size)
-    (ht : Aead.blTarget off imm = BitVec.ofNat 32 tgt)
+    (ht : Release.blTarget off imm = BitVec.ofNat 32 tgt)
     (hq : ReachS base (PcWr W) ((s.setReg 14 ((base + BitVec.ofNat 32 (off + 4)) ||| 1#32)).setReg 15
       (base + BitVec.ofNat 32 tgt)) Q) : ReachS base (PcWr W) s Q :=
   ReachS.bl hb off tgt imm hpc ho hi hsz ht (PcWr.nil W _ _ _) hq

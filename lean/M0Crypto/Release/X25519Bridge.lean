@@ -2,6 +2,7 @@ import M0Crypto.Release.ConstantTime.X25519Entry
 import M0Crypto.Release.ConstantTime.EntrySound
 import M0Crypto.Release.ConstantTime.ContractBridges
 import M0Crypto.Release.TraceSpec
+import M0Crypto.Release.X25519TraceSpec
 
 /-!
 # From the X25519 contract to the certificate's parameters

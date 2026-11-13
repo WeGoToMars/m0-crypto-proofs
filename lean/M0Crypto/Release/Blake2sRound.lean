@@ -1,6 +1,6 @@
 import M0Crypto.Release.Blake2sG
-import M0Crypto.Release.Frame
 import M0Crypto.Release.Blake2sCompressCode
+import M0Crypto.Release.FrameBase
 
 set_option linter.unusedSimpArgs false
 

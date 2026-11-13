@@ -6,7 +6,7 @@ import M0Crypto.Release.ReachPcR2
 import M0Crypto.Release.Blake2sLd
 import M0Crypto.Release.Blake2sFinalOut
 import M0Crypto.Release.Blake2sInstr
-import M0Crypto.Release.AeadCall
+import M0Crypto.Release.Call
 import M0Crypto.Release.Blake2sFrames
 
 set_option linter.unusedSimpArgs false
@@ -66,8 +66,8 @@ theorem disj_sub {a : Word} {n : Nat} {b : Word} {m n' m' : Nat} (h : Disj a n b
   obtain ⟨g1, g2, g3⟩ := h
   exact ⟨by omega, by omega, by omega⟩
 
-theorem blFinal : Aead.blTarget oFBl (blImm oFBl cmpStart) = BitVec.ofNat 32 cmpStart := by
-  unfold Aead.blTarget; decide +kernel
+theorem blFinal : Release.blTarget oFBl (blImm oFBl cmpStart) = BitVec.ofNat 32 cmpStart := by
+  unfold Release.blTarget; decide +kernel
 
 theorem code_w32 {m : Mem} {base : Word} (hc : CodeAt m base B) (a v : Word)
     (h : ∀ i < B.length, ∀ k < 4, base + BitVec.ofNat 32 i ≠ a + BitVec.ofNat 32 k) :

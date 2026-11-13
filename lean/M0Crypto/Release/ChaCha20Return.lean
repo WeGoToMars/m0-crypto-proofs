@@ -1,4 +1,4 @@
-import M0Crypto.Release.Frame
+import M0Crypto.Release.ChaCha20Frame
 import M0Crypto.Release.ChaCha20Layout
 import M0Crypto.Release.ChaCha20Policy
 

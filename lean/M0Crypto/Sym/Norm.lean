@@ -138,11 +138,11 @@ theorem awcK_sound (s0 : State) (a b : SExpr) (c : SBool) :
 /-- Rotate-right by `k` with `k % 32 ≠ 0` is the left rotation by `32 - k % 32`; the carry-in
 is unused. -/
 theorem rorC_rotl (x k : Word) (c : Bool) (h : k.toNat % 32 ≠ 0) :
-    (Armv6M.rorC x (k.toNat % 256) c).1 = M0Crypto.Spec.ChaCha20.rotl x (32 - k.toNat % 32) := by
+    (Armv6M.rorC x (k.toNat % 256) c).1 = rotlWord x (32 - k.toNat % 32) := by
   have h1 : k.toNat % 256 ≠ 0 := by omega
   have hm : k.toNat % 256 % 32 = k.toNat % 32 := by omega
   have e : 32 - (32 - k.toNat % 32) = k.toNat % 32 := by omega
-  simp only [Armv6M.rorC, h1, ↓reduceIte, hm, M0Crypto.Spec.ChaCha20.rotl, e]
+  simp only [Armv6M.rorC, h1, ↓reduceIte, hm, rotlWord, e]
   exact BitVec.or_comm _ _
 
 /-- Rotation rule. A constant rotation whose amount is a multiple of 32 is kept; any other

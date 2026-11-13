@@ -1,6 +1,8 @@
 import M0Crypto.Release.ConstantTime.FunctionalWrites
 import M0Crypto.Release.ConstantTime.StmCertificate
 import M0Crypto.Release.ConstantTime.AeadDecryptEntry
+import M0Crypto.Release.ConstantTime.ChaCha20Poly1305Stm
+import M0Crypto.Release.ConstantTime.ChaCha20Poly1305Writes
 
 /-! Buffer-store obligations of the decryption certificate, discharged by the functional
 write bounds. Kept apart from `FunctionalWrites` because it needs the checked certificate. -/

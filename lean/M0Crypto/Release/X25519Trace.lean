@@ -4,7 +4,6 @@ import M0Crypto.Release.ConstantTime.EntryReads
 import M0Crypto.Release.ConstantTime.ReachableWindow
 import M0Crypto.Release.ConstantTime.SiteCheck
 import M0Crypto.Release.ConstantTime.RegionStores
-import M0Crypto.Release.ChaCha20XorStack
 
 set_option linter.unusedSimpArgs false
 
@@ -171,7 +170,7 @@ theorem _root_.M0Crypto.Release.X25519.x25519_stack : TraceSpec.X25519Stack := b
   obtain ⟨states, hrun, -, -⟩ := runStates_of_runUntil ht
   refine ⟨states, tr, hrun, fun u hu => ?_⟩
   by_cases hpc : u.pc = c.ret
-  · have hl := ChaCha20XorStack.runStates_stop_last hrun u hu hpc
+  · have hl := Release.runStates_stop_last hrun u hu hpc
     obtain ⟨last, hlast, hrun'⟩ := runStates_final hrun
     have ht' := (runUntil_success_unique ht hrun').1
     rw [hlast] at hl

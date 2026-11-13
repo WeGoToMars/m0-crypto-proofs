@@ -24,7 +24,7 @@ open M0Crypto.Release.X25519W4
 open M0Crypto.Release.X25519Block
 open M0Crypto.Release.X25519Macros (diff256 sl)
 open M0Crypto.Release.X25519Mul (regs_sbcs regs_subs c_sbcs c_subs)
-open M0Crypto.Release.Blake2s (toReg_ne15 regs_eors)
+open M0Crypto.Release.InstrNext (toReg_ne15 regs_eors)
 
 /-- Load the pointer in slot `p` and the 8 words: `X0` in `r4`-`r7`, `X1` in `r0`-`r3`. -/
 def dload (p : Nat) : List Instr := [.ldrSp 0 (sl p), .ldm 0 0xf0, .ldm 0 0x0f]

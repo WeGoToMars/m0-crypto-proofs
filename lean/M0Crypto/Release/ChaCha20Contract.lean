@@ -50,11 +50,6 @@ variable (c : Ctx)
 /-- Frame pointer after the prologue. -/
 def fp : Word := c.sp0 - BitVec.ofNat 32 chStackBytes
 
-/-- `n` bytes of `m` from `a`. -/
-def bytesAt (m : Mem) : Word → Nat → List Byte
-  | _, 0 => []
-  | a, n + 1 => m a :: bytesAt m (a + 1#32) n
-
 def keyB : List Byte := bytesAt c.m0 c.key 32
 def nonceB : List Byte := bytesAt c.m0 c.nonce 12
 def msg : List Byte := bytesAt c.m0 c.inp c.len.toNat

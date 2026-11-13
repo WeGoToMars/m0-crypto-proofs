@@ -66,7 +66,7 @@ theorem subQ_exec (s : State) :
   refine ⟨?_, ?_, hm, ?_⟩
   · simp (config := {decide := true}) only [t, subQ, execAll, State.reg, X25519Mul.regs_lsl,
       X25519Mul.regs_lsr, X25519Mul.regs_subs, X25519Mul.regs_sbcs, X25519Mem.regs_mvns,
-      regs_orrs, Blake2s.regs_movImm, X25519Mul.regs_muls, toReg1, toReg6, toReg7,
+      regs_orrs, InstrNext.regs_movImm, X25519Mul.regs_muls, toReg1, toReg6, toReg7,
       ite_true, ite_false, ne_eq, not_false_eq_true, k19, k1, k31]
     have hx : (~~~(s.regs 6) >>> 31).toNat = 1 - (s.regs 6).toNat / 2 ^ 31 := by
       have := (s.regs 6).isLt
@@ -84,7 +84,7 @@ theorem subQ_exec (s : State) :
     omega
   · simp (config := {decide := true}) only [t, subQ, execAll, State.reg, X25519Mul.regs_lsl,
       X25519Mul.regs_lsr, X25519Mul.regs_subs, X25519Mul.regs_sbcs, X25519Mem.regs_mvns,
-      regs_orrs, Blake2s.regs_movImm, X25519Mul.regs_muls, toReg1, toReg6, toReg7, ite_true,
+      regs_orrs, InstrNext.regs_movImm, X25519Mul.regs_muls, toReg1, toReg6, toReg7, ite_true,
       ite_false, ne_eq, not_false_eq_true, k1, k31, kb]
     rw [BitVec.toNat_or]
     exact or_top _ (s.regs 6).isLt

@@ -24,7 +24,7 @@ namespace M0Crypto.Thumb.ReleaseCheck.X25519
 open M0Crypto.Armv6M (Word Reg State Mem)
 open M0Crypto.Thumb
 open M0Crypto.Thumb.ReleaseCheck
-open M0Crypto.Spec.ChaCha20 (Byte)
+open M0Crypto.Spec.X25519 (Byte)
 
 /-- Sizes of the internal routines, from `llvm-nm -S` of the release object. The routines lie
 back to back directly below `m0c_x25519` (`fe_mul`, `fe_sqr`, `fe_mulc_add`), so their offsets
@@ -112,7 +112,7 @@ def entryCase (tag : String) (outA scalarA pointA : Nat) (k u : List Byte) (outL
     else none
 
 /-- `n` as 32 little-endian bytes. -/
-def le256 (n : Nat) : List Byte := Spec.Aead.leBytes 32 n
+def le256 (n : Nat) : List Byte := (List.range 32).map fun i => BitVec.ofNat 8 (n / 256 ^ i)
 
 /-- Pseudo-random bytes (a 64-bit linear congruential generator, top byte). -/
 def rnd (n seed : Nat) : List Byte :=

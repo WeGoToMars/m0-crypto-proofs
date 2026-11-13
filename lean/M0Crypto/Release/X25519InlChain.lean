@@ -220,12 +220,12 @@ theorem mv2_exec (s : State) (a b x y : Reg) (ha : a ≠ 15) (hb : b ≠ 15) (hy
       ∀ r : Reg, r ≠ 15 → r ≠ a → r ≠ b → t.regs r = s.regs r := by
   intro t
   refine ⟨?_, ?_, ?_, ?_, ?_⟩
-  · simp [t, execAll, Blake2s.regs_movHi, ha, hab]
-  · simp [t, execAll, Blake2s.regs_movHi, hb, hy, Ne.symm hay]
-  · simp [t, execAll, Blake2s.mem_movHi]
+  · simp [t, execAll, InstrNext.regs_movHi, ha, hab]
+  · simp [t, execAll, InstrNext.regs_movHi, hb, hy, Ne.symm hay]
+  · simp [t, execAll, InstrNext.mem_movHi]
   · simp [t, execAll, X25519Mul.c_movHi]
   · intro r h15 h1 h2
-    simp [t, execAll, Blake2s.regs_movHi, h15, h1, h2]
+    simp [t, execAll, InstrNext.regs_movHi, h15, h1, h2]
 
 theorem sumOp_split (neg : Bool) : sumOp neg = pairOp neg false ++ ([.movHi 8 3, .movHi 10 4] ++
     (pairOp neg true ++ ([.movHi 11 3, .movHi 12 4] ++ (pairOp neg true ++ topOp neg)))) := by
@@ -305,27 +305,27 @@ theorem loOp_exec (s : State) (neg : Bool) :
   intro t
   refine ⟨?_, ?_, ?_, ?_, ?_⟩
   · simp (config := {decide := true}) only [t, loOp, execAll, regs_dop, c_dop, regs_op3, c_op3,
-      Blake2s.regs_movHi, Blake2s.regs_movImm, X25519Mul.c_movHi, X25519Mul.c_movImm,
+      InstrNext.regs_movHi, InstrNext.regs_movImm, X25519Mul.c_movHi, X25519Mul.c_movImm,
       X25519Mem.regs_stm, X25519Mem.c_stm, State.reg, toReg0, toReg1, toReg2, toReg7, ite_true,
       ite_false]
     exact pair_nat _ _ _ _ _ _ _ _ _ (adc_nat _ _ _) (adc_nat _ _ _)
   · simp (config := {decide := true}) only [t, loOp, execAll, X25519Mem.mem_stm, mem_dop, mem_op3,
-      Blake2s.mem_movHi, mem_movImm, regs_dop, regs_op3, Blake2s.regs_movHi, Blake2s.regs_movImm,
+      InstrNext.mem_movHi, mem_movImm, regs_dop, regs_op3, InstrNext.regs_movHi, InstrNext.regs_movImm,
       X25519Mem.regs_stm, listRegs_06, List.map, State.reg, toReg0, toReg1, toReg2, toReg7,
       ite_true, ite_false]
   · simp (config := {decide := true}) only [t, loOp, execAll, regs_dop, regs_op3,
-      Blake2s.regs_movHi, Blake2s.regs_movImm, X25519Mem.regs_stm, State.reg, toReg0, toReg1,
+      InstrNext.regs_movHi, InstrNext.regs_movImm, X25519Mem.regs_stm, State.reg, toReg0, toReg1,
       toReg2, toReg7, ite_true, ite_false, bitCount_06]
     try rfl
   · simp (config := {decide := true}) only [t, loOp, execAll, regs_dop, regs_op3,
-      Blake2s.regs_movHi, Blake2s.regs_movImm, X25519Mem.regs_stm, State.reg, toReg0, toReg1,
+      InstrNext.regs_movHi, InstrNext.regs_movImm, X25519Mem.regs_stm, State.reg, toReg0, toReg1,
       toReg2, toReg7, ite_true, ite_false]
     try rfl
   · intro r h15 hr
     simp only [List.mem_cons, List.not_mem_nil, or_false, not_or] at hr
     obtain ⟨h0, h1, h2, h7⟩ := hr
     simp only [t, loOp, execAll, regs_dop _ _ _ _ _ h15, regs_op3 _ _ _ _ _ _ h15,
-      Blake2s.regs_movHi _ _ _ _ h15, Blake2s.regs_movImm _ _ _ _ h15, X25519Mem.regs_stm _ _ _ _ h15,
+      InstrNext.regs_movHi _ _ _ _ h15, InstrNext.regs_movImm _ _ _ _ h15, X25519Mem.regs_stm _ _ _ _ h15,
       toReg0, toReg1, toReg2, toReg7, h0, h1, h2, h7, ite_false]
 
 theorem chain6_nat (r1 r2 r3 r4 r5 r6 c1 c2 c3 c4 c5 c6 x1 x2 x3 x4 x5 x6 y cin : Nat)
@@ -352,17 +352,17 @@ theorem hiOp_exec (s : State) (neg : Bool) :
   intro t y
   refine ⟨?_, ?_, ?_⟩
   · simp (config := {decide := true}) only [t, hiOp, execAll, regs_dop, c_dop,
-      Blake2s.regs_movHi, X25519Mul.c_movHi, X25519Mem.regs_stm, X25519Mem.c_stm, State.reg,
+      InstrNext.regs_movHi, X25519Mul.c_movHi, X25519Mem.regs_stm, X25519Mem.c_stm, State.reg,
       toReg0, toReg1, toReg2, toReg3, toReg4, toReg5, toReg6, toReg7, ite_true, ite_false]
     exact chain6_nat _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ (adc_nat _ _ _) (adc_nat _ _ _)
       (adc_nat _ _ _) (adc_nat _ _ _) (adc_nat _ _ _) (adc_nat _ _ _)
   · simp (config := {decide := true}) only [t, hiOp, execAll, X25519Mem.mem_stm, mem_dop,
-      Blake2s.mem_movHi, regs_dop, Blake2s.regs_movHi, X25519Mem.regs_stm, listRegs_7e, List.map,
+      InstrNext.mem_movHi, regs_dop, InstrNext.regs_movHi, X25519Mem.regs_stm, listRegs_7e, List.map,
       State.reg, toReg0, toReg1, toReg2, toReg3, toReg4, toReg5, toReg6, toReg7, ite_true, ite_false]
   · intro r h15 hr
     simp only [List.mem_cons, List.not_mem_nil, or_false, not_or] at hr
     obtain ⟨h0, h1, h2, h3, h4, h5, h6⟩ := hr
-    simp only [t, hiOp, execAll, regs_dop _ _ _ _ _ h15, Blake2s.regs_movHi _ _ _ _ h15,
+    simp only [t, hiOp, execAll, regs_dop _ _ _ _ _ h15, InstrNext.regs_movHi _ _ _ _ h15,
       X25519Mem.regs_stm _ _ _ _ h15, toReg0, toReg1, toReg2, toReg3, toReg4, toReg5, toReg6,
       h0, h1, h2, h3, h4, h5, h6, ite_false]
 

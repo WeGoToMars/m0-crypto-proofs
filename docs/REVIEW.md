@@ -4,6 +4,8 @@ This guide lists exactly which parts of the Lean code a person has to read to tr
 
 **Scope.** This guide describes the proofs of library 0.2.0: release artifact 3,030 bytes, sha256 `b85f137f8356ea1d290578ce03616b3e00cff08aac7cc1104b3e9fdadfc990d3`. It is written for the commit it is part of. The lists in section 3 are the output of [`tools/trusted_defs.lean`](../tools/trusted_defs.lean), which computes them from the theorem statements themselves (section 6).
 
+**Release assets.** ChaCha20-Poly1305, BLAKE2s and X25519 are released and verified separately. Each is its own relocation-free object (`m0crypto_chacha20poly1305.o`, `m0crypto_blake2s.o`, `m0crypto_x25519.o`) with its own Lake workspace `assets/ASSET`. The workspace compiles the shared sources in `lean/` against that asset's artifact, `assets/ASSET/artifact/M0Crypto/Artifacts/Release.lean`. It holds the asset's `Audit.lean`, `expected-axioms.txt` and `statements.golden`. In an asset's theorems, `Artifacts.Release` (and its abbreviation `B`) is that asset's `.text`. Sections 2 to 8 cover the ChaCha20-Poly1305 asset. Section 9 covers X25519. The model, decoder and shared statement vocabulary are the same source files in every asset.
+
 ## 1. What a proof gives you, and what it does not
 
 A Lean theorem has two parts: a **statement** (what is claimed) and a **proof** (why it holds). Lean's kernel checks every proof mechanically, so you never need to read a proof to know it is valid. That is the whole point: of about 43,000 lines of Lean, 890 hand-written lines in 11 files are trusted. 790 of them need a careful human reading. The other 100 are the instruction decoding functions, which are compared with LLVM on every instruction of the code instead (section 3.2).
@@ -38,13 +40,13 @@ These are the roots from which the trusted base is computed. A reviewer reads ea
 | `Aead.encrypt_constant_time`, `_reads`, `_stack` | [`AeadEncryptConstantTime.lean`](../lean/M0Crypto/Release/AeadEncryptConstantTime.lean), [`AeadReads.lean`](../lean/M0Crypto/Release/AeadReads.lean), [`AeadEncryptStack.lean`](../lean/M0Crypto/Release/AeadEncryptStack.lean) | Same, encryption (320 bytes) |
 | `Aead.decrypt_constant_time`, `_reads`, `_stack` | [`AeadDecryptConstantTime.lean`](../lean/M0Crypto/Release/AeadDecryptConstantTime.lean), [`AeadReads.lean`](../lean/M0Crypto/Release/AeadReads.lean), [`AeadDecryptStack.lean`](../lean/M0Crypto/Release/AeadDecryptStack.lean) | Same, decryption (320 bytes; the verdict bit is public) |
 
-All twelve, and the four X25519 theorems of section 9.1, are in `lean/Audit.lean`, so their axioms are checked.
+All twelve are in `assets/chacha20poly1305/Audit.lean`, and the four X25519 theorems of section 9.1 are in `assets/x25519/Audit.lean`, so their axioms are checked.
 
-The three correctness statements are written out at the theorems (search for the theorem name in its file). The nine constant-time, read and stack statements are written once, as Props, in [`TraceSpec.lean`](../lean/M0Crypto/Release/TraceSpec.lean); those theorems only say `: TraceSpec.X`.
+The three correctness statements are written out at the theorems (search for the theorem name in its file). The nine constant-time, read and stack statements are written once, as Props, in [`ChaCha20TraceSpec.lean`](../lean/M0Crypto/Release/ChaCha20TraceSpec.lean) (shared vocabulary in [`TraceSpec.lean`](../lean/M0Crypto/Release/TraceSpec.lean)); those theorems only say `: TraceSpec.X`.
 
 All four theorems about one function assume the same thing, a valid call: `ChaCha20Xor.Pre c s` for ChaCha20, and `Aead.APre c off s` for the two AEAD functions (`off` selects encryption or decryption). The hypotheses are therefore read once per definition, not once per theorem.
 
-**What the golden file does and does not lock.** `tools/statements.golden` holds the printed statement of every audited theorem, and `check.sh` fails if one changes. For the three correctness theorems that is the hypothesis by name (`Pre` or `APre`) and the conclusion. For the nine trace theorems it is one line each, the name of the Prop. In both cases the *definitions* a statement names (`Pre`, `Valid`, `AValid`, `ABuf`, `pub`, `Result`, the read regions) are not in the file. A change to one of them produces no golden diff. All of them live in the statement files of section 3.5 (for X25519, `X25519Contract.lean`, section 9.2), so the check is the diff of those files (section 6, question 2).
+**What the golden file locks.** Each asset's `assets/ASSET/Audit.lean` lists its claims, and `assets/ASSET/statements.golden` holds the printed statement of every claim, then the printed body of every trusted definition those statements reach (`tools/trusted_defs.lean`, `printTrusted`): the machine model and decoder, the contracts (`Pre`, `Valid`, `AValid`, `ABuf`, `pub`, `Result`, the read regions), the `TraceSpec` Props and the specification. `check.sh` fails if any of them changes. The artifact bytes are not printed; step 2b pins them. What the file cannot show is whether a changed definition still means what its reference says; that is the review of section 3.
 
 ## 3. What to review, in order
 
@@ -190,13 +192,13 @@ What this argument rests on, and what a reviewer checks instead of the 100 lines
 
 ### 3.3 Artifact
 
-[`Artifacts/Release.lean`](../lean/M0Crypto/Artifacts/Release.lean) holds the release `.text` as a byte list plus the function offsets. It is generated, so do not review the bytes. Review instead:
+[`Artifacts/Release.lean`](../assets/chacha20poly1305/artifact/M0Crypto/Artifacts/Release.lean) holds the asset's release `.text` as a byte list plus the function offsets. It is generated, so do not review the bytes. Review instead:
 
 - [`tools/extract_release.py`](../tools/extract_release.py): it copies `.text` and the symbol offsets from the built object without changing them.
 - [`tools/check.sh`](../tools/check.sh) step 2b: the library is rebuilt from source, the artifact file is regenerated in memory from the built object and must equal the checked-in file (bytes, offsets and sha256).
 - The size and sha256 in the file's header are the ones the library's CHANGELOG and README state for the release. Nothing checks this mechanically: step 2b compares the file with a fresh build, not with a recorded value. (`build/lib/MANIFEST.txt` is written by that same build, so it always agrees and proves nothing here.) Any change of the artifact does show up as a diff of this checked-in file.
 
-**[`Artifacts/Release.lean`](../lean/M0Crypto/Artifacts/Release.lean)**
+**[`Artifacts/Release.lean`](../assets/chacha20poly1305/artifact/M0Crypto/Artifacts/Release.lean)**
 
 | Declaration | Lines | Review note |
 |---|---:|---|
@@ -267,7 +269,7 @@ Vectors are a second check, but they do not replace reading: a spec bug on a pat
 
 Contracts say *when* a theorem applies (preconditions) and *what* it promises (postconditions). This is where a statement most easily ends up weaker than intended, and where no tool helps you.
 
-They are in five statement files, which contain definitions only and import nothing but the specification, the model and the artifact. Read each from top to bottom: [`Contract.lean`](../lean/M0Crypto/Release/Contract.lean) (shared vocabulary), [`ChaCha20Contract.lean`](../lean/M0Crypto/Release/ChaCha20Contract.lean), [`AeadContract.lean`](../lean/M0Crypto/Release/AeadContract.lean), [`TraceSpec.lean`](../lean/M0Crypto/Release/TraceSpec.lean) and, for X25519, [`X25519Contract.lean`](../lean/M0Crypto/Release/X25519Contract.lean) (section 9.2).
+They are in statement files, which contain definitions only and import nothing but the specification, the model and the artifact. Read each from top to bottom: [`Contract.lean`](../lean/M0Crypto/Release/Contract.lean) and [`TraceSpec.lean`](../lean/M0Crypto/Release/TraceSpec.lean) (shared vocabulary), [`ChaCha20Contract.lean`](../lean/M0Crypto/Release/ChaCha20Contract.lean), [`AeadContract.lean`](../lean/M0Crypto/Release/AeadContract.lean), [`ChaCha20TraceSpec.lean`](../lean/M0Crypto/Release/ChaCha20TraceSpec.lean) and, for X25519, [`X25519Contract.lean`](../lean/M0Crypto/Release/X25519Contract.lean) and [`X25519TraceSpec.lean`](../lean/M0Crypto/Release/X25519TraceSpec.lean) (section 9.2).
 
 Two definitions carry most of the weight, so read them first:
 
@@ -295,7 +297,7 @@ For every postcondition and statement, ask:
 | Declaration | Lines | Review note |
 |---|---:|---|
 | `Release.B` | 2 | The release bytes (short name for `Artifacts.Release.bytes`). |
-| `Release.Region` | 4 | `y` is one of the `n` bytes from `a`: `(y − a) mod 2^32 < n`. **Used by every region of the contracts**; an error here changes all of them. Check the wrap-around reading: a region that crosses the top of memory continues at address 0 (the preconditions exclude that for caller buffers, through `Disj`). The proved lemmas `Region.mk` and `Region.exists` (`Release/Frame.lean`) show it equals "`y = a + o` for some `o < n`". |
+| `Release.Region` | 4 | `y` is one of the `n` bytes from `a`: `(y − a) mod 2^32 < n`. **Used by every region of the contracts**; an error here changes all of them. Check the wrap-around reading: a region that crosses the top of memory continues at address 0 (the preconditions exclude that for caller buffers, through `Disj`). The proved lemmas `Region.mk` and `Region.exists` (`Release/FrameBase.lean`) show it equals "`y = a + o` for some `o < n`". |
 | `Release.WritesTo` | 3 | Every write in the trace lies in a region: used for "writes stay inside caller buffers". |
 | `Release.runStates` | 15 | Same run as `runUntil`, also returning every intermediate state (used by the stack statements). The proved lemma `runStates_events` (`Release/RunStates.lean`) shows its trace equals `runUntil`'s. |
 | `Release.Frame.Disj` | 3 | Two byte ranges do not overlap and do not wrap around memory. **Used in almost every precondition**; an error here weakens all of them. |
@@ -351,7 +353,7 @@ For every postcondition and statement, ask:
 | `Release.Aead.EncryptResult` | 6 | Encryption post: `RetPost`, ciphertext and tag equal `Spec.Aead.encrypt`, memory unchanged outside `AWr`. `zero`: 96 bytes of the AEAD's own frame (Poly1305 context and key block) are zero. Callee frames are not mentioned. |
 | `Release.Aead.DecryptResult` | 9 | Decryption post: on failure r0 = −2 and `out` is unchanged; on success r0 = 0 and the plaintext equals the spec. `frame` and `zero` as for encryption. |
 
-**[`Release/TraceSpec.lean`](../lean/M0Crypto/Release/TraceSpec.lean)**
+**[`Release/ChaCha20TraceSpec.lean`](../lean/M0Crypto/Release/ChaCha20TraceSpec.lean)** (the shared `ReadsFrom` and `InStackWindow` are in [`Release/TraceSpec.lean`](../lean/M0Crypto/Release/TraceSpec.lean))
 
 | Declaration | Lines | Review note |
 |---|---:|---|
@@ -380,16 +382,16 @@ These files decide whether the proofs are about the shipped library and whether 
 
 | File | Lines | What it guarantees |
 |---|---:|---|
-| [`tools/check.sh`](../tools/check.sh) | 296 | The release gate. Step 2b: rebuilds the library and compares the regenerated artifact file with the checked-in one. Step 4: builds all proofs. Step 4b: compares the decoder with `llvm-objdump`. Step 4c: runs the specification on external vectors. Step 5: rejects `sorry`/`admit`/`axiom`/`native_decide`/`implemented_by`/`extern` in sources. Step 6: audits axioms. Step 6b: compares statements with the golden file. Step 7: runs the QEMU tests. Step 7b: compares the model with QEMU instruction by instruction. |
+| [`tools/check.sh`](../tools/check.sh) | 296 | The release gate, per asset (`tools/check.sh [ASSET...]`). Step 2b: rebuilds each asset and compares the regenerated artifact file with the checked-in one. Step 4: builds each asset's proofs in its workspace. Step 4b: compares the decoder with `llvm-objdump`. Step 4c: runs the specification on external vectors. Step 5: rejects `sorry`/`admit`/`axiom`/`native_decide`/`implemented_by`/`extern` in sources. Step 6: audits axioms. Step 6b: compares statements with the golden file. Step 7: runs the QEMU tests. Step 7b: compares the model with QEMU instruction by instruction. |
 | [`../tools/build_lib.sh`](../../tools/build_lib.sh) | 51 | Builds the object whose `.text` is proved, with the pinned toolchain. |
-| [`tools/extract_release.py`](../tools/extract_release.py) | 172 | Generates `Artifacts/Release.lean` from the built object. |
+| [`tools/extract_release.py`](../tools/extract_release.py) | 172 | Generates an asset's `Artifacts/Release.lean` from its built object. |
 | [`tools/check_listing.py`](../tools/check_listing.py), [`lean/DumpListing.lean`](../lean/DumpListing.lean), [`lean/M0Crypto/Thumb/Listing.lean`](../lean/M0Crypto/Thumb/Listing.lean) | 83 + 5 + 129 | The decoder-versus-LLVM comparison, including `render`, which prints the model's decoding. This is what stands in for reading the decoding functions (section 3.2). |
 | [`tools/spec_vectors.py`](../tools/spec_vectors.py), [`lean/SpecVectors.lean`](../lean/SpecVectors.lean) | 50 + 61 | Runs the specification on the library's test vectors (section 3.4). A test: an error here could hide a specification bug, not create a false theorem. |
 | [`tools/qemu_steps.py`](../tools/qemu_steps.py), [`lean/StepTrace.lean`](../lean/StepTrace.lean) | 180 + 84 | Compares the model with QEMU after every instruction of sampled calls (section 3.1). Also a test. |
-| [`lean/Audit.lean`](../lean/Audit.lean) | 280 | Theorems whose axioms are printed. `check.sh` allows only `propext`, `Classical.choice`, `Quot.sound`. |
-| [`tools/statements.sh`](../tools/statements.sh) + [`tools/statements.golden`](../tools/statements.golden) | 19 + 1866 | Printed statement of every audited theorem. See section 2 for what this does not lock. |
+| `assets/ASSET/Audit.lean` | | Per asset: the claims (section 6, "Claim policy"). `check.sh` requires one axiom report per claim, drawn only from `propext`, `Classical.choice`, `Quot.sound`. |
+| [`tools/statements.sh`](../tools/statements.sh), [`tools/claims.sh`](../tools/claims.sh) + `assets/ASSET/statements.golden` | | Per asset: printed statement of every claim and body of every trusted definition. See section 2. |
 | [`lean-toolchain`](../lean-toolchain), [`tools/versions.txt`](../tools/versions.txt), [`../tools/versions.txt`](https://github.com/WeGoToMars/m0-crypto-lib/blob/main/tools/versions.txt) | — | Pinned Lean, LLVM and QEMU versions. |
-| [`tools/trusted_defs.lean`](../tools/trusted_defs.lean) | 98 | Computes the lists in section 3. An error here would hide trusted code from the reviewer. Not run by `check.sh`. |
+| [`tools/trusted_defs.lean`](../tools/trusted_defs.lean) | 120 | Computes the lists in section 3 and the definitions printed into the golden files. An error here would hide trusted code from the reviewer. `check.sh` runs it through `statements.sh`. |
 
 Also trusted, outside this repository:
 
@@ -415,17 +417,19 @@ Trust is not a one-time review. Every change to the code or proofs can move the 
 **Check the reading list before every review.**
 
 ```sh
-lake build
-lake env lean tools/trusted_defs.lean
+(cd assets/chacha20poly1305 && lake build)
+tools/trusted_defs.sh chacha20poly1305      # likewise blake2s, x25519
 ```
 
-The tool prints every trusted declaration with its file and line range, then one `FILE` line per file. Those `FILE` lines must name exactly the eleven hand-written files of section 3, the two of section 9 (`Spec/X25519.lean`, `X25519Contract.lean`) and the artifact file, plus the BLAKE2s files, which this document does not yet cover. A file that appears for the first time holds new trusted code: move that definition into a statement file, or review the new file. When a headline theorem is added or renamed, add it to `roots` in the tool; it fails if a root is missing.
+The tool prints every trusted declaration with its file and line range, then one `FILE` line per file. Those `FILE` lines must name exactly the eleven hand-written files of section 3, the two of section 9 (`Spec/X25519.lean`, `X25519Contract.lean`) and the artifact file, plus the BLAKE2s files, which this document does not yet cover. A file that appears for the first time holds new trusted code: move that definition into a statement file, or review the new file. The roots are the claims in the asset's `Audit.lean` without the non-vacuity witnesses, so adding a claim there is the only step.
 
 The tables in section 3 are this output plus one hand-written note per declaration. To refresh them, add a row (with a note) for each new declaration, drop rows that disappeared, and correct the line counts.
 
+**Claim policy (every asset).** An asset's `Audit.lean` lists exactly its claims, in this order: for each global function of the asset's object, a correctness, a constant-time, a read-bound and a stack-bound theorem, and a non-vacuity witness (`*_nonvacuous`) whose statement is the correctness precondition at a concrete call; then the asset's composition claims (AEAD `rejected_writes`, BLAKE2s `hash_*`, `c1`, `c4`). Supporting lemmas are not listed: `#print axioms` on a claim already follows its whole proof, and step 5 scans every source for `sorry` and axioms. Internal routines (local symbols: X25519 `fe_*`, Poly1305 `init`/`blocks`/`finish`) are not claims; their contracts are proved and used inside the claims of the functions that call them, and the artifact file marks each function offset `exported` or `internal`. A composed claim with many hypotheses names them as a structure (BLAKE2s `C1Hyp`, `C4Hyp`) so that its witness can state them at a concrete call; a constant-time witness uses two executions that differ in their secret input (BLAKE2s `c4_nonvacuous`: two message byte strings). Open against this policy: the per-function constant-time claims of all three assets have no two-execution witness (their witnesses show the correctness precondition).
+
 **Review statement diffs, not proof diffs.** For any change, the questions are:
 
-1. Did `tools/statements.golden` change? Read every changed statement in full.
+1. Did an asset's `statements.golden` change? Read every changed statement in full.
 2. Did a trusted file change? This is the only check on the contract definitions and on the bodies of the `TraceSpec` Props, so it is not optional. Read the diff against its reference:
 
    ```sh
@@ -433,8 +437,9 @@ The tables in section 3 are this output plus one hand-written note per declarati
      lean/M0Crypto/Thumb/Decode.lean lean/M0Crypto/Thumb/Exec.lean lean/M0Crypto/Thumb/Listing.lean \
      lean/M0Crypto/Release/Contract.lean lean/M0Crypto/Release/ChaCha20Contract.lean \
      lean/M0Crypto/Release/AeadContract.lean lean/M0Crypto/Release/TraceSpec.lean \
-     lean/M0Crypto/Release/X25519Contract.lean \
-     lean/M0Crypto/Artifacts/Release.lean lean/Audit.lean tools ../tools/build_lib.sh
+     lean/M0Crypto/Release/ChaCha20TraceSpec.lean lean/M0Crypto/Release/X25519TraceSpec.lean \
+     lean/M0Crypto/Release/X25519Contract.lean lean/M0Crypto/Assets \
+     assets tools ../tools/build_lib.sh
    ```
 
 3. Did `check.sh` pass from a clean checkout?
@@ -450,9 +455,9 @@ If all three are fine, the proof changes need no correctness review.
 - a postcondition that is dropped or replaced by something weaker;
 - `sorry`, `axiom`, `native_decide`, or a raised `maxRecDepth`/`maxHeartbeats` to force a `decide` through (the last two are not unsound, only a cost signal).
 
-**Non-vacuity.** Each function has a concrete call that satisfies `Pre` (or `APre`), the whole hypothesis of its correctness, read and stack theorems: [`Release/NonVacuity.lean`](../lean/M0Crypto/Release/NonVacuity.lean) proves this for the three functions, with calls that are in place, unaligned and non-empty, and passes each witness to its correctness theorem. The constant-time theorems take two such calls with equal `pub` (and, for decryption, equal verdict); the same witness taken twice fits. Check that the witnesses are realistic rather than degenerate. The executable release checks (`Thumb/ReleaseCheck/`) run the real bytes on concrete inputs, which is strong evidence but not a proof that the contracts are satisfiable.
+**Non-vacuity.** Each function has a concrete call that satisfies `Pre` (or `APre`), the whole hypothesis of its correctness, read and stack theorems: [`Release/ChaCha20Poly1305NonVacuity.lean`](../lean/M0Crypto/Release/ChaCha20Poly1305NonVacuity.lean) proves this for the three functions, with calls that are in place, unaligned and non-empty, and passes each witness to its correctness theorem. The constant-time theorems take two such calls with equal `pub` (and, for decryption, equal verdict); the same witness taken twice fits. Check that the witnesses are realistic rather than degenerate. The executable release checks (`Thumb/ReleaseCheck/`) run the real bytes on concrete inputs, which is strong evidence but not a proof that the contracts are satisfiable.
 
-**Keep the trusted base where it is.** Statements mention only definitions from `Spec/`, the model, and the five statement files. A new definition that a statement needs goes into a statement file, never into a proof file.
+**Keep the trusted base where it is.** Statements mention only definitions from `Spec/`, the model, and the statement files. A new definition that a statement needs goes into a statement file, never into a proof file.
 
 **Known gaps.**
 
@@ -465,12 +470,12 @@ If all three are fine, the proof changes need no correctness review.
 
 The fastest way to understand what each part protects is to break it on purpose and watch what fails. Do these on a scratch branch and revert afterwards. Build only the modules you need (`lake build +Module.Name`); a full build takes several minutes.
 
-1. **Read a statement in full.** `tools/statements.sh` prints every audited statement with full names. Pick `xor_correct` and trace each name to its definition through the tables above. Then pick `xor_constant_time` and notice that the printed statement is only a name: open `TraceSpec.lean` for the rest.
-2. **See the axiom audit.** `lake env lean lean/Audit.lean` prints the axioms of each theorem. Replace a proof step in `Release/ChaCha20Xor.lean` by `sorry`, run `lake build`, and run it again: `sorryAx` appears for every audited theorem that depends on that proof, and `check.sh` fails.
+1. **Read a statement in full.** `tools/statements.sh chacha20poly1305` prints every claim with full names, then every trusted definition. Pick `xor_correct` and trace each name to its definition, first in that output, then in the tables above. Then pick `xor_constant_time`: the statement is only a name, and its body is printed further down.
+2. **See the axiom audit.** `lake env lean Audit.lean` in `assets/chacha20poly1305` prints the axioms of each theorem. Replace a proof step in `Release/ChaCha20Xor.lean` by `sorry`, run `lake build`, and run it again: `sorryAx` appears for every audited theorem that depends on that proof, and `check.sh` fails.
 3. **Break the spec.** In `Spec.ChaCha20.quarterRound`, change the rotation 12 to 11. The vectors in `Spec/ChaCha20Vectors.lean` fail. Then ask: which spec errors would the vectors *not* catch? (Hint: the length fields of `macData`.)
 4. **Break the model.** In `Armv6M.addWithCarry`, return the carry negated. Build the release proofs and see which theorems fail: that shows you how much depends on one line. Then try an error in a flag: remove `.setNZ x` from the `movImm` case of `Instr.exec`, build `+M0Crypto.Thumb.FastRun` and run the step 7b command from `check.sh`. It stops at the first instruction after which the model and QEMU differ.
 5. **Make a theorem vacuous.** Add `h : False` as a hypothesis to a copy of a small theorem. It proves trivially. This is why section 3.5 asks whether preconditions can all hold.
-6. **See what the golden file does not show.** `grep -n -A3 'xor_correct :' tools/statements.golden` prints `ChaCha20Xor.Pre c s →` and nothing about what `Pre`, or the `Valid` inside it, requires. Now add a field to `Valid` in `ChaCha20Contract.lean` (for example `short : c.len.toNat < 64`) and build `+M0Crypto.Release.AeadKey`. The printed statement would be unchanged, but the build stops: the AEAD proof must establish `Valid` for its own inner ChaCha20 call, and the witness in `NonVacuity.lean` no longer fits. A contract is protected by whoever has to satisfy it. A definition nobody has to satisfy, such as `pub` or a read region, is protected only by review.
+6. **See who protects a contract.** Add a field to `Valid` in `ChaCha20Contract.lean` (for example `short : c.len.toNat < 64`) and build `+M0Crypto.Release.AeadKey`. The golden file would show the new field, but the build stops first: the AEAD proof must establish `Valid` for its own inner ChaCha20 call, and the witness in `NonVacuity.lean` no longer fits. A contract is protected by whoever has to satisfy it. A definition nobody has to satisfy, such as `pub` or a read region, is protected only by review.
 7. **Mutate the assembly.** [`tools/mutate_aead.py`](../tools/mutate_aead.py) applies deliberate bugs to the AEAD source and checks that the QEMU tests or the model's executable release checks detect each one. (It does not run the proofs.) Read its mutant list and predict which check catches each mutant before running it.
 
 Background reading: [Theorem Proving in Lean 4](https://lean-lang.org/theorem_proving_in_lean4/) (chapters on propositions, quantifiers and structures are enough to read every statement here) and [Functional Programming in Lean](https://lean-lang.org/functional_programming_in_lean/) (to read definitions such as `Instr.exec`).
@@ -503,7 +508,7 @@ The X25519 unit is four symbols of the release artifact: the entry `m0c_x25519` 
 | `X25519.x25519_reads : TraceSpec.X25519Reads` | same | Reads only `scalar`, `point`, the artifact and the stack window |
 | `X25519.x25519_stack : TraceSpec.X25519Stack` | same | SP within 516 bytes below its entry value at every state |
 
-All four assume exactly `X25519.Pre c s`. They are in `lean/Audit.lean` and in the `EXPECTED` list of `check.sh`, with the non-vacuity witness `NonVacuity.x25519_pre_nonvacuous`: a call where `out` is `point`, at an odd address, and `scalar` is unaligned, on RFC 7748 vector 1. `tools/trusted_defs.lean` has the four theorems as roots.
+All four assume exactly `X25519.Pre c s`. They are the claims in `assets/x25519/Audit.lean`, with the non-vacuity witness `NonVacuity.x25519_pre_nonvacuous` (`X25519NonVacuity.lean`): a call where `out` is `point`, at an odd address, and `scalar` is unaligned, on RFC 7748 vector 1.
 
 ### 9.2 What to read
 
@@ -511,7 +516,7 @@ All four assume exactly `X25519.Pre c s`. They are in `lean/Audit.lean` and in t
 |---|---|---:|---:|---|
 | Specification | [`Spec/X25519.lean`](../lean/M0Crypto/Spec/X25519.lean) | 15 | 68 | RFC 7748 section 5 |
 | Contract | [`X25519Contract.lean`](../lean/M0Crypto/Release/X25519Contract.lean) | 15 | 87 | `include/m0crypto/x25519.h`, AAPCS32 |
-| Trace statements | [`TraceSpec.lean`](../lean/M0Crypto/Release/TraceSpec.lean): `X25519.Ctx.pub`, `X25519ReadRegion`, `X25519ConstantTime`, `X25519Reads`, `X25519Stack` | 5 | 26 | the claims of section 9.1 |
+| Trace statements | [`X25519TraceSpec.lean`](../lean/M0Crypto/Release/X25519TraceSpec.lean): `X25519.Ctx.pub`, `X25519ReadRegion`, `X25519ConstantTime`, `X25519Reads`, `X25519Stack` | 5 | 26 | the claims of section 9.1 |
 | Model | `sbcs` in `Thumb.DpOp` and `Instr.exec` (section 3.1) | 1 | 4 | ARMv6-M manual, SBC (register) |
 | Artifact | `Artifacts.Release.x25519`, `size`, `bytes` | 3 | generated (444) | `llvm-nm -S` of the built object; section 3.3 |
 

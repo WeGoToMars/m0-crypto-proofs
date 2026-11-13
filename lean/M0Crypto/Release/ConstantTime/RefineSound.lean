@@ -1,7 +1,7 @@
 import M0Crypto.Release.ConstantTime.TightenSound
 import M0Crypto.Release.ConstantTime.BranchSound
-import M0Crypto.Release.ChaCha20Output
 import M0Crypto.Sym.Norm
+import M0Crypto.Release.Reach
 
 /-! Soundness of interval refinement for conditional branches. -/
 namespace M0Crypto.Release.ConstantTime
@@ -35,7 +35,7 @@ theorem cmpSem_flags {c : Cmp} {s : M0Crypto.Armv6M.State}
         simpa [BitVec.sub_add_cancel] using hh
       · intro he
         simpa [he] using (BitVec.sub_self (operand s c.b))
-    · rw [hc.2.2.1, M0Crypto.Release.ChaCha20Output.sub_carry]
+    · rw [hc.2.2.1, M0Crypto.Release.sub_carry]
 
 /-- For the unsigned and equality conditions that the analyzer refines, the
 recorded comparison and observed branch direction imply the corresponding

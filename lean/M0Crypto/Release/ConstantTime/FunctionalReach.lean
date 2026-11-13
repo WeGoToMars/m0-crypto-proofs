@@ -1,4 +1,4 @@
-import M0Crypto.Release.ConstantTime.DecryptVerdict
+import M0Crypto.Release.ConstantTime.InstructionCases
 
 /-! Connecting functional artifact execution to recorded machine states. -/
 namespace M0Crypto.Release.ConstantTime

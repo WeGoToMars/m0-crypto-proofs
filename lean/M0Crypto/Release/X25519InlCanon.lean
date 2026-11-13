@@ -121,7 +121,7 @@ theorem canonFirst_exec (s : State) (c : LowReg) (hc : c ≠ 1) (st : Bool) :
       X25519Mem.regs_ldrImm, X25519Mem.mem_ldrImm, X25519Mem.c_ldrImm, X25519Mem.regs_strImm,
       X25519Mem.mem_strImm, c_strImm, X25519Mul.regs_adds, X25519Mul.c_adds,
       X25519MulcWord.mem_adds, State.reg, toReg0, toReg1, Ne.symm hc', hc', hc1, a0,
-      Blake2s.toReg_ne15, ne_eq, not_false_eq_true]
+      InstrNext.toReg_ne15, ne_eq, not_false_eq_true]
   all_goals
     try (intro r h15 hr
          simp (config := {decide := true}) only [X25519Mem.regs_strImm _ _ _ _ _ h15,
@@ -242,13 +242,13 @@ theorem canonHead_exec (s : State) :
     simp [slot]
   refine ⟨?_, ?_, ?_, ?_, ?_⟩
   · simp (config := {decide := true}) only [t, canonHead, execAll, State.reg, X25519Mul.regs_lsl,
-      X25519Mul.regs_lsr, Blake2s.regs_movImm, X25519Mul.regs_muls, X25519Mem.regs_ldrImm,
+      X25519Mul.regs_lsr, InstrNext.regs_movImm, X25519Mul.regs_muls, X25519Mem.regs_ldrImm,
       X25519Mem.regs_strImm, toReg0, toReg1, toReg2, toReg3, toReg4, ite_true, ite_false, k0]
   · simp (config := {decide := true}) only [t, canonHead, execAll, State.reg, X25519Mul.regs_lsl,
-      X25519Mul.regs_lsr, Blake2s.regs_movImm, X25519Mul.regs_muls, X25519Mem.regs_ldrImm,
+      X25519Mul.regs_lsr, InstrNext.regs_movImm, X25519Mul.regs_muls, X25519Mem.regs_ldrImm,
       X25519Mem.regs_strImm, toReg0, toReg1, toReg2, toReg3, toReg4, ite_true, ite_false, k19]
   · simp (config := {decide := true}) only [t, canonHead, execAll, State.reg, X25519Mul.regs_lsl,
-      X25519Mul.regs_lsr, Blake2s.regs_movImm, X25519Mul.regs_muls, X25519Mem.regs_ldrImm,
+      X25519Mul.regs_lsr, InstrNext.regs_movImm, X25519Mul.regs_muls, X25519Mem.regs_ldrImm,
       X25519Mem.regs_strImm, X25519Mem.mem_ldrImm, X25519Mem.mem_strImm, mem_movImm,
       toReg0, toReg1, toReg2, toReg3, toReg4, ite_true, ite_false, k19, k31, a7]
     have := x.isLt
@@ -256,7 +256,7 @@ theorem canonHead_exec (s : State) :
       Nat.shiftRight_eq_div_pow, Nat.reduceMod] at this ⊢
     omega
   · simp (config := {decide := true}) only [t, canonHead, execAll, State.reg, X25519Mul.regs_lsl,
-      X25519Mul.regs_lsr, Blake2s.regs_movImm, X25519Mul.regs_muls, X25519Mem.regs_ldrImm,
+      X25519Mul.regs_lsr, InstrNext.regs_movImm, X25519Mul.regs_muls, X25519Mem.regs_ldrImm,
       X25519Mem.regs_strImm, X25519Mem.mem_ldrImm, X25519Mem.mem_strImm, mem_movImm,
       X25519MulcWord.mem_lsl, X25519MulcWord.mem_lsr, X25519MulcWord.mem_dp,
       toReg0, toReg1, toReg2, toReg3, toReg4, ite_true, ite_false, k1, k31, a7, x]

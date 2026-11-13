@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Compare the Lean model's decoding of the release artifact with llvm-objdump.
 
-Runs lean/DumpListing.lean (the model's decoder and renderer, Thumb/Listing.lean)
-and `llvm-objdump -d` on the release object build/lib/m0crypto.o, normalises both, and requires
+Runs lean/DumpListing.lean (the model's decoder and renderer, Thumb/Listing.lean) in the
+asset's Lake workspace (assets/ASSET, whose artifact is that object's .text) and
+`llvm-objdump -d` on the asset's release object, normalises both, and requires
 the same instruction at the same offset for every instruction of every code range.
 Branch lines compare the target address only; PC-relative loads also compare the
 literal address. objdump's `.word` lines (literal pools) are skipped; the Lean
@@ -12,7 +13,7 @@ It also requires every direct branch to target a listed instruction. The compari
 does not cover an offset inside a `bl` or a literal pool, and with this no branch
 leads to one.
 
-Usage: check_listing.py OBJDUMP OBJECT
+Usage: check_listing.py OBJDUMP OBJECT ASSET
 """
 import re
 import subprocess
@@ -48,8 +49,9 @@ def objdump_lines(objdump, obj):
     return res
 
 
-def lean_lines():
-    out = subprocess.run(["lake", "env", "lean", "--run", "lean/DumpListing.lean"], cwd=ROOT,
+def lean_lines(asset):
+    out = subprocess.run(["lake", "env", "lean", "--run", str(ROOT / "lean/DumpListing.lean")],
+                         cwd=ROOT / "assets" / asset,
                          check=True, capture_output=True, text=True).stdout
     res = {}
     for line in out.splitlines():
@@ -61,9 +63,9 @@ def lean_lines():
 
 
 def main(argv):
-    if len(argv) != 3:
+    if len(argv) != 4 or not (ROOT / "assets" / argv[3]).is_dir():
         sys.exit(__doc__)
-    want, got = objdump_lines(argv[1], argv[2]), lean_lines()
+    want, got = objdump_lines(argv[1], argv[2]), lean_lines(argv[3])
     bad = [o for o in sorted(set(want) | set(got)) if want.get(o) != got.get(o)]
     for o in bad[:20]:
         print(f"  0x{o:x}: objdump {want.get(o)!r}  model {got.get(o)!r}")

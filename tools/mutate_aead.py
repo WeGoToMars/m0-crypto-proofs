@@ -4,12 +4,13 @@
     python3 -I tools/mutate_aead.py
 
 Applies each deliberate bug below to src/chacha20poly1305.S (part of the
-release unit src/m0crypto.S), one at a time, and runs both checks on it:
+release asset src/m0crypto_chacha20poly1305.S), one at a time, and runs both checks on it:
 
 * QEMU: tools/test_qemu.sh;
-* model: rebuild the library (its tools/build_lib.sh), regenerate
-  lean/M0Crypto/Artifacts/Release.lean and build
-  M0Crypto.Thumb.ReleaseCheck (all access-audit and secret-residue shards).
+* model: rebuild the asset (the library's tools/build_lib.sh chacha20poly1305), regenerate
+  assets/chacha20poly1305/artifact/M0Crypto/Artifacts/Release.lean and build
+  M0Crypto.Thumb.ReleaseCheck.ChaCha20Poly1305 (all access-audit and secret-residue shards)
+  in that asset's workspace.
 
 A check DETECTS a mutant only if it ran and reported a failing case. A build or
 tool error is reported as such and fails the run; it never counts as detection.
@@ -60,17 +61,19 @@ MUTANTS = [
     ("expected_tag[15] clear becomes mov r5, r5", "    movs r5, #0                     /* expected_tag[15]: do not leave it for CRYPT to save */\n", "    mov  r5, r5\n", "model"),
 ]
 
-ARTIFACT = os.path.join(ROOT, "lean", "M0Crypto", "Artifacts", "Release.lean")
+WORKSPACE = os.path.join(ROOT, "assets", "chacha20poly1305")
+ARTIFACT = os.path.join(WORKSPACE, "artifact", "M0Crypto", "Artifacts", "Release.lean")
 
 
 def rebuild():
     """Build the library from the (mutated) source and regenerate the Lean artifact."""
-    b = subprocess.run([os.path.join(LIB, "tools", "build_lib.sh")],
+    b = subprocess.run([os.path.join(LIB, "tools", "build_lib.sh"), "chacha20poly1305"],
                        capture_output=True, text=True)
     if b.returncode:
         return b
     return subprocess.run([sys.executable, "-I", os.path.join(ROOT, "tools", "extract_release.py"),
-                           os.path.join(LIB, "build", "lib", "m0crypto.o"), ARTIFACT],
+                           os.path.join(LIB, "build", "lib", "chacha20poly1305", "m0crypto_chacha20poly1305.o"),
+                           ARTIFACT],
                           capture_output=True, text=True)
 
 
@@ -84,8 +87,8 @@ def model_check():
         return "ERROR", "mutant did not change the library bytes"
     # Building the root invalidates every shard when the artifact changes.
     # `lake env lean` on an import-only root would reuse stale compiled checks.
-    r = subprocess.run(["lake", "build", "+M0Crypto.Thumb.ReleaseCheck"],
-                       cwd=ROOT, capture_output=True, text=True)
+    r = subprocess.run(["lake", "build", "+M0Crypto.Thumb.ReleaseCheck.ChaCha20Poly1305"],
+                       cwd=WORKSPACE, capture_output=True, text=True)
     out = (r.stdout + r.stderr).strip().splitlines()
     failed = next((l for l in out if "release check FAILED" in l), None)
     if r.returncode == 0 and failed is None:

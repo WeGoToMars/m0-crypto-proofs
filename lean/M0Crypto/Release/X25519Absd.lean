@@ -16,7 +16,7 @@ open M0Crypto.Release.X25519Mem
 open M0Crypto.Release.X25519W4
 open M0Crypto.Release.X25519Carry (sbc_pair carry_le)
 open M0Crypto.Release.X25519Mul (regs_subs regs_sbcs c_sbcs c_subs ne_lo)
-open M0Crypto.Release.Blake2s (toReg_ne15 regs_eors)
+open M0Crypto.Release.InstrNext (toReg_ne15 regs_eors)
 
 theorem not2 {a b : Nat} (ha : a < 2 ^ 32) (hb : b < 2 ^ 32) :
     2 ^ 32 - 1 - a + 2 ^ 32 * (2 ^ 32 - 1 - b) = 2 ^ 64 - 1 - (a + 2 ^ 32 * b) := by omega

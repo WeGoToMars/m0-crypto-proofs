@@ -8,8 +8,8 @@ bug below it applies the edit to src/blake2s_*.S in a copy of the library, rebui
 release object, then runs two checks:
 
 * QEMU: tools/test_qemu.sh of the copy (does a test image see the bug?);
-* proofs: regenerates lean/M0Crypto/Artifacts/Release.lean in a copy of the proofs tree
-  and builds every module with `Blake2s` in its name (the BLAKE2s proofs, certificates and
+* proofs: regenerates assets/blake2s/artifact/M0Crypto/Artifacts/Release.lean in a copy of
+  the proofs tree and builds, in that asset's workspace, every module with `Blake2s` in its name (the BLAKE2s proofs, certificates and
   release checks; the ChaCha20 and AEAD proofs are not rebuilt). The modules that fail are
   listed. A mutant is REJECTED by the proofs when that build fails.
 
@@ -81,14 +81,18 @@ def sync(src, dst, excludes):
 
 
 def build_lib(libdir):
-    r = run([os.path.join(libdir, "tools", "build_lib.sh")])
+    r = run([os.path.join(libdir, "tools", "build_lib.sh"), "blake2s"])
     if r.returncode:
         return None, (r.stdout + r.stderr).strip()[-300:]
-    return os.path.join(libdir, "build", "lib", "m0crypto.o"), ""
+    return os.path.join(libdir, "build", "lib", "blake2s", "m0crypto_blake2s.o"), ""
+
+
+def workspace(pdir):
+    return os.path.join(pdir, "assets", "blake2s")
 
 
 def extract(obj, pdir):
-    out = os.path.join(pdir, "lean", "M0Crypto", "Artifacts", "Release.lean")
+    out = os.path.join(workspace(pdir), "artifact", "M0Crypto", "Artifacts", "Release.lean")
     return run([sys.executable, "-I", os.path.join(pdir, "tools", "extract_release.py"), obj, out])
 
 
@@ -105,7 +109,7 @@ def lake_build(pdir):
     # tools/membuild.py (memory-budgeted lake build) if present, else plain lake.
     mb = os.environ.get("M0C_MEMBUILD", os.path.join(ROOT, "tools", "membuild.py"))
     cmd = [sys.executable, mb] if os.path.exists(mb) else ["lake"]
-    r = run(cmd + (["build"] if cmd == ["lake"] else []) + blake2s_modules(pdir), cwd=pdir, env=env)
+    r = run(cmd + (["build"] if cmd == ["lake"] else []) + blake2s_modules(pdir), cwd=workspace(pdir), env=env)
     out = r.stdout + r.stderr
     failed = sorted(set(re.findall(r"^✖ \[\d+/\d+\] Building (\S+)", out, re.M)))
     return r.returncode, failed, out
@@ -125,12 +129,11 @@ def main():
     os.makedirs(WORK, exist_ok=True)
     sync(LIB, libd, [".git", "proofs", "build", "bench"])
     # First run: copy the built tree (.lake included) so only changed modules rebuild.
-    sync(ROOT, prd, [".git", "build", "__pycache__"] + ([".lake"] if os.path.isdir(os.path.join(prd, ".lake")) else []))
+    sync(ROOT, prd, [".git", "build", "__pycache__"] + ([".lake"] if os.path.isdir(os.path.join(workspace(prd), ".lake")) else []))
     obj, err = build_lib(libd)
     if not obj:
         sys.exit("baseline library build failed: " + err)
     base_obj = open(obj, "rb").read()
-    rel = os.path.join(prd, "lean", "M0Crypto", "Artifacts", "Release.lean")
     if extract(obj, prd).returncode:
         sys.exit("baseline extract failed")
     rc, failed, out = lake_build(prd)

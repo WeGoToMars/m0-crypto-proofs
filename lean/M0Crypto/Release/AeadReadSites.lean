@@ -1,12 +1,12 @@
 import M0Crypto.Release.TraceSpec
-import M0Crypto.Release.Frame
+import M0Crypto.Release.ChaCha20Frame
 import M0Crypto.Release.ChaCha20Setup
 import M0Crypto.Release.ChaCha20Layout
 import M0Crypto.Release.AeadPrologue
 import M0Crypto.Release.AeadCrypt
 import M0Crypto.Release.AeadDecrypt
 import M0Crypto.Release.RunStates
-import M0Crypto.Release.TraceSpecDefs
+import M0Crypto.Release.ChaCha20TraceSpecDefs
 
 set_option linter.unusedSimpArgs false
 set_option maxRecDepth 100000

@@ -1,0 +1,1125 @@
+M0Crypto.Release.ChaCha20Xor.xor_correct : ∀ (c : M0Crypto.Release.Frame.Ctx) (s : M0Crypto.Armv6M.State),
+  M0Crypto.Release.ChaCha20Xor.Pre c s →
+    ∃ n,
+      ∀ (fuel : Nat),
+        n ≤ fuel →
+          ∃ s' tr,
+            M0Crypto.Thumb.runUntil c.ret fuel s = Except.ok (s', tr) ∧
+              M0Crypto.Release.ChaCha20Xor.Result c s' ∧
+                M0Crypto.Release.WritesTo (M0Crypto.Release.ChaCha20Xor.WrOk c) tr
+M0Crypto.Release.ChaCha20Xor.xor_constant_time : M0Crypto.Release.TraceSpec.ChaCha20XorConstantTime
+M0Crypto.Release.ChaCha20Xor.xor_reads : M0Crypto.Release.TraceSpec.ChaCha20XorReads
+M0Crypto.Release.ChaCha20Xor.xor_stack : M0Crypto.Release.TraceSpec.ChaCha20XorStack
+M0Crypto.Release.NonVacuity.xor_correct_nonvacuous : M0Crypto.Release.ChaCha20Xor.Pre M0Crypto.Release.NonVacuity.chCtx
+  (M0Crypto.Release.NonVacuity.stOf M0Crypto.Release.NonVacuity.chMem M0Crypto.Release.NonVacuity.chCtx.regs0)
+M0Crypto.Release.Aead.encrypt_correct : ∀ (c : M0Crypto.Release.Aead.ACall) (s : M0Crypto.Armv6M.State),
+  M0Crypto.Release.Aead.APre c M0Crypto.Release.Aead.encOff s →
+    ∃ n,
+      ∀ (fuel : Nat),
+        n ≤ fuel →
+          ∃ t tr,
+            M0Crypto.Thumb.runUntil c.ret fuel s = Except.ok (t, tr) ∧
+              M0Crypto.Release.Aead.EncryptResult c t ∧ M0Crypto.Release.WritesTo (M0Crypto.Release.Aead.AWr c) tr
+M0Crypto.Release.Aead.encrypt_constant_time : M0Crypto.Release.TraceSpec.AeadEncryptConstantTime
+M0Crypto.Release.Aead.encrypt_reads : M0Crypto.Release.TraceSpec.AeadEncryptReads
+M0Crypto.Release.Aead.encrypt_stack : M0Crypto.Release.TraceSpec.AeadEncryptStack
+M0Crypto.Release.NonVacuity.encrypt_correct_nonvacuous : M0Crypto.Release.Aead.APre
+  (M0Crypto.Release.NonVacuity.aCall M0Crypto.Release.Aead.encOff) M0Crypto.Release.Aead.encOff
+  (M0Crypto.Release.NonVacuity.stOf M0Crypto.Release.NonVacuity.aMem
+    (M0Crypto.Release.NonVacuity.aCall M0Crypto.Release.Aead.encOff).regs0)
+M0Crypto.Release.Aead.decrypt_correct : ∀ (c : M0Crypto.Release.Aead.ACall) (s : M0Crypto.Armv6M.State),
+  M0Crypto.Release.Aead.APre c M0Crypto.Release.Aead.decOff s →
+    ∃ n,
+      ∀ (fuel : Nat),
+        n ≤ fuel →
+          ∃ t tr,
+            M0Crypto.Thumb.runUntil c.ret fuel s = Except.ok (t, tr) ∧
+              M0Crypto.Release.Aead.DecryptResult c t ∧ M0Crypto.Release.WritesTo (M0Crypto.Release.Aead.DAllowed c) tr
+M0Crypto.Release.Aead.rejected_writes : ∀ (c : M0Crypto.Release.Aead.ACall) (tr : List M0Crypto.Thumb.Event),
+  M0Crypto.Spec.Aead.decrypt c.keyB c.nonceB c.aadB c.ptB c.tagB = Option.none →
+    M0Crypto.Release.WritesTo (M0Crypto.Release.Aead.DAllowed c) tr →
+      M0Crypto.Release.WritesTo (M0Crypto.Release.Aead.SWr c.A) tr
+M0Crypto.Release.Aead.decrypt_constant_time : M0Crypto.Release.TraceSpec.AeadDecryptConstantTime
+M0Crypto.Release.Aead.decrypt_reads : M0Crypto.Release.TraceSpec.AeadDecryptReads
+M0Crypto.Release.Aead.decrypt_stack : M0Crypto.Release.TraceSpec.AeadDecryptStack
+M0Crypto.Release.NonVacuity.decrypt_correct_nonvacuous : M0Crypto.Release.Aead.APre
+  (M0Crypto.Release.NonVacuity.aCall M0Crypto.Release.Aead.decOff) M0Crypto.Release.Aead.decOff
+  (M0Crypto.Release.NonVacuity.stOf M0Crypto.Release.NonVacuity.aMem
+    (M0Crypto.Release.NonVacuity.aCall M0Crypto.Release.Aead.decOff).regs0)
+def M0Crypto.Armv6M.Mem : Type :=
+  M0Crypto.Armv6M.Word → BitVec 8
+def M0Crypto.Armv6M.read32 : M0Crypto.Armv6M.Mem → M0Crypto.Armv6M.Word → M0Crypto.Armv6M.Word :=
+  fun m a => m (a + 3#32) ++ m (a + 2#32) ++ m (a + 1#32) ++ m a
+def M0Crypto.Armv6M.write32 : M0Crypto.Armv6M.Mem → M0Crypto.Armv6M.Word → M0Crypto.Armv6M.Word → M0Crypto.Armv6M.Mem :=
+  fun m a v x =>
+  if x = a then BitVec.extractLsb' 0 8 v
+  else
+    if x = a + 1#32 then BitVec.extractLsb' 8 8 v
+    else if x = a + 2#32 then BitVec.extractLsb' 16 8 v else if x = a + 3#32 then BitVec.extractLsb' 24 8 v else m x
+def M0Crypto.Armv6M.slot : M0Crypto.Armv6M.Word → Nat → M0Crypto.Armv6M.Word :=
+  fun sp i => sp + BitVec.ofNat 32 (4 * i)
+def M0Crypto.Armv6M.Word : Type :=
+  BitVec 32
+def M0Crypto.Armv6M.Reg : Type :=
+  Fin 16
+def M0Crypto.Armv6M.LowReg : Type :=
+  Fin 8
+def M0Crypto.Armv6M.LowReg.toReg : M0Crypto.Armv6M.LowReg → M0Crypto.Armv6M.Reg :=
+  fun r => ⟨↑r, M0Crypto.Armv6M.LowReg.toReg._proof_2 r⟩
+inductive M0Crypto.Armv6M.State : Type
+  | M0Crypto.Armv6M.State.mk : (M0Crypto.Armv6M.Reg → M0Crypto.Armv6M.Word) →
+  Bool → Bool → Bool → Bool → (M0Crypto.Armv6M.Word → BitVec 8) → M0Crypto.Armv6M.State
+def M0Crypto.Armv6M.State.pc : M0Crypto.Armv6M.State → M0Crypto.Armv6M.Word :=
+  fun s => s.regs 15
+def M0Crypto.Armv6M.State.reg : M0Crypto.Armv6M.State → M0Crypto.Armv6M.LowReg → M0Crypto.Armv6M.Word :=
+  fun s r => s.regs r.toReg
+def M0Crypto.Armv6M.State.setReg : M0Crypto.Armv6M.State → M0Crypto.Armv6M.Reg → M0Crypto.Armv6M.Word → M0Crypto.Armv6M.State :=
+  fun s r x => { regs := fun i => if i = r then x else s.regs i, n := s.n, z := s.z, c := s.c, v := s.v, mem := s.mem }
+def M0Crypto.Armv6M.State.setNZ : M0Crypto.Armv6M.State → M0Crypto.Armv6M.Word → M0Crypto.Armv6M.State :=
+  fun s x => { regs := s.regs, n := BitVec.msb x, z := x == 0, c := s.c, v := s.v, mem := s.mem }
+def M0Crypto.Armv6M.addWithCarry : M0Crypto.Armv6M.Word → M0Crypto.Armv6M.Word → Bool → M0Crypto.Armv6M.Word × Bool × Bool :=
+  fun x y carryIn =>
+  have unsignedSum := BitVec.toNat x + BitVec.toNat y + carryIn.toNat;
+  have signedSum := BitVec.toInt x + BitVec.toInt y + ↑carryIn.toNat;
+  have result := BitVec.ofNat 32 unsignedSum;
+  (result, Decidable.decide (result.toNat ≠ unsignedSum), Decidable.decide (result.toInt ≠ signedSum))
+def M0Crypto.Armv6M.rorC : M0Crypto.Armv6M.Word → Nat → Bool → M0Crypto.Armv6M.Word × Bool :=
+  fun x amount carryIn =>
+  if amount = 0 then (x, carryIn)
+  else
+    have m := amount % 32;
+    have result := x >>> m ||| x <<< (32 - m);
+    (result, result.msb)
+inductive M0Crypto.Release.Aead.ACall : Type
+  | M0Crypto.Release.Aead.ACall.mk : M0Crypto.Armv6M.Word →
+  M0Crypto.Armv6M.Word →
+    M0Crypto.Armv6M.Word →
+      M0Crypto.Armv6M.Word →
+        M0Crypto.Armv6M.Word →
+          M0Crypto.Armv6M.Word →
+            M0Crypto.Armv6M.Word →
+              M0Crypto.Armv6M.Word →
+                M0Crypto.Armv6M.Word →
+                  M0Crypto.Armv6M.Word →
+                    M0Crypto.Armv6M.Mem → (M0Crypto.Armv6M.Reg → M0Crypto.Armv6M.Word) → M0Crypto.Release.Aead.ACall
+def M0Crypto.Release.Aead.ACall.A : M0Crypto.Release.Aead.ACall → M0Crypto.Armv6M.Word :=
+  fun c => c.sp0 - 144#32
+def M0Crypto.Release.Aead.ACall.ret : M0Crypto.Release.Aead.ACall → M0Crypto.Armv6M.Word :=
+  fun c => c.regs0 14 &&& ~~~1#32
+inductive M0Crypto.Release.Aead.AEntry : M0Crypto.Release.Aead.ACall → Nat → M0Crypto.Armv6M.State → Prop
+  | M0Crypto.Release.Aead.AEntry.mk : ∀ {c : M0Crypto.Release.Aead.ACall} {e : Nat} {s : M0Crypto.Armv6M.State},
+  s.regs = c.regs0 →
+    s.mem = c.m0 →
+      c.regs0 15 = c.base + BitVec.ofNat 32 e →
+        c.regs0 13 = c.sp0 →
+          c.regs0 0 = c.out →
+            c.regs0 1 = c.tag →
+              c.regs0 2 = c.inp →
+                c.regs0 3 = c.len →
+                  M0Crypto.Armv6M.read32 c.m0 c.sp0 = c.aad →
+                    M0Crypto.Armv6M.read32 c.m0 (c.sp0 + 4#32) = c.alen →
+                      M0Crypto.Armv6M.read32 c.m0 (c.sp0 + 8#32) = c.key →
+                        M0Crypto.Armv6M.read32 c.m0 (c.sp0 + 12#32) = c.nonce → M0Crypto.Release.Aead.AEntry c e s
+def M0Crypto.Release.Aead.encOff : Nat :=
+  M0Crypto.Artifacts.Release.chacha20poly1305_encrypt
+def M0Crypto.Release.Aead.decOff : Nat :=
+  M0Crypto.Artifacts.Release.chacha20poly1305_decrypt
+def M0Crypto.Release.Aead.ACall.keyB : M0Crypto.Release.Aead.ACall → List M0Crypto.Spec.ChaCha20.Byte :=
+  fun c => M0Crypto.Release.Frame.Ctx.bytesAt c.m0 c.key 32
+def M0Crypto.Release.Aead.ACall.nonceB : M0Crypto.Release.Aead.ACall → List M0Crypto.Spec.ChaCha20.Byte :=
+  fun c => M0Crypto.Release.Frame.Ctx.bytesAt c.m0 c.nonce 12
+def M0Crypto.Release.Aead.ACall.aadB : M0Crypto.Release.Aead.ACall → List (BitVec 8) :=
+  fun c => M0Crypto.Release.Frame.Ctx.bytesAt c.m0 c.aad (BitVec.toNat c.alen)
+def M0Crypto.Release.Aead.ACall.ptB : M0Crypto.Release.Aead.ACall → List M0Crypto.Spec.ChaCha20.Byte :=
+  fun c => M0Crypto.Release.Frame.Ctx.bytesAt c.m0 c.inp (BitVec.toNat c.len)
+def M0Crypto.Release.Aead.ACall.tagB : M0Crypto.Release.Aead.ACall → List (BitVec 8) :=
+  fun c => M0Crypto.Release.Frame.Ctx.bytesAt c.m0 c.tag 16
+def M0Crypto.Release.Aead.ACall.expected : M0Crypto.Release.Aead.ACall → List M0Crypto.Spec.ChaCha20.Byte :=
+  fun c =>
+  M0Crypto.Spec.Aead.poly1305 (M0Crypto.Spec.Aead.polyKey c.keyB c.nonceB) (M0Crypto.Spec.Aead.macData c.aadB c.ptB)
+inductive M0Crypto.Release.Aead.AValid : M0Crypto.Release.Aead.ACall → Prop
+  | M0Crypto.Release.Aead.AValid.mk : ∀ {c : M0Crypto.Release.Aead.ACall},
+  BitVec.toNat c.base % 4 = 0 →
+    BitVec.toNat c.sp0 % 8 = 0 →
+      320 ≤ BitVec.toNat c.sp0 →
+        BitVec.toNat c.sp0 + 16 ≤ 2 ^ 32 →
+          M0Crypto.Release.Frame.Disj c.base M0Crypto.Artifacts.Release.size (c.sp0 - 320#32) 336 →
+            M0Crypto.Release.Frame.Disj c.key 32 (c.sp0 - 320#32) 320 →
+              M0Crypto.Release.Frame.Disj c.nonce 12 (c.sp0 - 320#32) 320 →
+                M0Crypto.Thumb.CodeAt c.m0 c.base M0Crypto.Release.B → M0Crypto.Release.Aead.AValid c
+inductive M0Crypto.Release.Aead.ABuf : M0Crypto.Release.Aead.ACall → Prop
+  | M0Crypto.Release.Aead.ABuf.mk : ∀ {c : M0Crypto.Release.Aead.ACall},
+  M0Crypto.Release.Frame.Disj c.out (BitVec.toNat c.len) (c.sp0 - 320#32) 336 →
+    M0Crypto.Release.Frame.Disj c.inp (BitVec.toNat c.len) (c.sp0 - 320#32) 320 →
+      c.inp = c.out ∨ M0Crypto.Release.Frame.Disj c.inp (BitVec.toNat c.len) c.out (BitVec.toNat c.len) →
+        M0Crypto.Release.Frame.Disj c.base M0Crypto.Artifacts.Release.size c.out (BitVec.toNat c.len) →
+          M0Crypto.Release.Frame.Disj c.aad (BitVec.toNat c.alen) (c.sp0 - 320#32) 320 →
+            M0Crypto.Release.Frame.Disj c.aad (BitVec.toNat c.alen) c.out (BitVec.toNat c.len) →
+              M0Crypto.Release.Frame.Disj c.tag 16 (c.sp0 - 320#32) 336 →
+                M0Crypto.Release.Frame.Disj c.tag 16 c.out (BitVec.toNat c.len) →
+                  M0Crypto.Release.Frame.Disj c.base M0Crypto.Artifacts.Release.size c.tag 16 →
+                    M0Crypto.Release.Aead.ABuf c
+inductive M0Crypto.Release.Aead.APre : M0Crypto.Release.Aead.ACall → Nat → M0Crypto.Armv6M.State → Prop
+  | M0Crypto.Release.Aead.APre.mk : ∀ {c : M0Crypto.Release.Aead.ACall} {e : Nat} {s : M0Crypto.Armv6M.State},
+  M0Crypto.Release.Aead.AValid c →
+    M0Crypto.Release.Aead.ABuf c →
+      M0Crypto.Release.Aead.AEntry c e s →
+        BitVec.getLsbD (c.regs0 14) 0 = Bool.true →
+          ¬M0Crypto.Release.Region c.base M0Crypto.Artifacts.Release.size c.ret → M0Crypto.Release.Aead.APre c e s
+def M0Crypto.Release.Aead.SWr : M0Crypto.Armv6M.Word → M0Crypto.Armv6M.Word → Prop :=
+  fun A y => M0Crypto.Release.Region (A - 176#32) 320 y
+def M0Crypto.Release.Aead.OutR : M0Crypto.Release.Aead.ACall → M0Crypto.Armv6M.Word → Prop :=
+  fun c y => M0Crypto.Release.Region c.out (BitVec.toNat c.len) y
+def M0Crypto.Release.Aead.AWr : M0Crypto.Release.Aead.ACall → M0Crypto.Armv6M.Word → Prop :=
+  fun c y => M0Crypto.Release.Aead.SWr c.A y ∨ M0Crypto.Release.Aead.OutR c y ∨ M0Crypto.Release.Region c.tag 16 y
+def M0Crypto.Release.Aead.DWr : M0Crypto.Release.Aead.ACall → M0Crypto.Armv6M.Word → Prop :=
+  fun c y => M0Crypto.Release.Aead.SWr c.A y ∨ M0Crypto.Release.Aead.OutR c y
+def M0Crypto.Release.Aead.DAllowed : M0Crypto.Release.Aead.ACall → M0Crypto.Armv6M.Word → Prop :=
+  fun c y => M0Crypto.Release.Aead.SWr c.A y ∨ c.expected = c.tagB ∧ M0Crypto.Release.Aead.OutR c y
+inductive M0Crypto.Release.Aead.RetPost : M0Crypto.Release.Aead.ACall → M0Crypto.Armv6M.Word → M0Crypto.Armv6M.State → Prop
+  | M0Crypto.Release.Aead.RetPost.mk : ∀ {c : M0Crypto.Release.Aead.ACall} {result : M0Crypto.Armv6M.Word} {t : M0Crypto.Armv6M.State},
+  t.pc = c.regs0 14 &&& ~~~1#32 →
+    t.regs 13 = c.sp0 →
+      (∀ (r : M0Crypto.Armv6M.Reg), 4 ≤ ↑r → ↑r < 12 → t.regs r = c.regs0 r) →
+        t.regs 0 = result →
+          (∀ (r : M0Crypto.Armv6M.Reg), 1 ≤ ↑r → ↑r < 4 → t.regs r = 0#32) → M0Crypto.Release.Aead.RetPost c result t
+inductive M0Crypto.Release.Aead.EncryptResult : M0Crypto.Release.Aead.ACall → M0Crypto.Armv6M.State → Prop
+  | M0Crypto.Release.Aead.EncryptResult.mk : ∀ {c : M0Crypto.Release.Aead.ACall} {t : M0Crypto.Armv6M.State},
+  M0Crypto.Release.Aead.RetPost c (0#32) t →
+    M0Crypto.Release.Frame.Ctx.bytesAt t.mem c.out (BitVec.toNat c.len) =
+        (M0Crypto.Spec.Aead.encrypt c.keyB c.nonceB c.aadB c.ptB).fst →
+      M0Crypto.Release.Frame.Ctx.bytesAt t.mem c.tag 16 =
+          (M0Crypto.Spec.Aead.encrypt c.keyB c.nonceB c.aadB c.ptB).snd →
+        (∀ (y : M0Crypto.Armv6M.Word), ¬M0Crypto.Release.Aead.AWr c y → t.mem y = c.m0 y) →
+          (∀ (o : Nat), o < 96 → t.mem (c.A + BitVec.ofNat 32 (8 + o)) = 0#8) → M0Crypto.Release.Aead.EncryptResult c t
+inductive M0Crypto.Release.Aead.DecryptResult : M0Crypto.Release.Aead.ACall → M0Crypto.Armv6M.State → Prop
+  | M0Crypto.Release.Aead.DecryptResult.mk : ∀ {c : M0Crypto.Release.Aead.ACall} {t : M0Crypto.Armv6M.State},
+  M0Crypto.Release.Aead.RetPost c (if c.expected = c.tagB then 0#32 else 4294967294#32) t →
+    (∀ (pt : List M0Crypto.Spec.ChaCha20.Byte),
+        M0Crypto.Spec.Aead.decrypt c.keyB c.nonceB c.aadB c.ptB c.tagB = Option.some pt →
+          t.regs 0 = 0#32 ∧ M0Crypto.Release.Frame.Ctx.bytesAt t.mem c.out (BitVec.toNat c.len) = pt) →
+      (M0Crypto.Spec.Aead.decrypt c.keyB c.nonceB c.aadB c.ptB c.tagB = Option.none →
+          t.regs 0 = 4294967294#32 ∧
+            M0Crypto.Release.Frame.Ctx.bytesAt t.mem c.out (BitVec.toNat c.len) =
+              M0Crypto.Release.Frame.Ctx.bytesAt c.m0 c.out (BitVec.toNat c.len)) →
+        (∀ (y : M0Crypto.Armv6M.Word), ¬M0Crypto.Release.Aead.DWr c y → t.mem y = c.m0 y) →
+          (∀ (o : Nat), o < 96 → t.mem (c.A + BitVec.ofNat 32 (8 + o)) = 0#8) → M0Crypto.Release.Aead.DecryptResult c t
+def M0Crypto.Release.ChaCha20Layout.chFrameWords : Nat :=
+  35
+def M0Crypto.Release.ChaCha20Layout.chStackWords : Nat :=
+  44
+def M0Crypto.Release.ChaCha20Layout.chStackBytes : Nat :=
+  4 * M0Crypto.Release.ChaCha20Layout.chStackWords
+inductive M0Crypto.Release.Frame.Ctx : Type
+  | M0Crypto.Release.Frame.Ctx.mk : M0Crypto.Armv6M.Word →
+  M0Crypto.Armv6M.Word →
+    M0Crypto.Armv6M.Word →
+      M0Crypto.Armv6M.Word →
+        M0Crypto.Armv6M.Word →
+          M0Crypto.Armv6M.Word →
+            M0Crypto.Armv6M.Word →
+              M0Crypto.Armv6M.Word →
+                M0Crypto.Armv6M.Mem → (M0Crypto.Armv6M.Reg → M0Crypto.Armv6M.Word) → M0Crypto.Release.Frame.Ctx
+def M0Crypto.Release.Frame.Ctx.fp : M0Crypto.Release.Frame.Ctx → M0Crypto.Armv6M.Word :=
+  fun c => c.sp0 - BitVec.ofNat 32 M0Crypto.Release.ChaCha20Layout.chStackBytes
+def M0Crypto.Release.Frame.Ctx.keyB : M0Crypto.Release.Frame.Ctx → List M0Crypto.Spec.ChaCha20.Byte :=
+  fun c => M0Crypto.Release.Frame.Ctx.bytesAt c.m0 c.key 32
+def M0Crypto.Release.Frame.Ctx.nonceB : M0Crypto.Release.Frame.Ctx → List M0Crypto.Spec.ChaCha20.Byte :=
+  fun c => M0Crypto.Release.Frame.Ctx.bytesAt c.m0 c.nonce 12
+def M0Crypto.Release.Frame.Ctx.msg : M0Crypto.Release.Frame.Ctx → List M0Crypto.Spec.ChaCha20.Byte :=
+  fun c => M0Crypto.Release.Frame.Ctx.bytesAt c.m0 c.inp (BitVec.toNat c.len)
+def M0Crypto.Release.Frame.Ctx.outB : M0Crypto.Release.Frame.Ctx → Nat → M0Crypto.Spec.ChaCha20.Byte :=
+  fun c i => (M0Crypto.Spec.Aead.chacha20 c.keyB (BitVec.toNat c.ctr) c.nonceB c.msg)[i]!
+def M0Crypto.Release.Frame.Ctx.oidx : M0Crypto.Release.Frame.Ctx → M0Crypto.Armv6M.Word → Nat :=
+  fun c y => BitVec.toNat (y - c.out)
+def M0Crypto.Release.Frame.Ctx.ret : M0Crypto.Release.Frame.Ctx → M0Crypto.Armv6M.Word :=
+  fun c => c.regs0 14 &&& ~~~1#32
+inductive M0Crypto.Release.Frame.Valid : M0Crypto.Release.Frame.Ctx → Prop
+  | M0Crypto.Release.Frame.Valid.mk : ∀ {c : M0Crypto.Release.Frame.Ctx},
+  BitVec.toNat c.base % 4 = 0 →
+    BitVec.toNat c.sp0 % 8 = 0 →
+      176 ≤ BitVec.toNat c.sp0 →
+        M0Crypto.Release.Frame.Disj c.base M0Crypto.Artifacts.Release.size c.fp 184 →
+          M0Crypto.Release.Frame.Disj c.base M0Crypto.Artifacts.Release.size c.out (BitVec.toNat c.len) →
+            M0Crypto.Release.Frame.Disj c.out (BitVec.toNat c.len) c.fp 184 →
+              M0Crypto.Release.Frame.Disj c.inp (BitVec.toNat c.len) c.fp 176 →
+                c.inp = c.out ∨ M0Crypto.Release.Frame.Disj c.inp (BitVec.toNat c.len) c.out (BitVec.toNat c.len) →
+                  M0Crypto.Release.Frame.Disj c.key 32 c.fp M0Crypto.Release.ChaCha20Layout.chStackBytes →
+                    M0Crypto.Release.Frame.Disj c.nonce 12 c.fp M0Crypto.Release.ChaCha20Layout.chStackBytes →
+                      M0Crypto.Thumb.CodeAt c.m0 c.base M0Crypto.Release.B → M0Crypto.Release.Frame.Valid c
+inductive M0Crypto.Release.ChaCha20Setup.Entry : M0Crypto.Release.Frame.Ctx → M0Crypto.Armv6M.State → Prop
+  | M0Crypto.Release.ChaCha20Setup.Entry.mk : ∀ {c : M0Crypto.Release.Frame.Ctx} {s : M0Crypto.Armv6M.State},
+  s.regs = c.regs0 →
+    s.mem = c.m0 →
+      c.regs0 15 = c.base →
+        c.regs0 13 = c.sp0 →
+          c.regs0 0 = c.out →
+            c.regs0 1 = c.inp →
+              c.regs0 2 = c.len →
+                c.regs0 3 = c.key →
+                  M0Crypto.Armv6M.read32 c.m0 c.sp0 = c.nonce →
+                    M0Crypto.Armv6M.read32 c.m0 (c.sp0 + 4#32) = c.ctr → M0Crypto.Release.ChaCha20Setup.Entry c s
+inductive M0Crypto.Release.ChaCha20Xor.Pre : M0Crypto.Release.Frame.Ctx → M0Crypto.Armv6M.State → Prop
+  | M0Crypto.Release.ChaCha20Xor.Pre.mk : ∀ {c : M0Crypto.Release.Frame.Ctx} {s : M0Crypto.Armv6M.State},
+  M0Crypto.Release.Frame.Valid c →
+    M0Crypto.Release.ChaCha20Setup.Entry c s →
+      BitVec.getLsbD (c.regs0 14) 0 = Bool.true →
+        ¬M0Crypto.Release.Region c.base M0Crypto.Artifacts.Release.size c.ret → M0Crypto.Release.ChaCha20Xor.Pre c s
+def M0Crypto.Release.ChaCha20Xor.OutS : M0Crypto.Release.Frame.Ctx → M0Crypto.Armv6M.Word → Prop :=
+  fun c y => ¬M0Crypto.Release.Region c.fp M0Crypto.Release.ChaCha20Layout.chStackBytes y
+inductive M0Crypto.Release.ChaCha20Xor.Result : M0Crypto.Release.Frame.Ctx → M0Crypto.Armv6M.State → Prop
+  | M0Crypto.Release.ChaCha20Xor.Result.mk : ∀ {c : M0Crypto.Release.Frame.Ctx} {t : M0Crypto.Armv6M.State},
+  t.pc = c.regs0 14 &&& ~~~1#32 →
+    t.regs 13 = c.sp0 →
+      (∀ (r : M0Crypto.Armv6M.Reg), 4 ≤ ↑r → ↑r < 12 → t.regs r = c.regs0 r) →
+        (t.regs 0 =
+            if M0Crypto.Spec.Aead.counterOk (BitVec.toNat c.ctr) (BitVec.toNat c.len) = Bool.true then 0 else ~~~0) →
+          (∀ (y : M0Crypto.Armv6M.Word),
+              M0Crypto.Release.ChaCha20Xor.OutS c y →
+                t.mem y =
+                  if
+                      M0Crypto.Spec.Aead.counterOk (BitVec.toNat c.ctr) (BitVec.toNat c.len) = Bool.true ∧
+                        M0Crypto.Release.Region c.out (BitVec.toNat c.len) y then
+                    c.outB (c.oidx y)
+                  else c.m0 y) →
+            (M0Crypto.Spec.Aead.counterOk (BitVec.toNat c.ctr) (BitVec.toNat c.len) = Bool.true →
+                c.len ≠ 0 →
+                  ∀ (i : Nat),
+                    i < M0Crypto.Release.ChaCha20Layout.chFrameWords →
+                      M0Crypto.Armv6M.read32 t.mem (M0Crypto.Armv6M.slot c.fp i) = 0) →
+              M0Crypto.Release.ChaCha20Xor.Result c t
+def M0Crypto.Release.ChaCha20Xor.WrOk : M0Crypto.Release.Frame.Ctx → M0Crypto.Armv6M.Word → Prop :=
+  fun c y =>
+  M0Crypto.Release.Region c.fp M0Crypto.Release.ChaCha20Layout.chStackBytes y ∨
+    M0Crypto.Spec.Aead.counterOk (BitVec.toNat c.ctr) (BitVec.toNat c.len) = Bool.true ∧
+      M0Crypto.Release.Region c.out (BitVec.toNat c.len) y
+def M0Crypto.Release.Frame.Ctx.pub : M0Crypto.Release.Frame.Ctx →
+  M0Crypto.Armv6M.Word ×
+    M0Crypto.Armv6M.Word ×
+      M0Crypto.Armv6M.Word ×
+        M0Crypto.Armv6M.Word ×
+          M0Crypto.Armv6M.Word ×
+            M0Crypto.Armv6M.Word × M0Crypto.Armv6M.Word × M0Crypto.Armv6M.Word × M0Crypto.Armv6M.Word :=
+  fun c => (c.base, c.sp0, c.regs0 14, c.out, c.inp, c.len, c.key, c.nonce, c.ctr)
+def M0Crypto.Release.Aead.ACall.pub : M0Crypto.Release.Aead.ACall →
+  M0Crypto.Armv6M.Word ×
+    M0Crypto.Armv6M.Word ×
+      M0Crypto.Armv6M.Word ×
+        M0Crypto.Armv6M.Word ×
+          M0Crypto.Armv6M.Word ×
+            M0Crypto.Armv6M.Word ×
+              M0Crypto.Armv6M.Word ×
+                M0Crypto.Armv6M.Word × M0Crypto.Armv6M.Word × M0Crypto.Armv6M.Word × M0Crypto.Armv6M.Word :=
+  fun c => (c.base, c.sp0, c.regs0 14, c.out, c.tag, c.inp, c.len, c.aad, c.alen, c.key, c.nonce)
+def M0Crypto.Release.Aead.ACall.verdict : M0Crypto.Release.Aead.ACall → Prop :=
+  fun c => c.expected = c.tagB
+def M0Crypto.Release.TraceSpec.aeadStackBytes : Nat :=
+  320
+def M0Crypto.Release.TraceSpec.ChaCha20XorReadRegion : M0Crypto.Release.Frame.Ctx → M0Crypto.Armv6M.Word → Prop :=
+  fun c y =>
+  M0Crypto.Release.Region c.inp (BitVec.toNat c.len) y ∨
+    M0Crypto.Release.Region c.key 32 y ∨
+      M0Crypto.Release.Region c.nonce 12 y ∨
+        M0Crypto.Release.Region c.base M0Crypto.Artifacts.Release.size y ∨
+          M0Crypto.Release.Region c.fp (M0Crypto.Release.ChaCha20Layout.chStackBytes + 8) y
+def M0Crypto.Release.TraceSpec.AeadEncryptReadRegion : M0Crypto.Release.Aead.ACall → M0Crypto.Armv6M.Word → Prop :=
+  fun c y =>
+  M0Crypto.Release.Region c.inp (BitVec.toNat c.len) y ∨
+    M0Crypto.Release.Region c.aad (BitVec.toNat c.alen) y ∨
+      M0Crypto.Release.Region c.key 32 y ∨
+        M0Crypto.Release.Region c.nonce 12 y ∨
+          M0Crypto.Release.Region c.out (BitVec.toNat c.len) y ∨
+            M0Crypto.Release.Region c.base M0Crypto.Artifacts.Release.size y ∨
+              M0Crypto.Release.Region (c.sp0 - BitVec.ofNat 32 M0Crypto.Release.TraceSpec.aeadStackBytes)
+                (M0Crypto.Release.TraceSpec.aeadStackBytes + 16) y
+def M0Crypto.Release.TraceSpec.AeadDecryptReadRegion : M0Crypto.Release.Aead.ACall → M0Crypto.Armv6M.Word → Prop :=
+  fun c y => M0Crypto.Release.TraceSpec.AeadEncryptReadRegion c y ∨ M0Crypto.Release.Region c.tag 16 y
+def M0Crypto.Release.TraceSpec.ChaCha20XorConstantTime : Prop :=
+  ∀ (c₁ c₂ : M0Crypto.Release.Frame.Ctx) (s₁ s₂ : M0Crypto.Armv6M.State),
+  M0Crypto.Release.ChaCha20Xor.Pre c₁ s₁ →
+    M0Crypto.Release.ChaCha20Xor.Pre c₂ s₂ →
+      c₁.pub = c₂.pub →
+        ∀ (fuel : Nat),
+          Except.map Prod.snd (M0Crypto.Thumb.runUntil c₁.ret fuel s₁) =
+            Except.map Prod.snd (M0Crypto.Thumb.runUntil c₂.ret fuel s₂)
+def M0Crypto.Release.TraceSpec.ChaCha20XorReads : Prop :=
+  ∀ (c : M0Crypto.Release.Frame.Ctx) (s : M0Crypto.Armv6M.State),
+  M0Crypto.Release.ChaCha20Xor.Pre c s →
+    ∃ n,
+      ∀ (fuel : Nat),
+        n ≤ fuel →
+          ∃ t tr,
+            M0Crypto.Thumb.runUntil c.ret fuel s = Except.ok (t, tr) ∧
+              M0Crypto.Release.TraceSpec.ReadsFrom (M0Crypto.Release.TraceSpec.ChaCha20XorReadRegion c) tr
+def M0Crypto.Release.TraceSpec.ChaCha20XorStack : Prop :=
+  ∀ (c : M0Crypto.Release.Frame.Ctx) (s : M0Crypto.Armv6M.State),
+  M0Crypto.Release.ChaCha20Xor.Pre c s →
+    ∃ n,
+      ∀ (fuel : Nat),
+        n ≤ fuel →
+          ∃ states tr,
+            M0Crypto.Release.runStates c.ret fuel s = Except.ok (states, tr) ∧
+              ∀ (st : M0Crypto.Armv6M.State),
+                st ∈ states →
+                  M0Crypto.Release.TraceSpec.InStackWindow c.sp0 M0Crypto.Release.ChaCha20Layout.chStackBytes
+                    (st.regs 13)
+def M0Crypto.Release.TraceSpec.AeadEncryptConstantTime : Prop :=
+  ∀ (c₁ c₂ : M0Crypto.Release.Aead.ACall) (s₁ s₂ : M0Crypto.Armv6M.State),
+  M0Crypto.Release.Aead.APre c₁ M0Crypto.Release.Aead.encOff s₁ →
+    M0Crypto.Release.Aead.APre c₂ M0Crypto.Release.Aead.encOff s₂ →
+      c₁.pub = c₂.pub →
+        ∀ (fuel : Nat),
+          Except.map Prod.snd (M0Crypto.Thumb.runUntil c₁.ret fuel s₁) =
+            Except.map Prod.snd (M0Crypto.Thumb.runUntil c₂.ret fuel s₂)
+def M0Crypto.Release.TraceSpec.AeadEncryptReads : Prop :=
+  ∀ (c : M0Crypto.Release.Aead.ACall) (s : M0Crypto.Armv6M.State),
+  M0Crypto.Release.Aead.APre c M0Crypto.Release.Aead.encOff s →
+    ∃ n,
+      ∀ (fuel : Nat),
+        n ≤ fuel →
+          ∃ t tr,
+            M0Crypto.Thumb.runUntil c.ret fuel s = Except.ok (t, tr) ∧
+              M0Crypto.Release.TraceSpec.ReadsFrom (M0Crypto.Release.TraceSpec.AeadEncryptReadRegion c) tr
+def M0Crypto.Release.TraceSpec.AeadEncryptStack : Prop :=
+  ∀ (c : M0Crypto.Release.Aead.ACall) (s : M0Crypto.Armv6M.State),
+  M0Crypto.Release.Aead.APre c M0Crypto.Release.Aead.encOff s →
+    ∃ n,
+      ∀ (fuel : Nat),
+        n ≤ fuel →
+          ∃ states tr,
+            M0Crypto.Release.runStates c.ret fuel s = Except.ok (states, tr) ∧
+              ∀ (st : M0Crypto.Armv6M.State),
+                st ∈ states →
+                  M0Crypto.Release.TraceSpec.InStackWindow c.sp0 M0Crypto.Release.TraceSpec.aeadStackBytes (st.regs 13)
+def M0Crypto.Release.TraceSpec.AeadDecryptConstantTime : Prop :=
+  ∀ (c₁ c₂ : M0Crypto.Release.Aead.ACall) (s₁ s₂ : M0Crypto.Armv6M.State),
+  M0Crypto.Release.Aead.APre c₁ M0Crypto.Release.Aead.decOff s₁ →
+    M0Crypto.Release.Aead.APre c₂ M0Crypto.Release.Aead.decOff s₂ →
+      c₁.pub = c₂.pub →
+        c₁.verdict = c₂.verdict →
+          ∀ (fuel : Nat),
+            Except.map Prod.snd (M0Crypto.Thumb.runUntil c₁.ret fuel s₁) =
+              Except.map Prod.snd (M0Crypto.Thumb.runUntil c₂.ret fuel s₂)
+def M0Crypto.Release.TraceSpec.AeadDecryptReads : Prop :=
+  ∀ (c : M0Crypto.Release.Aead.ACall) (s : M0Crypto.Armv6M.State),
+  M0Crypto.Release.Aead.APre c M0Crypto.Release.Aead.decOff s →
+    ∃ n,
+      ∀ (fuel : Nat),
+        n ≤ fuel →
+          ∃ t tr,
+            M0Crypto.Thumb.runUntil c.ret fuel s = Except.ok (t, tr) ∧
+              M0Crypto.Release.TraceSpec.ReadsFrom (M0Crypto.Release.TraceSpec.AeadDecryptReadRegion c) tr
+def M0Crypto.Release.TraceSpec.AeadDecryptStack : Prop :=
+  ∀ (c : M0Crypto.Release.Aead.ACall) (s : M0Crypto.Armv6M.State),
+  M0Crypto.Release.Aead.APre c M0Crypto.Release.Aead.decOff s →
+    ∃ n,
+      ∀ (fuel : Nat),
+        n ≤ fuel →
+          ∃ states tr,
+            M0Crypto.Release.runStates c.ret fuel s = Except.ok (states, tr) ∧
+              ∀ (st : M0Crypto.Armv6M.State),
+                st ∈ states →
+                  M0Crypto.Release.TraceSpec.InStackWindow c.sp0 M0Crypto.Release.TraceSpec.aeadStackBytes (st.regs 13)
+def M0Crypto.Release.B : List (BitVec 8) :=
+  M0Crypto.Artifacts.Release.bytes
+def M0Crypto.Release.Region : M0Crypto.Armv6M.Word → Nat → M0Crypto.Armv6M.Word → Prop :=
+  fun a n y => BitVec.toNat (y - a) < n
+def M0Crypto.Release.WritesTo : (M0Crypto.Armv6M.Word → Prop) → List M0Crypto.Thumb.Event → Prop :=
+  fun Wr tr =>
+  ∀ (e : M0Crypto.Thumb.Event), e ∈ tr → ∀ (y : M0Crypto.Armv6M.Word), M0Crypto.Thumb.Writes e.accesses y → Wr y
+def M0Crypto.Release.runStates : M0Crypto.Armv6M.Word →
+  Nat → M0Crypto.Armv6M.State → Except M0Crypto.Thumb.Fault (List M0Crypto.Armv6M.State × List M0Crypto.Thumb.Event) :=
+  fun stop x x_1 =>
+  Nat.brecOn (motive := fun x =>
+    M0Crypto.Armv6M.State → Except M0Crypto.Thumb.Fault (List M0Crypto.Armv6M.State × List M0Crypto.Thumb.Event)) x
+    (M0Crypto.Release.runStates._f stop) x_1
+def M0Crypto.Release.Frame.Ctx.bytesAt : M0Crypto.Armv6M.Mem → M0Crypto.Armv6M.Word → Nat → List (BitVec 8) :=
+  fun m x x_1 =>
+  Nat.brecOn (motive := fun x => M0Crypto.Armv6M.Word → List (BitVec 8)) x_1 (M0Crypto.Release.Frame.Ctx.bytesAt._f m) x
+def M0Crypto.Release.Frame.Disj : M0Crypto.Armv6M.Word → Nat → M0Crypto.Armv6M.Word → Nat → Prop :=
+  fun a n b m =>
+  BitVec.toNat a + n ≤ 2 ^ 32 ∧
+    BitVec.toNat b + m ≤ 2 ^ 32 ∧ (BitVec.toNat a + n ≤ BitVec.toNat b ∨ BitVec.toNat b + m ≤ BitVec.toNat a)
+def M0Crypto.Release.TraceSpec.ReadsFrom : (M0Crypto.Armv6M.Word → Prop) → List M0Crypto.Thumb.Event → Prop :=
+  fun Rd tr =>
+  ∀ (e : M0Crypto.Thumb.Event), e ∈ tr → ∀ (y : M0Crypto.Armv6M.Word), M0Crypto.Thumb.Reads e.accesses y → Rd y
+def M0Crypto.Release.TraceSpec.InStackWindow : M0Crypto.Armv6M.Word → Nat → M0Crypto.Armv6M.Word → Prop :=
+  fun sp0 stackBytes sp => ∃ o, o ≤ stackBytes ∧ sp = sp0 - BitVec.ofNat 32 o
+def M0Crypto.Spec.Aead.keystream : List M0Crypto.Spec.ChaCha20.Byte → Nat → List M0Crypto.Spec.ChaCha20.Byte → Nat → List M0Crypto.Spec.ChaCha20.Byte :=
+  fun key counter nonce n =>
+  List.take n
+    (List.flatMap (fun i => M0Crypto.Spec.ChaCha20.block key (BitVec.ofNat 32 (counter + i)) nonce)
+      (List.range ((n + 63) / 64)))
+def M0Crypto.Spec.Aead.chacha20 : List M0Crypto.Spec.ChaCha20.Byte →
+  Nat → List M0Crypto.Spec.ChaCha20.Byte → List M0Crypto.Spec.ChaCha20.Byte → List M0Crypto.Spec.ChaCha20.Byte :=
+  fun key counter nonce msg =>
+  List.map
+    (fun x =>
+      match x with
+      | (a, b) => a ^^^ b)
+    (msg.zip (M0Crypto.Spec.Aead.keystream key counter nonce msg.length))
+def M0Crypto.Spec.Aead.counterOk : Nat → Nat → Bool :=
+  fun counter len => Decidable.decide (counter + (len + 63) / 64 ≤ 2 ^ 32)
+def M0Crypto.Spec.Aead.p : Nat :=
+  2 ^ 130 - 5
+def M0Crypto.Spec.Aead.leNat : List M0Crypto.Spec.ChaCha20.Byte → Nat :=
+  fun x => List.brecOn x M0Crypto.Spec.Aead.leNat._f
+def M0Crypto.Spec.Aead.leBytes : Nat → Nat → List M0Crypto.Spec.ChaCha20.Byte :=
+  fun n x => List.map (fun i => BitVec.ofNat 8 (x / 256 ^ i)) (List.range n)
+def M0Crypto.Spec.Aead.clamp : Nat → Nat :=
+  fun r => r &&& 21267647620597763993911028882763415551
+def M0Crypto.Spec.Aead.chunks16 : List M0Crypto.Spec.ChaCha20.Byte → List (List M0Crypto.Spec.ChaCha20.Byte) :=
+  WellFounded.Nat.fix (fun x => x.length) fun a a_1 =>
+  (match (motive :=
+      (x : List M0Crypto.Spec.ChaCha20.Byte) →
+        ((y : List M0Crypto.Spec.ChaCha20.Byte) →
+            InvImage (fun x1 x2 => x1 < x2) (fun x => x.length) y x → List (List M0Crypto.Spec.ChaCha20.Byte)) →
+          List (List M0Crypto.Spec.ChaCha20.Byte))
+      a with
+    | [] => fun x => []
+    | b :: rest => fun x =>
+      List.take 16 (b :: rest) :: x (List.drop 16 (b :: rest)) (M0Crypto.Spec.Aead.chunks16._proof_1 b rest))
+    a_1
+def M0Crypto.Spec.Aead.polyAcc : Nat → List M0Crypto.Spec.ChaCha20.Byte → Nat :=
+  fun r msg =>
+  List.foldl (fun acc c => (acc + M0Crypto.Spec.Aead.leNat (c ++ [1#8])) * r % M0Crypto.Spec.Aead.p) 0
+    (M0Crypto.Spec.Aead.chunks16 msg)
+def M0Crypto.Spec.Aead.poly1305 : List M0Crypto.Spec.ChaCha20.Byte → List M0Crypto.Spec.ChaCha20.Byte → List M0Crypto.Spec.ChaCha20.Byte :=
+  fun key msg =>
+  have r := M0Crypto.Spec.Aead.clamp (M0Crypto.Spec.Aead.leNat (List.take 16 key));
+  have s := M0Crypto.Spec.Aead.leNat (List.take 16 (List.drop 16 key));
+  M0Crypto.Spec.Aead.leBytes 16 (M0Crypto.Spec.Aead.polyAcc r msg + s)
+def M0Crypto.Spec.Aead.pad16 : List M0Crypto.Spec.ChaCha20.Byte → List M0Crypto.Spec.ChaCha20.Byte :=
+  fun bs => List.replicate ((16 - bs.length % 16) % 16) 0#8
+def M0Crypto.Spec.Aead.macData : List M0Crypto.Spec.ChaCha20.Byte → List M0Crypto.Spec.ChaCha20.Byte → List M0Crypto.Spec.ChaCha20.Byte :=
+  fun aad ct =>
+  aad ++ M0Crypto.Spec.Aead.pad16 aad ++ ct ++ M0Crypto.Spec.Aead.pad16 ct ++ M0Crypto.Spec.Aead.leBytes 8 aad.length ++
+    M0Crypto.Spec.Aead.leBytes 8 ct.length
+def M0Crypto.Spec.Aead.polyKey : List M0Crypto.Spec.ChaCha20.Byte → List M0Crypto.Spec.ChaCha20.Byte → List M0Crypto.Spec.ChaCha20.Byte :=
+  fun key nonce => List.take 32 (M0Crypto.Spec.ChaCha20.block key (0#32) nonce)
+def M0Crypto.Spec.Aead.encrypt : List M0Crypto.Spec.ChaCha20.Byte →
+  List M0Crypto.Spec.ChaCha20.Byte →
+    List M0Crypto.Spec.ChaCha20.Byte →
+      List M0Crypto.Spec.ChaCha20.Byte → List M0Crypto.Spec.ChaCha20.Byte × List M0Crypto.Spec.ChaCha20.Byte :=
+  fun key nonce aad pt =>
+  have ct := M0Crypto.Spec.Aead.chacha20 key 1 nonce pt;
+  (ct, M0Crypto.Spec.Aead.poly1305 (M0Crypto.Spec.Aead.polyKey key nonce) (M0Crypto.Spec.Aead.macData aad ct))
+def M0Crypto.Spec.Aead.decrypt : List M0Crypto.Spec.ChaCha20.Byte →
+  List M0Crypto.Spec.ChaCha20.Byte →
+    List M0Crypto.Spec.ChaCha20.Byte →
+      List M0Crypto.Spec.ChaCha20.Byte → List M0Crypto.Spec.ChaCha20.Byte → Option (List M0Crypto.Spec.ChaCha20.Byte) :=
+  fun key nonce aad ct tag =>
+  if M0Crypto.Spec.Aead.poly1305 (M0Crypto.Spec.Aead.polyKey key nonce) (M0Crypto.Spec.Aead.macData aad ct) = tag then
+    Option.some (M0Crypto.Spec.Aead.chacha20 key 1 nonce ct)
+  else Option.none
+def M0Crypto.Spec.ChaCha20.Word : Type :=
+  BitVec 32
+def M0Crypto.Spec.ChaCha20.Byte : Type :=
+  BitVec 8
+def M0Crypto.Spec.ChaCha20.rotl : M0Crypto.Spec.ChaCha20.Word → Nat → M0Crypto.Spec.ChaCha20.Word :=
+  fun x n => x <<< n ||| x >>> (32 - n)
+def M0Crypto.Spec.ChaCha20.quarterRound : M0Crypto.Spec.ChaCha20.Word →
+  M0Crypto.Spec.ChaCha20.Word →
+    M0Crypto.Spec.ChaCha20.Word →
+      M0Crypto.Spec.ChaCha20.Word →
+        M0Crypto.Spec.ChaCha20.Word ×
+          M0Crypto.Spec.ChaCha20.Word × M0Crypto.Spec.ChaCha20.Word × M0Crypto.Spec.ChaCha20.Word :=
+  fun a b c d =>
+  have a := a + b;
+  have d := d ^^^ a;
+  have d := M0Crypto.Spec.ChaCha20.rotl d 16;
+  have c := c + d;
+  have b := b ^^^ c;
+  have b := M0Crypto.Spec.ChaCha20.rotl b 12;
+  have a := a + b;
+  have d := d ^^^ a;
+  have d := M0Crypto.Spec.ChaCha20.rotl d 8;
+  have c := c + d;
+  have b := b ^^^ c;
+  have b := M0Crypto.Spec.ChaCha20.rotl b 7;
+  (a, b, c, d)
+def M0Crypto.Spec.ChaCha20.State : Type :=
+  Array M0Crypto.Spec.ChaCha20.Word
+def M0Crypto.Spec.ChaCha20.qround : M0Crypto.Spec.ChaCha20.State → Nat → Nat → Nat → Nat → M0Crypto.Spec.ChaCha20.State :=
+  fun s x y z w =>
+  match M0Crypto.Spec.ChaCha20.quarterRound s[x]! s[y]! s[z]! s[w]! with
+  | (a, b, c, d) => (((Array.set! s x a).set! y b).set! z c).set! w d
+def M0Crypto.Spec.ChaCha20.innerBlock : M0Crypto.Spec.ChaCha20.State → M0Crypto.Spec.ChaCha20.State :=
+  fun s =>
+  have s := M0Crypto.Spec.ChaCha20.qround s 0 4 8 12;
+  have s := M0Crypto.Spec.ChaCha20.qround s 1 5 9 13;
+  have s := M0Crypto.Spec.ChaCha20.qround s 2 6 10 14;
+  have s := M0Crypto.Spec.ChaCha20.qround s 3 7 11 15;
+  have s := M0Crypto.Spec.ChaCha20.qround s 0 5 10 15;
+  have s := M0Crypto.Spec.ChaCha20.qround s 1 6 11 12;
+  have s := M0Crypto.Spec.ChaCha20.qround s 2 7 8 13;
+  have s := M0Crypto.Spec.ChaCha20.qround s 3 4 9 14;
+  s
+def M0Crypto.Spec.ChaCha20.wordOfBytes : M0Crypto.Spec.ChaCha20.Byte →
+  M0Crypto.Spec.ChaCha20.Byte → M0Crypto.Spec.ChaCha20.Byte → M0Crypto.Spec.ChaCha20.Byte → M0Crypto.Spec.ChaCha20.Word :=
+  fun b0 b1 b2 b3 =>
+  BitVec.setWidth 32 b0 ||| BitVec.setWidth 32 b1 <<< 8 ||| BitVec.setWidth 32 b2 <<< 16 |||
+    BitVec.setWidth 32 b3 <<< 24
+def M0Crypto.Spec.ChaCha20.wordsOfBytes : List M0Crypto.Spec.ChaCha20.Byte → List M0Crypto.Spec.ChaCha20.Word :=
+  fun x => List.brecOn x M0Crypto.Spec.ChaCha20.wordsOfBytes._f
+def M0Crypto.Spec.ChaCha20.bytesOfWord : M0Crypto.Spec.ChaCha20.Word → List M0Crypto.Spec.ChaCha20.Byte :=
+  fun w => [BitVec.extractLsb' 0 8 w, BitVec.extractLsb' 8 8 w, BitVec.extractLsb' 16 8 w, BitVec.extractLsb' 24 8 w]
+def M0Crypto.Spec.ChaCha20.constants : List M0Crypto.Spec.ChaCha20.Word :=
+  [1634760805#32, 857760878#32, 2036477234#32, 1797285236#32]
+def M0Crypto.Spec.ChaCha20.initState : List M0Crypto.Spec.ChaCha20.Byte →
+  M0Crypto.Spec.ChaCha20.Word → List M0Crypto.Spec.ChaCha20.Byte → M0Crypto.Spec.ChaCha20.State :=
+  fun key counter nonce =>
+  (M0Crypto.Spec.ChaCha20.constants ++ M0Crypto.Spec.ChaCha20.wordsOfBytes key ++ [counter] ++
+      M0Crypto.Spec.ChaCha20.wordsOfBytes nonce).toArray
+def M0Crypto.Spec.ChaCha20.innerBlocks : Nat → M0Crypto.Spec.ChaCha20.State → M0Crypto.Spec.ChaCha20.State :=
+  fun x x_1 =>
+  Nat.brecOn (motive := fun x => M0Crypto.Spec.ChaCha20.State → M0Crypto.Spec.ChaCha20.State) x
+    M0Crypto.Spec.ChaCha20.innerBlocks._f x_1
+def M0Crypto.Spec.ChaCha20.blockWords : List M0Crypto.Spec.ChaCha20.Byte →
+  M0Crypto.Spec.ChaCha20.Word → List M0Crypto.Spec.ChaCha20.Byte → M0Crypto.Spec.ChaCha20.State :=
+  fun key counter nonce =>
+  have s := M0Crypto.Spec.ChaCha20.initState key counter nonce;
+  have w := M0Crypto.Spec.ChaCha20.innerBlocks 10 s;
+  Array.map (fun i => s[i]! + w[i]!) (List.range 16).toArray
+def M0Crypto.Spec.ChaCha20.block : List M0Crypto.Spec.ChaCha20.Byte →
+  M0Crypto.Spec.ChaCha20.Word → List M0Crypto.Spec.ChaCha20.Byte → List M0Crypto.Spec.ChaCha20.Byte :=
+  fun key counter nonce =>
+  List.flatMap M0Crypto.Spec.ChaCha20.bytesOfWord (M0Crypto.Spec.ChaCha20.blockWords key counter nonce).toList
+inductive M0Crypto.Thumb.DpOp : Type
+  | M0Crypto.Thumb.DpOp.ands : M0Crypto.Thumb.DpOp
+  | M0Crypto.Thumb.DpOp.eors : M0Crypto.Thumb.DpOp
+  | M0Crypto.Thumb.DpOp.adcs : M0Crypto.Thumb.DpOp
+  | M0Crypto.Thumb.DpOp.sbcs : M0Crypto.Thumb.DpOp
+  | M0Crypto.Thumb.DpOp.rors : M0Crypto.Thumb.DpOp
+  | M0Crypto.Thumb.DpOp.tst : M0Crypto.Thumb.DpOp
+  | M0Crypto.Thumb.DpOp.rsbs : M0Crypto.Thumb.DpOp
+  | M0Crypto.Thumb.DpOp.cmp : M0Crypto.Thumb.DpOp
+  | M0Crypto.Thumb.DpOp.orrs : M0Crypto.Thumb.DpOp
+  | M0Crypto.Thumb.DpOp.muls : M0Crypto.Thumb.DpOp
+  | M0Crypto.Thumb.DpOp.mvns : M0Crypto.Thumb.DpOp
+inductive M0Crypto.Thumb.MemOp : Type
+  | M0Crypto.Thumb.MemOp.str : M0Crypto.Thumb.MemOp
+  | M0Crypto.Thumb.MemOp.strh : M0Crypto.Thumb.MemOp
+  | M0Crypto.Thumb.MemOp.strb : M0Crypto.Thumb.MemOp
+  | M0Crypto.Thumb.MemOp.ldr : M0Crypto.Thumb.MemOp
+  | M0Crypto.Thumb.MemOp.ldrh : M0Crypto.Thumb.MemOp
+  | M0Crypto.Thumb.MemOp.ldrb : M0Crypto.Thumb.MemOp
+def M0Crypto.Thumb.MemOp.width : M0Crypto.Thumb.MemOp → Nat :=
+  fun x =>
+  match x with
+  | M0Crypto.Thumb.MemOp.str => 4
+  | M0Crypto.Thumb.MemOp.ldr => 4
+  | M0Crypto.Thumb.MemOp.strh => 2
+  | M0Crypto.Thumb.MemOp.ldrh => 2
+  | M0Crypto.Thumb.MemOp.strb => 1
+  | M0Crypto.Thumb.MemOp.ldrb => 1
+def M0Crypto.Thumb.MemOp.isLoad : M0Crypto.Thumb.MemOp → Bool :=
+  fun x =>
+  match x with
+  | M0Crypto.Thumb.MemOp.ldr => Bool.true
+  | M0Crypto.Thumb.MemOp.ldrh => Bool.true
+  | M0Crypto.Thumb.MemOp.ldrb => Bool.true
+  | x => Bool.false
+inductive M0Crypto.Thumb.Instr : Type
+  | M0Crypto.Thumb.Instr.lslImm : M0Crypto.Armv6M.LowReg → M0Crypto.Armv6M.LowReg → BitVec 5 → M0Crypto.Thumb.Instr
+  | M0Crypto.Thumb.Instr.lsrImm : M0Crypto.Armv6M.LowReg → M0Crypto.Armv6M.LowReg → BitVec 5 → M0Crypto.Thumb.Instr
+  | M0Crypto.Thumb.Instr.addReg : M0Crypto.Armv6M.LowReg → M0Crypto.Armv6M.LowReg → M0Crypto.Armv6M.LowReg → M0Crypto.Thumb.Instr
+  | M0Crypto.Thumb.Instr.subReg : M0Crypto.Armv6M.LowReg → M0Crypto.Armv6M.LowReg → M0Crypto.Armv6M.LowReg → M0Crypto.Thumb.Instr
+  | M0Crypto.Thumb.Instr.addImm3 : M0Crypto.Armv6M.LowReg → M0Crypto.Armv6M.LowReg → BitVec 3 → M0Crypto.Thumb.Instr
+  | M0Crypto.Thumb.Instr.subImm3 : M0Crypto.Armv6M.LowReg → M0Crypto.Armv6M.LowReg → BitVec 3 → M0Crypto.Thumb.Instr
+  | M0Crypto.Thumb.Instr.movImm : M0Crypto.Armv6M.LowReg → BitVec 8 → M0Crypto.Thumb.Instr
+  | M0Crypto.Thumb.Instr.cmpImm : M0Crypto.Armv6M.LowReg → BitVec 8 → M0Crypto.Thumb.Instr
+  | M0Crypto.Thumb.Instr.addImm8 : M0Crypto.Armv6M.LowReg → BitVec 8 → M0Crypto.Thumb.Instr
+  | M0Crypto.Thumb.Instr.subImm8 : M0Crypto.Armv6M.LowReg → BitVec 8 → M0Crypto.Thumb.Instr
+  | M0Crypto.Thumb.Instr.dp : M0Crypto.Thumb.DpOp → M0Crypto.Armv6M.LowReg → M0Crypto.Armv6M.LowReg → M0Crypto.Thumb.Instr
+  | M0Crypto.Thumb.Instr.movHi : M0Crypto.Armv6M.Reg → M0Crypto.Armv6M.Reg → M0Crypto.Thumb.Instr
+  | M0Crypto.Thumb.Instr.ldrLit : M0Crypto.Armv6M.LowReg → BitVec 8 → M0Crypto.Thumb.Instr
+  | M0Crypto.Thumb.Instr.memReg : M0Crypto.Thumb.MemOp → M0Crypto.Armv6M.LowReg → M0Crypto.Armv6M.LowReg → M0Crypto.Armv6M.LowReg → M0Crypto.Thumb.Instr
+  | M0Crypto.Thumb.Instr.memImm : M0Crypto.Thumb.MemOp → M0Crypto.Armv6M.LowReg → M0Crypto.Armv6M.LowReg → BitVec 5 → M0Crypto.Thumb.Instr
+  | M0Crypto.Thumb.Instr.strSp : M0Crypto.Armv6M.LowReg → BitVec 8 → M0Crypto.Thumb.Instr
+  | M0Crypto.Thumb.Instr.ldrSp : M0Crypto.Armv6M.LowReg → BitVec 8 → M0Crypto.Thumb.Instr
+  | M0Crypto.Thumb.Instr.addRdSp : M0Crypto.Armv6M.LowReg → BitVec 8 → M0Crypto.Thumb.Instr
+  | M0Crypto.Thumb.Instr.addSp : BitVec 7 → M0Crypto.Thumb.Instr
+  | M0Crypto.Thumb.Instr.subSp : BitVec 7 → M0Crypto.Thumb.Instr
+  | M0Crypto.Thumb.Instr.uxth : M0Crypto.Armv6M.LowReg → M0Crypto.Armv6M.LowReg → M0Crypto.Thumb.Instr
+  | M0Crypto.Thumb.Instr.push : BitVec 8 → Bool → M0Crypto.Thumb.Instr
+  | M0Crypto.Thumb.Instr.pop : BitVec 8 → Bool → M0Crypto.Thumb.Instr
+  | M0Crypto.Thumb.Instr.stm : M0Crypto.Armv6M.LowReg → BitVec 8 → M0Crypto.Thumb.Instr
+  | M0Crypto.Thumb.Instr.ldm : M0Crypto.Armv6M.LowReg → BitVec 8 → M0Crypto.Thumb.Instr
+  | M0Crypto.Thumb.Instr.bcond : BitVec 4 → BitVec 8 → M0Crypto.Thumb.Instr
+  | M0Crypto.Thumb.Instr.b : BitVec 11 → M0Crypto.Thumb.Instr
+  | M0Crypto.Thumb.Instr.bl : BitVec 25 → M0Crypto.Thumb.Instr
+def M0Crypto.Thumb.Instr.size : M0Crypto.Thumb.Instr → Nat :=
+  fun x =>
+  match x with
+  | M0Crypto.Thumb.Instr.bl imm25 => 4
+  | x => 2
+def M0Crypto.Thumb.low : BitVec 16 → Nat → M0Crypto.Armv6M.LowReg :=
+  fun hw lo => ⟨hw.toNat >>> lo % 8, M0Crypto.Thumb.low._proof_1 hw lo⟩
+def M0Crypto.Thumb.bits : BitVec 16 → Nat → (w : Nat) → BitVec w :=
+  fun hw lo w => BitVec.extractLsb' lo w hw
+def M0Crypto.Thumb.is32 : BitVec 16 → Bool :=
+  fun hw => Decidable.decide (hw.toNat >>> 11 ≥ 29)
+def M0Crypto.Thumb.decodeDp : BitVec 16 → Option M0Crypto.Thumb.Instr :=
+  fun hw =>
+  have dn := M0Crypto.Thumb.low hw 0;
+  have m := M0Crypto.Thumb.low hw 3;
+  match hw.toNat >>> 6 % 16 with
+  | 0 => Option.some (M0Crypto.Thumb.Instr.dp M0Crypto.Thumb.DpOp.ands dn m)
+  | 1 => Option.some (M0Crypto.Thumb.Instr.dp M0Crypto.Thumb.DpOp.eors dn m)
+  | 5 => Option.some (M0Crypto.Thumb.Instr.dp M0Crypto.Thumb.DpOp.adcs dn m)
+  | 6 => Option.some (M0Crypto.Thumb.Instr.dp M0Crypto.Thumb.DpOp.sbcs dn m)
+  | 7 => Option.some (M0Crypto.Thumb.Instr.dp M0Crypto.Thumb.DpOp.rors dn m)
+  | 8 => Option.some (M0Crypto.Thumb.Instr.dp M0Crypto.Thumb.DpOp.tst dn m)
+  | 9 => Option.some (M0Crypto.Thumb.Instr.dp M0Crypto.Thumb.DpOp.rsbs dn m)
+  | 10 => Option.some (M0Crypto.Thumb.Instr.dp M0Crypto.Thumb.DpOp.cmp dn m)
+  | 12 => Option.some (M0Crypto.Thumb.Instr.dp M0Crypto.Thumb.DpOp.orrs dn m)
+  | 13 => Option.some (M0Crypto.Thumb.Instr.dp M0Crypto.Thumb.DpOp.muls dn m)
+  | 15 => Option.some (M0Crypto.Thumb.Instr.dp M0Crypto.Thumb.DpOp.mvns dn m)
+  | x => Option.none
+def M0Crypto.Thumb.memOpOfRegForm : Nat → Option M0Crypto.Thumb.MemOp :=
+  fun x =>
+  match x with
+  | 0 => Option.some M0Crypto.Thumb.MemOp.str
+  | 1 => Option.some M0Crypto.Thumb.MemOp.strh
+  | 2 => Option.some M0Crypto.Thumb.MemOp.strb
+  | 4 => Option.some M0Crypto.Thumb.MemOp.ldr
+  | 5 => Option.some M0Crypto.Thumb.MemOp.ldrh
+  | 6 => Option.some M0Crypto.Thumb.MemOp.ldrb
+  | x => Option.none
+def M0Crypto.Thumb.decode16 : BitVec 16 → Option M0Crypto.Thumb.Instr :=
+  fun hw =>
+  let op := hw.toNat;
+  if M0Crypto.Thumb.is32 hw = Bool.true then Option.none
+  else
+    if op >>> 11 = 0 then
+      Option.some
+        (M0Crypto.Thumb.Instr.lslImm (M0Crypto.Thumb.low hw 0) (M0Crypto.Thumb.low hw 3) (M0Crypto.Thumb.bits hw 6 5))
+    else
+      if op >>> 11 = 1 then
+        Option.some
+          (M0Crypto.Thumb.Instr.lsrImm (M0Crypto.Thumb.low hw 0) (M0Crypto.Thumb.low hw 3) (M0Crypto.Thumb.bits hw 6 5))
+      else
+        if op >>> 9 = 12 then
+          Option.some
+            (M0Crypto.Thumb.Instr.addReg (M0Crypto.Thumb.low hw 0) (M0Crypto.Thumb.low hw 3) (M0Crypto.Thumb.low hw 6))
+        else
+          if op >>> 9 = 13 then
+            Option.some
+              (M0Crypto.Thumb.Instr.subReg (M0Crypto.Thumb.low hw 0) (M0Crypto.Thumb.low hw 3)
+                (M0Crypto.Thumb.low hw 6))
+          else
+            if op >>> 9 = 14 then
+              Option.some
+                (M0Crypto.Thumb.Instr.addImm3 (M0Crypto.Thumb.low hw 0) (M0Crypto.Thumb.low hw 3)
+                  (M0Crypto.Thumb.bits hw 6 3))
+            else
+              if op >>> 9 = 15 then
+                Option.some
+                  (M0Crypto.Thumb.Instr.subImm3 (M0Crypto.Thumb.low hw 0) (M0Crypto.Thumb.low hw 3)
+                    (M0Crypto.Thumb.bits hw 6 3))
+              else
+                if op >>> 11 = 4 then
+                  Option.some (M0Crypto.Thumb.Instr.movImm (M0Crypto.Thumb.low hw 8) (M0Crypto.Thumb.bits hw 0 8))
+                else
+                  if op >>> 11 = 5 then
+                    Option.some (M0Crypto.Thumb.Instr.cmpImm (M0Crypto.Thumb.low hw 8) (M0Crypto.Thumb.bits hw 0 8))
+                  else
+                    if op >>> 11 = 6 then
+                      Option.some (M0Crypto.Thumb.Instr.addImm8 (M0Crypto.Thumb.low hw 8) (M0Crypto.Thumb.bits hw 0 8))
+                    else
+                      if op >>> 11 = 7 then
+                        Option.some
+                          (M0Crypto.Thumb.Instr.subImm8 (M0Crypto.Thumb.low hw 8) (M0Crypto.Thumb.bits hw 0 8))
+                      else
+                        if op >>> 10 = 16 then M0Crypto.Thumb.decodeDp hw
+                        else
+                          if op >>> 8 = 70 then
+                            let d := op >>> 7 % 2 * 8 + op % 8;
+                            let m := op >>> 3 % 16;
+                            if d = 15 ∨ d = 13 ∨ m = 15 ∨ m = 13 then Option.none
+                            else
+                              Option.some
+                                (M0Crypto.Thumb.Instr.movHi ⟨d, M0Crypto.Thumb.decode16._proof_3 hw⟩
+                                  ⟨m, M0Crypto.Thumb.decode16._proof_4 hw⟩)
+                          else
+                            if op >>> 11 = 9 then
+                              Option.some
+                                (M0Crypto.Thumb.Instr.ldrLit (M0Crypto.Thumb.low hw 8) (M0Crypto.Thumb.bits hw 0 8))
+                            else
+                              if op >>> 12 = 5 then
+                                Option.map
+                                  (fun o =>
+                                    M0Crypto.Thumb.Instr.memReg o (M0Crypto.Thumb.low hw 0) (M0Crypto.Thumb.low hw 3)
+                                      (M0Crypto.Thumb.low hw 6))
+                                  (M0Crypto.Thumb.memOpOfRegForm (op >>> 9 % 8))
+                              else
+                                if op >>> 11 = 12 then
+                                  Option.some
+                                    (M0Crypto.Thumb.Instr.memImm M0Crypto.Thumb.MemOp.str (M0Crypto.Thumb.low hw 0)
+                                      (M0Crypto.Thumb.low hw 3) (M0Crypto.Thumb.bits hw 6 5))
+                                else
+                                  if op >>> 11 = 13 then
+                                    Option.some
+                                      (M0Crypto.Thumb.Instr.memImm M0Crypto.Thumb.MemOp.ldr (M0Crypto.Thumb.low hw 0)
+                                        (M0Crypto.Thumb.low hw 3) (M0Crypto.Thumb.bits hw 6 5))
+                                  else
+                                    if op >>> 11 = 14 then
+                                      Option.some
+                                        (M0Crypto.Thumb.Instr.memImm M0Crypto.Thumb.MemOp.strb (M0Crypto.Thumb.low hw 0)
+                                          (M0Crypto.Thumb.low hw 3) (M0Crypto.Thumb.bits hw 6 5))
+                                    else
+                                      if op >>> 11 = 15 then
+                                        Option.some
+                                          (M0Crypto.Thumb.Instr.memImm M0Crypto.Thumb.MemOp.ldrb
+                                            (M0Crypto.Thumb.low hw 0) (M0Crypto.Thumb.low hw 3)
+                                            (M0Crypto.Thumb.bits hw 6 5))
+                                      else
+                                        if op >>> 11 = 16 then
+                                          Option.some
+                                            (M0Crypto.Thumb.Instr.memImm M0Crypto.Thumb.MemOp.strh
+                                              (M0Crypto.Thumb.low hw 0) (M0Crypto.Thumb.low hw 3)
+                                              (M0Crypto.Thumb.bits hw 6 5))
+                                        else
+                                          if op >>> 11 = 17 then
+                                            Option.some
+                                              (M0Crypto.Thumb.Instr.memImm M0Crypto.Thumb.MemOp.ldrh
+                                                (M0Crypto.Thumb.low hw 0) (M0Crypto.Thumb.low hw 3)
+                                                (M0Crypto.Thumb.bits hw 6 5))
+                                          else
+                                            if op >>> 11 = 18 then
+                                              Option.some
+                                                (M0Crypto.Thumb.Instr.strSp (M0Crypto.Thumb.low hw 8)
+                                                  (M0Crypto.Thumb.bits hw 0 8))
+                                            else
+                                              if op >>> 11 = 19 then
+                                                Option.some
+                                                  (M0Crypto.Thumb.Instr.ldrSp (M0Crypto.Thumb.low hw 8)
+                                                    (M0Crypto.Thumb.bits hw 0 8))
+                                              else
+                                                if op >>> 11 = 21 then
+                                                  Option.some
+                                                    (M0Crypto.Thumb.Instr.addRdSp (M0Crypto.Thumb.low hw 8)
+                                                      (M0Crypto.Thumb.bits hw 0 8))
+                                                else
+                                                  if op >>> 7 = 352 then
+                                                    Option.some
+                                                      (M0Crypto.Thumb.Instr.addSp (M0Crypto.Thumb.bits hw 0 7))
+                                                  else
+                                                    if op >>> 7 = 353 then
+                                                      Option.some
+                                                        (M0Crypto.Thumb.Instr.subSp (M0Crypto.Thumb.bits hw 0 7))
+                                                    else
+                                                      if op >>> 6 = 714 then
+                                                        Option.some
+                                                          (M0Crypto.Thumb.Instr.uxth (M0Crypto.Thumb.low hw 0)
+                                                            (M0Crypto.Thumb.low hw 3))
+                                                      else
+                                                        if op >>> 9 = 90 then
+                                                          if op % 512 = 0 then Option.none
+                                                          else
+                                                            Option.some
+                                                              (M0Crypto.Thumb.Instr.push (M0Crypto.Thumb.bits hw 0 8)
+                                                                (Decidable.decide (op >>> 8 % 2 = 1)))
+                                                        else
+                                                          if op >>> 9 = 94 then
+                                                            if op % 512 = 0 then Option.none
+                                                            else
+                                                              Option.some
+                                                                (M0Crypto.Thumb.Instr.pop (M0Crypto.Thumb.bits hw 0 8)
+                                                                  (Decidable.decide (op >>> 8 % 2 = 1)))
+                                                          else
+                                                            if op >>> 11 = 24 then
+                                                              if
+                                                                  op % 256 = 0 ∨
+                                                                    (op % 256) >>> (op >>> 8 % 8) % 2 = 1 then
+                                                                Option.none
+                                                              else
+                                                                Option.some
+                                                                  (M0Crypto.Thumb.Instr.stm (M0Crypto.Thumb.low hw 8)
+                                                                    (M0Crypto.Thumb.bits hw 0 8))
+                                                            else
+                                                              if op >>> 11 = 25 then
+                                                                if op % 256 = 0 then Option.none
+                                                                else
+                                                                  Option.some
+                                                                    (M0Crypto.Thumb.Instr.ldm (M0Crypto.Thumb.low hw 8)
+                                                                      (M0Crypto.Thumb.bits hw 0 8))
+                                                              else
+                                                                if op >>> 12 = 13 then
+                                                                  if op >>> 8 % 16 ≥ 14 then Option.none
+                                                                  else
+                                                                    Option.some
+                                                                      (M0Crypto.Thumb.Instr.bcond
+                                                                        (M0Crypto.Thumb.bits hw 8 4)
+                                                                        (M0Crypto.Thumb.bits hw 0 8))
+                                                                else
+                                                                  if op >>> 11 = 28 then
+                                                                    Option.some
+                                                                      (M0Crypto.Thumb.Instr.b
+                                                                        (M0Crypto.Thumb.bits hw 0 11))
+                                                                  else Option.none
+def M0Crypto.Thumb.decodeBL : BitVec 16 → BitVec 16 → Option M0Crypto.Thumb.Instr :=
+  fun hw1 hw2 =>
+  if hw1.toNat >>> 11 = 30 ∧ hw2.toNat >>> 14 % 4 = 3 ∧ hw2.toNat >>> 12 % 2 = 1 then
+    have s := hw1.toNat >>> 10 % 2;
+    have j1 := hw2.toNat >>> 13 % 2;
+    have j2 := hw2.toNat >>> 11 % 2;
+    have i1 := 1 - (j1 ^^^ s);
+    have i2 := 1 - (j2 ^^^ s);
+    have v := (((s * 2 + i1) * 2 + i2) * 1024 + hw1.toNat % 1024) * 2048 + hw2.toNat % 2048;
+    Option.some (M0Crypto.Thumb.Instr.bl (BitVec.ofNat 25 (v * 2)))
+  else Option.none
+def M0Crypto.Thumb.decode : BitVec 16 → BitVec 16 → Option M0Crypto.Thumb.Instr :=
+  fun hw1 hw2 =>
+  if M0Crypto.Thumb.is32 hw1 = Bool.true then M0Crypto.Thumb.decodeBL hw1 hw2 else M0Crypto.Thumb.decode16 hw1
+def M0Crypto.Thumb.read8 : M0Crypto.Armv6M.Mem → M0Crypto.Armv6M.Word → M0Crypto.Armv6M.Word :=
+  fun m a => BitVec.setWidth 32 (m a)
+def M0Crypto.Thumb.read16 : M0Crypto.Armv6M.Mem → M0Crypto.Armv6M.Word → M0Crypto.Armv6M.Word :=
+  fun m a => BitVec.setWidth 32 (m (a + 1#32) ++ m a)
+def M0Crypto.Thumb.write8 : M0Crypto.Armv6M.Mem → M0Crypto.Armv6M.Word → M0Crypto.Armv6M.Word → M0Crypto.Armv6M.Mem :=
+  fun m a v x => if x = a then BitVec.extractLsb' 0 8 v else m x
+def M0Crypto.Thumb.write16 : M0Crypto.Armv6M.Mem → M0Crypto.Armv6M.Word → M0Crypto.Armv6M.Word → M0Crypto.Armv6M.Mem :=
+  fun m a v x => if x = a then BitVec.extractLsb' 0 8 v else if x = a + 1#32 then BitVec.extractLsb' 8 8 v else m x
+def M0Crypto.Thumb.fetch16 : M0Crypto.Armv6M.Mem → M0Crypto.Armv6M.Word → BitVec 16 :=
+  fun m a => m (a + 1#32) ++ m a
+def M0Crypto.Thumb.lslC : M0Crypto.Armv6M.Word → Nat → Bool → M0Crypto.Armv6M.Word × Bool :=
+  fun x n c => if n = 0 then (x, c) else (x <<< n, BitVec.getLsbD x (32 - n))
+def M0Crypto.Thumb.lsrC : M0Crypto.Armv6M.Word → Nat → M0Crypto.Armv6M.Word × Bool :=
+  fun x n => (x >>> n, BitVec.getLsbD x (n - 1))
+def M0Crypto.Thumb.condPassed : BitVec 4 → M0Crypto.Armv6M.State → Bool :=
+  fun cond s =>
+  match cond.toNat with
+  | 0 => s.z
+  | 1 => !s.z
+  | 2 => s.c
+  | 3 => !s.c
+  | 4 => s.n
+  | 5 => !s.n
+  | 6 => s.v
+  | 7 => !s.v
+  | 8 => s.c && !s.z
+  | 9 => !s.c || s.z
+  | 10 => s.n == s.v
+  | 11 => s.n != s.v
+  | 12 => !s.z && s.n == s.v
+  | 13 => s.z || s.n != s.v
+  | x => Bool.false
+def M0Crypto.Thumb.listRegs : BitVec 8 → List M0Crypto.Armv6M.LowReg :=
+  fun l => List.filter (fun i => l.getLsbD ↑i) (List.finRange 8)
+def M0Crypto.Thumb.bitCount : BitVec 8 → Nat :=
+  fun l => (M0Crypto.Thumb.listRegs l).length
+def M0Crypto.Armv6M.State.setNZC : M0Crypto.Armv6M.State → M0Crypto.Armv6M.Word → Bool → M0Crypto.Armv6M.State :=
+  fun s r c =>
+  have __src := s.setNZ r;
+  { regs := __src.regs, n := __src.n, z := __src.z, c := c, v := __src.v, mem := __src.mem }
+def M0Crypto.Armv6M.State.setNZCV : M0Crypto.Armv6M.State → M0Crypto.Armv6M.Word → Bool → Bool → M0Crypto.Armv6M.State :=
+  fun s r c v =>
+  have __src := s.setNZ r;
+  { regs := __src.regs, n := __src.n, z := __src.z, c := c, v := v, mem := __src.mem }
+def M0Crypto.Armv6M.State.sp : M0Crypto.Armv6M.State → M0Crypto.Armv6M.Word :=
+  fun s => s.regs 13
+def M0Crypto.Thumb.addFlags : M0Crypto.Armv6M.State →
+  M0Crypto.Armv6M.Reg →
+    M0Crypto.Armv6M.Word → M0Crypto.Armv6M.Word → Bool → optParam Bool Bool.true → M0Crypto.Armv6M.State :=
+  fun s d a b cin write =>
+  match M0Crypto.Armv6M.addWithCarry a b cin with
+  | (r, c, v) =>
+    have s := if write = Bool.true then s.setReg d r else s;
+    s.setNZCV r c v
+inductive M0Crypto.Thumb.Kind : Type
+  | M0Crypto.Thumb.Kind.read : M0Crypto.Thumb.Kind
+  | M0Crypto.Thumb.Kind.write : M0Crypto.Thumb.Kind
+inductive M0Crypto.Thumb.Access : Type
+  | M0Crypto.Thumb.Access.mk : M0Crypto.Thumb.Kind → M0Crypto.Armv6M.Word → Nat → M0Crypto.Thumb.Access
+def M0Crypto.Thumb.Access.aligned : M0Crypto.Thumb.Access → Bool :=
+  fun a => BitVec.toNat a.addr % a.width == 0
+inductive M0Crypto.Thumb.Event : Type
+  | M0Crypto.Thumb.Event.mk : M0Crypto.Armv6M.Word → M0Crypto.Thumb.Instr → List M0Crypto.Thumb.Access → M0Crypto.Thumb.Event
+inductive M0Crypto.Thumb.Fault : Type
+  | M0Crypto.Thumb.Fault.pcOdd : M0Crypto.Armv6M.Word → M0Crypto.Thumb.Fault
+  | M0Crypto.Thumb.Fault.undefined : M0Crypto.Armv6M.Word → M0Crypto.Thumb.Fault
+  | M0Crypto.Thumb.Fault.unaligned : M0Crypto.Armv6M.Word → M0Crypto.Thumb.Fault
+  | M0Crypto.Thumb.Fault.interworking : M0Crypto.Armv6M.Word → M0Crypto.Thumb.Fault
+  | M0Crypto.Thumb.Fault.fuel : M0Crypto.Thumb.Fault
+def M0Crypto.Thumb.storeWords : M0Crypto.Armv6M.Mem → M0Crypto.Armv6M.Word → List M0Crypto.Armv6M.Word → M0Crypto.Armv6M.Mem :=
+  fun m x x_1 =>
+  List.brecOn (motive := fun x => M0Crypto.Armv6M.Mem → M0Crypto.Armv6M.Word → M0Crypto.Armv6M.Mem) x_1
+    M0Crypto.Thumb.storeWords._f m x
+def M0Crypto.Thumb.wordAccesses : M0Crypto.Thumb.Kind → M0Crypto.Armv6M.Word → Nat → List M0Crypto.Thumb.Access :=
+  fun k a n => List.map (fun i => { kind := k, addr := a + BitVec.ofNat 32 (4 * i), width := 4 }) (List.range n)
+def M0Crypto.Thumb.loadRegs : M0Crypto.Armv6M.State → M0Crypto.Armv6M.Word → List M0Crypto.Armv6M.Reg → M0Crypto.Armv6M.State :=
+  fun s x x_1 =>
+  List.brecOn (motive := fun x => M0Crypto.Armv6M.State → M0Crypto.Armv6M.Word → M0Crypto.Armv6M.State) x_1
+    M0Crypto.Thumb.loadRegs._f s x
+def M0Crypto.Thumb.Instr.accesses : M0Crypto.Thumb.Instr → M0Crypto.Armv6M.State → List M0Crypto.Thumb.Access :=
+  fun i s =>
+  have pc := s.pc;
+  match i with
+  | M0Crypto.Thumb.Instr.ldrLit t imm8 =>
+    [{ kind := M0Crypto.Thumb.Kind.read, addr := (pc + 4#32 &&& ~~~3#32) + BitVec.ofNat 32 (imm8.toNat * 4),
+        width := 4 }]
+  | M0Crypto.Thumb.Instr.memReg op t n m =>
+    [{ kind := if op.isLoad = Bool.true then M0Crypto.Thumb.Kind.read else M0Crypto.Thumb.Kind.write,
+        addr := s.reg n + s.reg m, width := op.width }]
+  | M0Crypto.Thumb.Instr.memImm op t n imm5 =>
+    [{ kind := if op.isLoad = Bool.true then M0Crypto.Thumb.Kind.read else M0Crypto.Thumb.Kind.write,
+        addr := s.reg n + BitVec.ofNat 32 (imm5.toNat * op.width), width := op.width }]
+  | M0Crypto.Thumb.Instr.strSp t imm8 =>
+    [{ kind := M0Crypto.Thumb.Kind.write, addr := s.sp + BitVec.ofNat 32 (imm8.toNat * 4), width := 4 }]
+  | M0Crypto.Thumb.Instr.ldrSp t imm8 =>
+    [{ kind := M0Crypto.Thumb.Kind.read, addr := s.sp + BitVec.ofNat 32 (imm8.toNat * 4), width := 4 }]
+  | M0Crypto.Thumb.Instr.push l lr =>
+    have n := M0Crypto.Thumb.bitCount l + lr.toNat;
+    M0Crypto.Thumb.wordAccesses M0Crypto.Thumb.Kind.write (s.sp - BitVec.ofNat 32 (4 * n)) n
+  | M0Crypto.Thumb.Instr.pop l pc =>
+    M0Crypto.Thumb.wordAccesses M0Crypto.Thumb.Kind.read s.sp (M0Crypto.Thumb.bitCount l + pc.toNat)
+  | M0Crypto.Thumb.Instr.stm n l =>
+    M0Crypto.Thumb.wordAccesses M0Crypto.Thumb.Kind.write (s.reg n) (M0Crypto.Thumb.bitCount l)
+  | M0Crypto.Thumb.Instr.ldm n l =>
+    M0Crypto.Thumb.wordAccesses M0Crypto.Thumb.Kind.read (s.reg n) (M0Crypto.Thumb.bitCount l)
+  | x => []
+def M0Crypto.Thumb.Instr.exec : M0Crypto.Thumb.Instr → M0Crypto.Armv6M.State → Except M0Crypto.Thumb.Fault M0Crypto.Armv6M.State :=
+  fun i s =>
+  have pc := s.pc;
+  have next := s.setReg 15 (pc + BitVec.ofNat 32 i.size);
+  have r := fun x => s.reg x;
+  match i with
+  | M0Crypto.Thumb.Instr.lslImm d m imm5 =>
+    match M0Crypto.Thumb.lslC (r m) imm5.toNat s.c with
+    | (x, c) => Except.ok ((next.setReg d.toReg x).setNZC x c)
+  | M0Crypto.Thumb.Instr.lsrImm d m imm5 =>
+    match M0Crypto.Thumb.lsrC (r m) (if imm5.toNat = 0 then 32 else imm5.toNat) with
+    | (x, c) => Except.ok ((next.setReg d.toReg x).setNZC x c)
+  | M0Crypto.Thumb.Instr.addReg d n m => Except.ok (M0Crypto.Thumb.addFlags next d.toReg (r n) (r m) Bool.false)
+  | M0Crypto.Thumb.Instr.subReg d n m => Except.ok (M0Crypto.Thumb.addFlags next d.toReg (r n) (~~~r m) Bool.true)
+  | M0Crypto.Thumb.Instr.addImm3 d n imm3 =>
+    Except.ok (M0Crypto.Thumb.addFlags next d.toReg (r n) (BitVec.setWidth 32 imm3) Bool.false)
+  | M0Crypto.Thumb.Instr.subImm3 d n imm3 =>
+    Except.ok (M0Crypto.Thumb.addFlags next d.toReg (r n) (~~~BitVec.setWidth 32 imm3) Bool.true)
+  | M0Crypto.Thumb.Instr.movImm d imm8 =>
+    have x := BitVec.setWidth 32 imm8;
+    Except.ok ((next.setReg d.toReg x).setNZ x)
+  | M0Crypto.Thumb.Instr.cmpImm n imm8 =>
+    Except.ok (M0Crypto.Thumb.addFlags next 0 (r n) (~~~BitVec.setWidth 32 imm8) Bool.true Bool.false)
+  | M0Crypto.Thumb.Instr.addImm8 dn imm8 =>
+    Except.ok (M0Crypto.Thumb.addFlags next dn.toReg (r dn) (BitVec.setWidth 32 imm8) Bool.false)
+  | M0Crypto.Thumb.Instr.subImm8 dn imm8 =>
+    Except.ok (M0Crypto.Thumb.addFlags next dn.toReg (r dn) (~~~BitVec.setWidth 32 imm8) Bool.true)
+  | M0Crypto.Thumb.Instr.dp op dn m =>
+    match op with
+    | M0Crypto.Thumb.DpOp.ands =>
+      have x := r dn &&& r m;
+      Except.ok ((next.setReg dn.toReg x).setNZ x)
+    | M0Crypto.Thumb.DpOp.eors =>
+      have x := r dn ^^^ r m;
+      Except.ok ((next.setReg dn.toReg x).setNZ x)
+    | M0Crypto.Thumb.DpOp.orrs =>
+      have x := r dn ||| r m;
+      Except.ok ((next.setReg dn.toReg x).setNZ x)
+    | M0Crypto.Thumb.DpOp.mvns =>
+      have x := ~~~r m;
+      Except.ok ((next.setReg dn.toReg x).setNZ x)
+    | M0Crypto.Thumb.DpOp.muls =>
+      have x := r m * r dn;
+      Except.ok ((next.setReg dn.toReg x).setNZ x)
+    | M0Crypto.Thumb.DpOp.tst => Except.ok (next.setNZ (r dn &&& r m))
+    | M0Crypto.Thumb.DpOp.adcs => Except.ok (M0Crypto.Thumb.addFlags next dn.toReg (r dn) (r m) s.c)
+    | M0Crypto.Thumb.DpOp.sbcs => Except.ok (M0Crypto.Thumb.addFlags next dn.toReg (r dn) (~~~r m) s.c)
+    | M0Crypto.Thumb.DpOp.rsbs => Except.ok (M0Crypto.Thumb.addFlags next dn.toReg (~~~r m) (0#32) Bool.true)
+    | M0Crypto.Thumb.DpOp.cmp => Except.ok (M0Crypto.Thumb.addFlags next 0 (r dn) (~~~r m) Bool.true Bool.false)
+    | M0Crypto.Thumb.DpOp.rors =>
+      match M0Crypto.Armv6M.rorC (r dn) (BitVec.toNat (r m) % 256) s.c with
+      | (x, c) => Except.ok ((next.setReg dn.toReg x).setNZC x c)
+  | M0Crypto.Thumb.Instr.movHi d m => Except.ok (next.setReg d (s.regs m))
+  | M0Crypto.Thumb.Instr.ldrLit t imm8 =>
+    have a := (pc + 4#32 &&& ~~~3#32) + BitVec.ofNat 32 (imm8.toNat * 4);
+    Except.ok (next.setReg t.toReg (M0Crypto.Armv6M.read32 s.mem a))
+  | M0Crypto.Thumb.Instr.memReg op t n m => Except.ok (M0Crypto.Thumb.Instr.exec.memOp next op t (r n + r m))
+  | M0Crypto.Thumb.Instr.memImm op t n imm5 =>
+    Except.ok (M0Crypto.Thumb.Instr.exec.memOp next op t (r n + BitVec.ofNat 32 (imm5.toNat * op.width)))
+  | M0Crypto.Thumb.Instr.strSp t imm8 =>
+    Except.ok
+      { regs := next.regs, n := next.n, z := next.z, c := next.c, v := next.v,
+        mem := M0Crypto.Armv6M.write32 s.mem (s.sp + BitVec.ofNat 32 (imm8.toNat * 4)) (r t) }
+  | M0Crypto.Thumb.Instr.ldrSp t imm8 =>
+    Except.ok (next.setReg t.toReg (M0Crypto.Armv6M.read32 s.mem (s.sp + BitVec.ofNat 32 (imm8.toNat * 4))))
+  | M0Crypto.Thumb.Instr.addRdSp d imm8 => Except.ok (next.setReg d.toReg (s.sp + BitVec.ofNat 32 (imm8.toNat * 4)))
+  | M0Crypto.Thumb.Instr.addSp imm7 => Except.ok (next.setReg 13 (s.sp + BitVec.ofNat 32 (imm7.toNat * 4)))
+  | M0Crypto.Thumb.Instr.subSp imm7 => Except.ok (next.setReg 13 (s.sp - BitVec.ofNat 32 (imm7.toNat * 4)))
+  | M0Crypto.Thumb.Instr.uxth d m => Except.ok (next.setReg d.toReg (BitVec.setWidth 32 (BitVec.setWidth 16 (r m))))
+  | M0Crypto.Thumb.Instr.push l lr =>
+    have n := M0Crypto.Thumb.bitCount l + lr.toNat;
+    have a := s.sp - BitVec.ofNat 32 (4 * n);
+    have vals := List.map r (M0Crypto.Thumb.listRegs l) ++ if lr = Bool.true then [s.regs 14] else [];
+    Except.ok
+      ({ regs := next.regs, n := next.n, z := next.z, c := next.c, v := next.v,
+            mem := M0Crypto.Thumb.storeWords s.mem a vals }.setReg
+        13 a)
+  | M0Crypto.Thumb.Instr.pop l pcBit =>
+    have s1 := M0Crypto.Thumb.loadRegs next s.sp (List.map M0Crypto.Armv6M.LowReg.toReg (M0Crypto.Thumb.listRegs l));
+    have a := s.sp + BitVec.ofNat 32 (4 * M0Crypto.Thumb.bitCount l);
+    have s2 := s1.setReg 13 (s.sp + BitVec.ofNat 32 (4 * (M0Crypto.Thumb.bitCount l + pcBit.toNat)));
+    if pcBit = Bool.true then
+      have target := M0Crypto.Armv6M.read32 s.mem a;
+      if BitVec.getLsbD target 0 = Bool.true then Except.ok (s2.setReg 15 (target &&& ~~~1#32))
+      else Except.error (M0Crypto.Thumb.Fault.interworking pc)
+    else Except.ok s2
+  | M0Crypto.Thumb.Instr.stm n l =>
+    have vals := List.map r (M0Crypto.Thumb.listRegs l);
+    Except.ok
+      ({ regs := next.regs, n := next.n, z := next.z, c := next.c, v := next.v,
+            mem := M0Crypto.Thumb.storeWords s.mem (r n) vals }.setReg
+        n.toReg (r n + BitVec.ofNat 32 (4 * M0Crypto.Thumb.bitCount l)))
+  | M0Crypto.Thumb.Instr.ldm n l =>
+    have s1 := M0Crypto.Thumb.loadRegs next (r n) (List.map M0Crypto.Armv6M.LowReg.toReg (M0Crypto.Thumb.listRegs l));
+    if l.getLsbD ↑n = Bool.true then Except.ok s1
+    else Except.ok (s1.setReg n.toReg (r n + BitVec.ofNat 32 (4 * M0Crypto.Thumb.bitCount l)))
+  | M0Crypto.Thumb.Instr.bcond cond imm8 =>
+    if M0Crypto.Thumb.condPassed cond s = Bool.true then
+      Except.ok (s.setReg 15 (pc + 4#32 + BitVec.signExtend 32 (imm8 ++ 0#1)))
+    else Except.ok next
+  | M0Crypto.Thumb.Instr.b imm11 => Except.ok (s.setReg 15 (pc + 4#32 + BitVec.signExtend 32 (imm11 ++ 0#1)))
+  | M0Crypto.Thumb.Instr.bl imm25 =>
+    Except.ok ((s.setReg 14 (pc + 4#32 ||| 1#32)).setReg 15 (pc + 4#32 + BitVec.signExtend 32 imm25))
+def M0Crypto.Thumb.Instr.exec.memOp : M0Crypto.Armv6M.State → M0Crypto.Thumb.MemOp → M0Crypto.Armv6M.LowReg → M0Crypto.Armv6M.Word → M0Crypto.Armv6M.State :=
+  fun next op t a =>
+  have v := next.reg t;
+  match op with
+  | M0Crypto.Thumb.MemOp.str =>
+    { regs := next.regs, n := next.n, z := next.z, c := next.c, v := next.v,
+      mem := M0Crypto.Armv6M.write32 next.mem a v }
+  | M0Crypto.Thumb.MemOp.strh =>
+    { regs := next.regs, n := next.n, z := next.z, c := next.c, v := next.v,
+      mem := M0Crypto.Thumb.write16 next.mem a v }
+  | M0Crypto.Thumb.MemOp.strb =>
+    { regs := next.regs, n := next.n, z := next.z, c := next.c, v := next.v, mem := M0Crypto.Thumb.write8 next.mem a v }
+  | M0Crypto.Thumb.MemOp.ldr => next.setReg t.toReg (M0Crypto.Armv6M.read32 next.mem a)
+  | M0Crypto.Thumb.MemOp.ldrh => next.setReg t.toReg (M0Crypto.Thumb.read16 next.mem a)
+  | M0Crypto.Thumb.MemOp.ldrb => next.setReg t.toReg (M0Crypto.Thumb.read8 next.mem a)
+def M0Crypto.Thumb.step : M0Crypto.Armv6M.State → Except M0Crypto.Thumb.Fault (M0Crypto.Armv6M.State × M0Crypto.Thumb.Event) :=
+  fun s =>
+  have pc := s.pc;
+  if BitVec.getLsbD pc 0 = Bool.true then Except.error (M0Crypto.Thumb.Fault.pcOdd pc)
+  else
+    match M0Crypto.Thumb.decode (M0Crypto.Thumb.fetch16 s.mem pc) (M0Crypto.Thumb.fetch16 s.mem (pc + 2#32)) with
+    | Option.none => Except.error (M0Crypto.Thumb.Fault.undefined pc)
+    | Option.some i =>
+      have acc := i.accesses s;
+      if acc.all M0Crypto.Thumb.Access.aligned = Bool.true then
+        match i.exec s with
+        | Except.ok s' => Except.ok (s', { pc := pc, instr := i, accesses := acc })
+        | Except.error e => Except.error e
+      else Except.error (M0Crypto.Thumb.Fault.unaligned pc)
+def M0Crypto.Thumb.runUntil : M0Crypto.Armv6M.Word →
+  Nat → M0Crypto.Armv6M.State → Except M0Crypto.Thumb.Fault (M0Crypto.Armv6M.State × List M0Crypto.Thumb.Event) :=
+  fun stop x x_1 =>
+  Nat.brecOn (motive := fun x =>
+    M0Crypto.Armv6M.State → Except M0Crypto.Thumb.Fault (M0Crypto.Armv6M.State × List M0Crypto.Thumb.Event)) x
+    (M0Crypto.Thumb.runUntil._f stop) x_1
+def M0Crypto.Thumb.CodeAt : M0Crypto.Armv6M.Mem → M0Crypto.Armv6M.Word → List (BitVec 8) → Prop :=
+  fun m base bytes => ∀ (i : Nat) (h : i < bytes.length), m (base + BitVec.ofNat 32 i) = bytes[i]
+def M0Crypto.Thumb.Writes : List M0Crypto.Thumb.Access → M0Crypto.Armv6M.Word → Prop :=
+  fun acc y => ∃ a, a ∈ acc ∧ a.kind = M0Crypto.Thumb.Kind.write ∧ ∃ k, k < a.width ∧ y = a.addr + BitVec.ofNat 32 k
+def M0Crypto.Thumb.Reads : List M0Crypto.Thumb.Access → M0Crypto.Armv6M.Word → Prop :=
+  fun acc y => ∃ a, a ∈ acc ∧ a.kind = M0Crypto.Thumb.Kind.read ∧ ∃ k, k < a.width ∧ y = a.addr + BitVec.ofNat 32 k

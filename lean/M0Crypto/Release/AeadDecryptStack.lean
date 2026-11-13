@@ -171,7 +171,7 @@ theorem _root_.M0Crypto.Release.Aead.decrypt_stack : TraceSpec.AeadDecryptStack 
   intro u hu
   by_cases hpc : u.pc = c.regs0 14 &&& ~~~1#32
   · obtain ⟨last, hlast, hw⟩ := decrypt_final_stack_window c hv hb s he hlr hret hrun
-    have := ChaCha20XorStack.runStates_stop_last hrun u hu hpc
+    have := Release.runStates_stop_last hrun u hu hpc
     rw [hlast] at this
     cases this
     simpa [decryptEnv, M0Crypto.Release.TraceSpec.aeadStackBytes] using hw

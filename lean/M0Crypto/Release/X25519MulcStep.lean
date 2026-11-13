@@ -15,7 +15,7 @@ namespace M0Crypto.Release.X25519MulcStep
 open M0Crypto.Armv6M (Word Reg LowReg State addWithCarry read32 write32)
 open M0Crypto.Thumb
 open M0Crypto.Release.X25519Mem (regs_strImm mem_strImm)
-open M0Crypto.Release.Blake2s (regs_movHi)
+open M0Crypto.Release.InstrNext (regs_movHi)
 open M0Crypto.Release.X25519Block
 open M0Crypto.Release.X25519MulcWord
 open M0Crypto.Release.X25519Macros (mulcWord mulcStep)

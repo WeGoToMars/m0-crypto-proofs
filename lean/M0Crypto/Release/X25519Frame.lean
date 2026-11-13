@@ -1,4 +1,4 @@
-import M0Crypto.Release.Frame
+import M0Crypto.Release.FrameBase
 
 /-!
 The stack frame of the X25519 field routines as a function from word slots to words

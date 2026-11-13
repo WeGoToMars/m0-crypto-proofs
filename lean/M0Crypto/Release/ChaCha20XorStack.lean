@@ -1,6 +1,7 @@
 import M0Crypto.Release.ChaCha20XorConstantTime
 import M0Crypto.Release.ConstantTime.ReachableWindow
 import M0Crypto.Release.ConstantTime.ContractBridges
+import M0Crypto.Release.ConstantTime.ChaCha20Poly1305Bridges
 
 set_option linter.unusedSimpArgs false
 
@@ -19,43 +20,6 @@ open M0Crypto.Thumb
 open M0Crypto.Release
 open M0Crypto.Release.ConstantTime
 open M0Crypto.Release.ChaCha20StoreEvents
-
-/-- Only the last state of a recording can be at the stop address. -/
-theorem runStates_stop_last {stop : Word} {fuel : Nat} {s : State}
-    {states : List State} {events : List Event}
-    (hrun : runStates stop fuel s = .ok (states, events)) :
-    ∀ u ∈ states, u.pc = stop → states.getLast? = some u := by
-  induction fuel generalizing s states events with
-  | zero =>
-    simp only [runStates] at hrun
-    split at hrun
-    · cases hrun; intro u hu _; simp at hu; simp [hu]
-    · contradiction
-  | succ fuel ih =>
-    simp only [runStates] at hrun
-    split at hrun
-    · cases hrun; intro u hu _; simp at hu; simp [hu]
-    · rename_i hp
-      cases hs : step s with
-      | error err => simp [hs] at hrun
-      | ok pair =>
-        obtain ⟨next, ev⟩ := pair
-        simp only [hs] at hrun
-        cases ht : runStates stop fuel next with
-        | error err => simp [ht] at hrun
-        | ok pair =>
-          obtain ⟨rest, tr⟩ := pair
-          simp only [ht, Except.ok.injEq, Prod.mk.injEq] at hrun
-          obtain ⟨rfl, rfl⟩ := hrun
-          intro u hu hpc
-          have hne : rest ≠ [] := (runStates_nonempty ht).1
-          simp only [List.mem_cons] at hu
-          rcases hu with rfl | hu
-          · exact absurd hpc hp
-          · have := ih ht u hu hpc
-            cases rest with
-            | nil => contradiction
-            | cons x xs => simpa using this
 
 /-- **Every state of `m0c_chacha20_xor` keeps SP in the stack window.** -/
 theorem _root_.M0Crypto.Release.ChaCha20Xor.xor_stack : TraceSpec.ChaCha20XorStack := by

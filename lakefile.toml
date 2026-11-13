@@ -1,7 +1,0 @@
-name = "m0crypto"
-version = "0.3.0"
-defaultTargets = ["M0Crypto"]
-
-[[lean_lib]]
-name = "M0Crypto"
-srcDir = "lean"

@@ -1,6 +1,6 @@
 import M0Crypto.Release.ReachSteps
 import M0Crypto.Thumb.FastRun
-import M0Crypto.Release.Frame
+import M0Crypto.Release.FrameBase
 
 set_option linter.unusedSimpArgs false
 

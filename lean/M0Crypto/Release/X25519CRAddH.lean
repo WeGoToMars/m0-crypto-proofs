@@ -16,7 +16,7 @@ open M0Crypto.Release.X25519W4
 open M0Crypto.Release.X25519Macros (sl)
 open M0Crypto.Release.X25519Mul (regs_adcs regs_adds c_adcs c_adds c_movImm)
 open M0Crypto.Release.X25519Carry (adc_nat carry_le)
-open M0Crypto.Release.Blake2s (regs_movImm)
+open M0Crypto.Release.InstrNext (regs_movImm)
 
 theorem regs_addRdSp_sl (s : State) (d : LowReg) (k : Nat) (hk : k < 256) (r : Reg) (hr : r ≠ 15) :
     ((Instr.addRdSp d (sl k)).next s).regs r = if r = d.toReg then slot s.sp k else s.regs r := by

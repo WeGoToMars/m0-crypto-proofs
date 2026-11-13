@@ -52,7 +52,7 @@ theorem addQ_exec (s : State) :
   refine ⟨?_, ?_, hm, ?_⟩
   · simp (config := {decide := true}) only [t, addQ, execAll, State.reg, X25519Mul.regs_lsl,
       X25519Mul.regs_lsr, X25519Mul.regs_adds, X25519Mul.regs_adcs, X25519Mul.c_adcs,
-      X25519Mul.c_movImm, Blake2s.regs_movImm, X25519Mul.regs_muls, toReg1, toReg6, toReg7,
+      X25519Mul.c_movImm, InstrNext.regs_movImm, X25519Mul.regs_muls, toReg1, toReg6, toReg7,
       ite_true, ite_false, ne_eq, not_false_eq_true, k0, k19, k1, k31]
     have e1 := adc_nat 0#32 0#32 s.c
     generalize addWithCarry 0#32 0#32 s.c = Z at *
@@ -66,7 +66,7 @@ theorem addQ_exec (s : State) :
       BitVec.toNat_ofNat, Nat.reduceMod, Nat.zero_mod] at e1 e2 ⊢
     omega
   · simp (config := {decide := true}) only [t, addQ, execAll, State.reg, X25519Mul.regs_lsl,
-      X25519Mul.regs_lsr, X25519Mul.regs_adds, X25519Mul.regs_adcs, Blake2s.regs_movImm,
+      X25519Mul.regs_lsr, X25519Mul.regs_adds, X25519Mul.regs_adcs, InstrNext.regs_movImm,
       X25519Mul.regs_muls, toReg1, toReg6, toReg7, ite_true, ite_false, ne_eq, not_false_eq_true,
       k1]
     have := (s.regs 6).isLt

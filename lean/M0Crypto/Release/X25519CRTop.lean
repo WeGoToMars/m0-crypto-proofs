@@ -19,7 +19,7 @@ open M0Crypto.Release.X25519Macros (sl SH SP_ SDST reduceTop)
 open M0Crypto.Release.X25519Mul (regs_adcs regs_adds regs_lsr regs_lsl regs_muls regs_uxth
   toReg_inj mul_small lo16 hi16 shl16 c_adds c_adcs c_movImm)
 open M0Crypto.Release.X25519Carry (adc_nat carry_le)
-open M0Crypto.Release.Blake2s (toReg_ne15 regs_movHi regs_movImm)
+open M0Crypto.Release.InstrNext (toReg_ne15 regs_movHi regs_movImm)
 
 def topA : List Instr :=
   [.ldrSp 4 (sl (SH + 7)), .ldrSp 5 (sl (SP_ + 7)), .movImm 7 38, .movImm 2 0,

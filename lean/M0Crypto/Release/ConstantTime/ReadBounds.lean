@@ -1,4 +1,3 @@
-import M0Crypto.Release.ConstantTime.OutputSiteCheck
 import M0Crypto.Release.ConstantTime.LiteralSound
 import M0Crypto.Release.ConstantTime.AccessAddress
 import M0Crypto.Release.ConstantTime.StackStoreSound

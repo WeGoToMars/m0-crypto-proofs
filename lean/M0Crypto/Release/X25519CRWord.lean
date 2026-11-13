@@ -21,7 +21,7 @@ open M0Crypto.Release.X25519Macros (sl SH SP_ reduceWord)
 open M0Crypto.Release.X25519Mul (regs_adcs regs_adds regs_lsr regs_lsl regs_muls regs_uxth
   toReg_inj High mul_small lo16 hi16 shl16 c_adds c_adcs)
 open M0Crypto.Release.X25519Carry (adc_nat carry_le)
-open M0Crypto.Release.Blake2s (toReg_ne15 regs_movHi)
+open M0Crypto.Release.InstrNext (toReg_ne15 regs_movHi)
 
 def wLoad (i : Nat) (h l t : LowReg) : List Instr :=
   [.ldrSp h (sl (SH + i)), .ldrSp l (sl (SP_ + i)), .uxth t h, .lsrImm h h 16,

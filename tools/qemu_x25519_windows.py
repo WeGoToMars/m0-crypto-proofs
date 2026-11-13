@@ -33,7 +33,7 @@ slot the code itself names (`str r0, [sp, #...]` after `movs r0, #0xfe`). It che
 not timing, and only the instructions the windows reach; the summary says how many distinct
 instructions of the X25519 unit (m0c_fe_mul .. end of m0c_x25519) that is.
 
---no-model records the QEMU windows and stops (no Lean). The Lean run needs the proofs tree's
+--no-model records the QEMU windows and stops (no Lean). The Lean run needs the X25519 asset workspace's (assets/x25519)
 M0Crypto.Thumb.FastRun to be built; it does not build anything itself.
 """
 import argparse
@@ -96,7 +96,7 @@ def cbytes(h):
 
 
 def text_of(obj):
-    """The .text bytes of the release object (what build/lib/text.bin holds)."""
+    """The .text bytes of the release object (what build/lib/x25519/text.bin holds)."""
     with tempfile.NamedTemporaryFile(suffix=".bin") as f:
         run([LLVM / "llvm-objcopy", "-O", "binary", "-j", ".text", obj, f.name])
         return Path(f.name).read_bytes()
@@ -291,8 +291,8 @@ def compare(cases, traced, work, timeout):
     case_file.write_text("\n".join(cases) + "\n")
     env = dict(os.environ, PATH=os.path.expanduser("~/.elan/bin") + ":" + os.environ["PATH"])
     r = subprocess.run(["nice", "-n", "5", "perl", "-e", f"alarm {timeout}; exec @ARGV",
-                        "lake", "env", "lean", "--run", "lean/StepTrace.lean", str(case_file)],
-                       cwd=ROOT, env=env, capture_output=True, text=True)
+                        "lake", "env", "lean", "--run", str(ROOT / "lean/StepTrace.lean"), str(case_file)],
+                       cwd=ROOT / "assets" / "x25519", env=env, capture_output=True, text=True)
     if r.returncode:
         fail(f"the model run failed (status {r.returncode}): {(r.stdout + r.stderr).strip()[-400:]}")
     model, name = {}, None
@@ -319,7 +319,7 @@ def compare(cases, traced, work, timeout):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--obj", default=str(LIB / "build" / "lib" / "m0crypto.o"))
+    ap.add_argument("--obj", default=str(LIB / "build" / "lib" / "x25519" / "m0crypto_x25519.o"))
     ap.add_argument("--work", default="/tmp/m0c-x25519-windows")
     ap.add_argument("--qemu", default=os.environ.get("QEMU", "qemu-system-arm"))
     ap.add_argument("--hit", type=int, default=7, help="which ladder step to trace (1-based)")

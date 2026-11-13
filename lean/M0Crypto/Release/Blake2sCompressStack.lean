@@ -1,5 +1,4 @@
 import M0Crypto.Release.Blake2sCompressConstantTime
-import M0Crypto.Release.ChaCha20XorStack
 import M0Crypto.Release.ConstantTime.ReachableWindow
 import M0Crypto.Release.ConstantTime.ContractBridges
 import M0Crypto.Release.Blake2sFrames
@@ -51,7 +50,7 @@ theorem compress_stack {base : Word} {s : State}
   by_cases hpc : u.pc = s.regs 14 &&& ~~~1#32
   · obtain ⟨last, hlast, hrunU⟩ := runStates_final hrun
     have h1 := runUntil_success_unique hru hrunU
-    have h2 := ChaCha20XorStack.runStates_stop_last hrun u hu hpc
+    have h2 := Release.runStates_stop_last hrun u hu hpc
     rw [hlast] at h2
     cases h2
     have : u = t := h1.1.symm

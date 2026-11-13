@@ -1,5 +1,5 @@
-import M0Crypto.Release.ChaCha20Contract
 import M0Crypto.Spec.X25519
+import M0Crypto.Release.Contract
 
 /-!
 # Contract of `m0c_x25519`

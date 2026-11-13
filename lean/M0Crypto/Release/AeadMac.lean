@@ -1,4 +1,6 @@
-import M0Crypto.Release.AeadCall
+import M0Crypto.Release.Call
+import M0Crypto.Release.AeadCode
+import M0Crypto.Release.Poly1305Context
 import M0Crypto.Release.ReachSteps
 set_option linter.unusedSimpArgs false
 set_option maxRecDepth 100000

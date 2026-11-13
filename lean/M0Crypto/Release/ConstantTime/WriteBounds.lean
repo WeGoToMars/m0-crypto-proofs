@@ -1,5 +1,4 @@
 import M0Crypto.Release.ConstantTime.BufferSeparation
-import M0Crypto.Release.ChaCha20Xor
 
 /-! Relating functional write bounds to concrete store accesses. -/
 namespace M0Crypto.Release.ConstantTime

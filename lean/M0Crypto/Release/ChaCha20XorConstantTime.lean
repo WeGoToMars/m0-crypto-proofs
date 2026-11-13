@@ -1,10 +1,11 @@
 import M0Crypto.Release.ChaCha20StoreEvents
-import M0Crypto.Release.ConstantTime.OutputSiteCheck
+import M0Crypto.Release.ConstantTime.ChaCha20OutputSiteCheck
 import M0Crypto.Release.ConstantTime.EntrySound
 import M0Crypto.Release.ConstantTime.Alignment
 import M0Crypto.Release.ConstantTime.StackCertificates
 import M0Crypto.Release.ConstantTime.IndexCertificates
-import M0Crypto.Release.ConstantTime.OutputSegments
+import M0Crypto.Release.ConstantTime.ChaCha20OutputSegments
+import M0Crypto.Release.ConstantTime.ChaCha20Poly1305EntrySound
 
 set_option linter.unusedSimpArgs false
 
