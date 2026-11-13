@@ -28,7 +28,7 @@ open M0Crypto.Armv6M (Word Reg LowReg)
 
 /-- Data-processing operations of the `010000` group that the artifact uses. -/
 inductive DpOp where
-  | ands | eors | adcs | rors | tst | rsbs | cmp | orrs | muls | mvns
+  | ands | eors | adcs | sbcs | rors | tst | rsbs | cmp | orrs | muls | mvns
   deriving DecidableEq, Repr
 
 /-- Width and direction of a non-signed load or store. -/
@@ -114,6 +114,7 @@ def decodeDp (hw : BitVec 16) : Option Instr :=
   | 0b0000 => some (.dp .ands dn m)
   | 0b0001 => some (.dp .eors dn m)
   | 0b0101 => some (.dp .adcs dn m)
+  | 0b0110 => some (.dp .sbcs dn m)
   | 0b0111 => some (.dp .rors dn m)
   | 0b1000 => some (.dp .tst dn m)
   | 0b1001 => some (.dp .rsbs dn m)
@@ -211,6 +212,8 @@ def decode (hw1 hw2 : BitVec 16) : Option Instr :=
 example : decode 0x0a12#16 0 = some (.lsrImm 2 2 8) := by decide         -- lsrs r2, r2, #8
 example : decode 0x0021#16 0 = some (.lslImm 1 4 0) := by decide         -- movs r1, r4
 example : decode 0x4148#16 0 = some (.dp .adcs 0 1) := by decide         -- adcs r0, r1
+example : decode 0x41b4#16 0 = some (.dp .sbcs 4 6) := by decide         -- sbcs r4, r6
+example : decode 0x41ad#16 0 = some (.dp .sbcs 5 5) := by decide         -- sbcs r5, r5
 example : decode 0x4364#16 0 = some (.dp .muls 4 4) := by decide         -- muls r4, r4, r4
 example : decode 0x4264#16 0 = some (.dp .rsbs 4 4) := by decide         -- rsbs r4, r4, #0
 example : decode 0x464d#16 0 = some (.movHi 5 9) := by decide            -- mov r5, r9

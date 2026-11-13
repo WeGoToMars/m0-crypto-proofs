@@ -3,7 +3,7 @@ import M0Crypto.Sym.Core
 /-!
 # Symbolic executor: `Sound` for the ALU forms
 
-`sound_dp` covers all ten `DpOp`s; `sound_lslImm` and `sound_lsrImm` cover the immediate
+`sound_dp` covers all eleven `DpOp`s; `sound_lslImm` and `sound_lsrImm` cover the immediate
 shifts. Each proof unfolds `symStep`, `Instr.next` and `Instr.exec` down to the
 denotations of `Core.lean`. Only the immediate shifts need a case split, on `imm5 = 0`,
 which both `symStep` and `Thumb.lslC` / `Thumb.lsrC` branch on.

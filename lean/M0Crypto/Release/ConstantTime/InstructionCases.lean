@@ -56,6 +56,7 @@ theorem certPoint_register_paired {env : Env} {bytes : List (BitVec 8)} {entry :
     | orrs => exact certPoint_logical_paired .orrs d m (by simp) hc hi hm hp h heven
     | muls => exact certPoint_logical_paired .muls d m (by simp) hc hi hm hp h heven
     | adcs => exact certPoint_adcs_paired d m hc hi hm hp h heven
+    | sbcs => exact certPoint_sbcs_paired d m hc hi hm hp h heven
     | rors => exact certPoint_rors_paired d m hc hi hm hp h heven
     | tst => exact certPoint_tst_paired d m hc hi hm hp h heven
     | rsbs => exact certPoint_rsbs_paired d m hc hi hm hp h heven
@@ -229,6 +230,7 @@ theorem certPoint_return_final {env : Env} {bytes : List (BitVec 8)}
   | cons j js =>
     obtain ⟨out, hx⟩ := certPoint_xfer hc hm hp
     obtain ⟨next, hs⟩ := certPoint_nonfinal_successor hc hm hp hx
+    have hx0 := hx
     have hb := xfer_sp_bounds hx
     have hw : env.win.covers st.spOff st.spOff = true := by
       simp [StackWindow.covers, hb.1, hb.2.2]
@@ -241,11 +243,13 @@ theorem certPoint_return_final {env : Env} {bytes : List (BitVec 8)}
           simp_all
         subst out
         simp at hs
-      | some ret =>
-        cases hv : stkGet st.stk (st.spOff + (4 * (regsOf l).length : Nat)) <;>
-          simp_all <;> split at hx <;> simp_all
+      | some c =>
+        rw [hctx] at hx0
+        obtain ⟨rs, -, hout⟩ := pop_internal_transfer l hx0
         subst out
-        simp at hs
+        cases rs with
+        | nil => simp at hs
+        | cons r rs => simp [hctx] at hs
 
 /-- A checked instruction advances the paired run under the local buffer and
 declassification obligations. -/

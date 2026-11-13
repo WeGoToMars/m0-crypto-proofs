@@ -26,6 +26,9 @@ theorem le_sem {p : Params} {a b : AbsVal} {x y : Word}
   case sp.lo =>
     rcases ha with ⟨_, _, _, _, hy⟩
     exact hy.symm
+  case ret.ret r r' =>
+    obtain ⟨⟨r₀, hr₀, hx⟩, -⟩ := ha
+    exact ⟨r₀, hle r₀ hr₀, hx⟩
   all_goals
     try
       have hxy := sem_public ha (by simp [AbsVal.pub])
@@ -64,12 +67,8 @@ theorem join_sem_left {p : Params} {a b : AbsVal} {x y : Word}
   | ret r =>
     cases b with
     | ret r' =>
-      by_cases h : r == r'
-      · have hr : r = r' := of_decide_eq_true h
-        subst r'
-        simpa [AbsVal.join, Sem] using ha
-      · have hxy := eq_of_sem ha (by simp [AbsVal.pub])
-        simp [AbsVal.join, h, Sem, hxy]
+      obtain ⟨⟨r₀, hr₀, hx⟩, hy⟩ := ha
+      exact ⟨⟨r₀, List.mem_append_left _ hr₀, hx⟩, hy⟩
     | hi => simp [AbsVal.join, Sem]
     | _ =>
       have hxy := eq_of_sem ha (by simp [AbsVal.pub])
@@ -115,12 +114,11 @@ theorem join_sem_right {p : Params} {a b : AbsVal} {x y : Word}
   | ret r =>
     cases a with
     | ret r' =>
-      by_cases h : r' == r
-      · have hr : r' = r := of_decide_eq_true h
-        subst r'
-        simpa [AbsVal.join, Sem] using hb
-      · have hxy := eq_of_sem hb (by simp [AbsVal.pub])
-        simp [AbsVal.join, h, Sem, hxy]
+      obtain ⟨⟨r₀, hr₀, hx⟩, hy⟩ := hb
+      refine ⟨⟨r₀, ?_, hx⟩, hy⟩
+      by_cases hc : r'.contains r₀ = true
+      · exact List.mem_append_left _ (by simpa using hc)
+      · exact List.mem_append_right _ (List.mem_filter.mpr ⟨hr₀, by simpa using hc⟩)
     | hi => simp [AbsVal.join, Sem]
     | _ =>
       have hxy := eq_of_sem hb (by simp [AbsVal.pub])

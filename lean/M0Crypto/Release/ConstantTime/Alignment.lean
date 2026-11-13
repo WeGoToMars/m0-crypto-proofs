@@ -46,51 +46,26 @@ theorem clear_thumb_bit (x : Word) (h : x.getLsbD 0 = false) :
     simp [h']
   · simp [hz, hi]
 
-/-- A checked internal return's successor is an aligned block head. -/
-theorem certPoint_return_target_aligned {env : Env} {bytes : List (BitVec 8)}
-    {entry : Nat} {init : AbsState} {cert : Cert} {b : Blk} {off ret : Nat} {st : AbsState}
-    (l : BitVec 8) (hc : certOk env bytes entry init cert = true)
-    (ha : certAligned cert = true) (hm : b ∈ cert)
-    (hp : BlockPoint env b off st [.pop l true]) (hctx : b.ctx = some ret) :
-    ret % 2 = 0 := by
-  obtain ⟨out, hx⟩ := certPoint_xfer hc hm hp
-  have hf := certPoint_final_successors hc hm hp hx
-  have hx' : xfer env off (some ret) (.pop l true) st = .ok out := by simpa [hctx] using hx
-  have ⟨_, hout⟩ := pop_internal_transfer l hx'
-  have hmem : (.pt ret none,
-      { loadStackRegs st.stk st.spOff (listRegs l) st with
-        spOff := st.spOff + (4 * (bitCount l + 1) : Nat) }) ∈ out.succs := by
-    rw [hout]
-    simp
-  obtain ⟨target, hfind, hmem, _⟩ := succFailure_target hf hmem
-  have hoff : target.off = ret := by
-    have hs := List.find?_some hfind
-    simp only [Bool.and_eq_true, beq_iff_eq] at hs
-    exact hs.1
-  simpa [hoff] using certAligned_head ha hmem
-
-/-- The concrete return address matches the analyzer's successor when the
-artifact base and certificate block heads are aligned. -/
-theorem certPoint_return_target {env : Env} {bytes : List (BitVec 8)}
-    {entry : Nat} {init : AbsState} {cert : Cert} {b : Blk} {off ret : Nat} {st : AbsState}
-    (base : Word) (hb : base.toNat % 2 = 0) (l : BitVec 8)
-    (hc : certOk env bytes entry init cert = true) (ha : certAligned cert = true)
-    (hm : b ∈ cert) (hp : BlockPoint env b off st [.pop l true]) (hctx : b.ctx = some ret) :
-    (((base + BitVec.ofNat 32 ret) ||| 1#32) &&& ~~~1#32) = base + BitVec.ofNat 32 ret :=
-  clear_thumb_bit _ (pc_even base ret hb (certPoint_return_target_aligned l hc ha hm hp hctx))
+/-- A block found at a top-level offset is an aligned block head. -/
+theorem findBlk_aligned {cert : Cert} {r : Nat} {blk : Blk}
+    (ha : certAligned cert = true) (hfind : findBlk cert r none = some blk) : r % 2 = 0 := by
+  have hs := List.find?_some hfind
+  simp only [Bool.and_eq_true, beq_iff_eq] at hs
+  simpa [hs.1] using certAligned_head ha (List.mem_of_find?_eq_some hfind)
 
 /-- Internal returns satisfy the paired-step relation using only the artifact
-base alignment and checked certificate alignment. -/
+base alignment and checked certificate alignment: every return offset the analysis
+sends to is a block head, and block heads are aligned. -/
 theorem certPoint_pop_return_aligned_paired {env : Env} {bytes : List (BitVec 8)}
-    {entry : Nat} {init : AbsState} {cert : Cert} {b : Blk} {off ret : Nat} {st : AbsState}
+    {entry : Nat} {init : AbsState} {cert : Cert} {b : Blk} {off c : Nat} {st : AbsState}
     {p : Params} {s₁ s₂ : M0Crypto.Armv6M.State} (l : BitVec 8)
     (hc : certOk env bytes entry init cert = true) (hi : certIndicesFailure cert env = none)
     (ha : certAligned cert = true) (hbase : p.base.toNat % 2 = 0)
     (hm : b ∈ cert) (hp : BlockPoint env b off st [.pop l true])
-    (hctx : b.ctx = some ret) (h : LowEq p bytes off st s₁ s₂) :
+    (hctx : b.ctx = some c) (h : LowEq p bytes off st s₁ s₂) :
     PairedStep (CertAt env cert p bytes) s₁ s₂ :=
   certPoint_pop_return_paired l hc hi hm hp hctx h
-    (certPoint_return_target p.base hbase l hc ha hm hp hctx)
+    (fun r _ hfind => clear_thumb_bit _ (pc_even p.base r hbase (findBlk_aligned ha hfind)))
     (certPoint_pc_even p.base hbase ha hm hp)
 
 /-- A non-final instruction in a validated block has exactly one successor:

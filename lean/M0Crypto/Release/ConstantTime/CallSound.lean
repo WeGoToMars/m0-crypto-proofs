@@ -38,7 +38,7 @@ theorem certPoint_call_paired {env : Env} {bytes : List (BitVec 8)} {entry : Nat
       rw [hdisp] at htarget
       simp only [BitVec.add_assoc] at htarget
       let link := (p.base + BitVec.ofNat 32 (off + 4)) ||| 1#32
-      have hval : AbsVal.Sem p (.ret (off + 4)) link link := by simp [AbsVal.Sem, link]
+      have hval : AbsVal.Sem p (.ret [off + 4]) link link := by simp [AbsVal.Sem, link]
       have hreg : regIndexOk 14 := by simp [regIndexOk, numRegs]
       have hwrite := paired_setReg_sound hreg hidx hrel hval
       have hnext := hwrite.withPC (AbsState.indicesOk_set hidx) (next := target)
@@ -55,8 +55,8 @@ theorem certPoint_call_paired {env : Env} {bytes : List (BitVec 8)} {entry : Nat
         (by simp [Instr.accesses]) he₁
       have hs₂ := step_of_instrAt hc₂ off (.bl imm) hpc₂ heven hdecode hlen
         (by simp [Instr.accesses]) he₂
-      have hmem : (Tgt.pt target (some (off + 4)), st.set 14 (.ret (off + 4))) ∈
-          [(Tgt.pt target (some (off + 4)), st.set 14 (.ret (off + 4)))] := by simp
+      have hmem : (Tgt.pt target (some (callCtx env off target)), st.set 14 (.ret [off + 4])) ∈
+          [(Tgt.pt target (some (callCtx env off target)), st.set 14 (.ret [off + 4]))] := by simp
       obtain ⟨next, hfind, hmember, hsub⟩ := checked_successor_relation hf hmem hi hnext
       have hn := certAt_resolved hc hfind hmember hsub
       unfold PairedStep

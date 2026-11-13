@@ -28,6 +28,10 @@ done
 
 echo "== 2b. release library: relocation-free unit, checked-in Lean artifact matches"
 mkdir -p build
+# src/x25519.S is generated; the plain library build uses the checked-in copy.
+python3 -I "$LIB/tools/gen_x25519.py" build/x25519.S
+cmp build/x25519.S "$LIB/src/x25519.S" || {
+    echo "FAIL: src/x25519.S differs from tools/gen_x25519.py output" >&2; exit 1; }
 "$LIB/tools/build_lib.sh" > build/lib-check.txt 2>&1 || {
     cat build/lib-check.txt; echo "FAIL: release library" >&2; exit 1; }
 python3 -I tools/extract_release.py "$LIB/build/lib/m0crypto.o" \
@@ -280,7 +284,13 @@ M0Crypto.Release.NonVacuity.init_correct_nonvacuous
 M0Crypto.Release.NonVacuity.update_correct_nonvacuous
 M0Crypto.Release.NonVacuity.final_correct_nonvacuous
 M0Crypto.Release.Blake2sCopy.copy_correct_nonvacuous
-M0Crypto.Release.NonVacuity.c4_nonvacuous"
+M0Crypto.Release.NonVacuity.c4_nonvacuous
+M0Crypto.Spec.X25519.output_eq_fast
+M0Crypto.Release.NonVacuity.x25519_pre_nonvacuous
+M0Crypto.Release.X25519.x25519_correct
+M0Crypto.Release.X25519.x25519_constant_time
+M0Crypto.Release.X25519.x25519_reads
+M0Crypto.Release.X25519.x25519_stack"
 ALLOWED="(propext|Classical\.choice|Quot\.sound)"
 for name in $EXPECTED; do
     n=$(grep -c -F "'$name' " "$TMP/axioms.txt" || true)
@@ -314,6 +324,20 @@ python3 -I tools/qemu_steps.py "${QEMU:-qemu-system-arm}" "$LLVM_BIN/llvm-nm" "$
     "$LIB/build/test/test_chacha20.elf" m0c_chacha20_xor \
     "$LIB/build/test/test_aead.elf" m0c_chacha20poly1305_encrypt,m0c_chacha20poly1305_decrypt \
     "$LIB/build/test/test_blake2s.elf" m0c_blake2s_init,m0c_blake2s_update,m0c_blake2s_final
+# SBCS has no traced release call short enough to single-step, so a fixture covers it:
+# carry in and out 0 and 1, signed overflow, zero, Rdn = Rm.
+for src in fixtures/sbcs_steps.S "$LIB/tests/startup.S"; do
+    "$LLVM_BIN/clang" --target=thumbv6m-none-eabi -mcpu=cortex-m0plus -mthumb \
+        -c "$src" -o "$TMP/$(basename "$src").o"
+done
+"${LLD_BIN:-/opt/homebrew/opt/lld/bin}/ld.lld" -T "$LIB/tests/microbit.ld" --build-id=none \
+    -o "$TMP/sbcs.elf" "$TMP/startup.S.o" "$TMP/sbcs_steps.S.o"
+"$LLVM_BIN/llvm-objcopy" -O binary -j .text.sbcs_fixture "$TMP/sbcs_steps.S.o" "$TMP/sbcs.bin"
+python3 -I tools/qemu_steps.py "${QEMU:-qemu-system-arm}" "$LLVM_BIN/llvm-nm" "$TMP/sbcs.bin" \
+    "$TMP/sbcs.elf" sbcs_fixture
+# A whole m0c_x25519 call is about three million instructions: sampled windows instead
+# (prologue, one ladder step, each loop exit, epilogue).
+python3 -I tools/qemu_x25519_windows.py --obj "$LIB/build/lib/m0crypto.o" --work "$TMP/x25519-windows"
 
 echo "== 8. diagnostic disassembly (not part of the trusted chain)"
 echo "$KERNELS" | while read -r stem _symbol _module; do

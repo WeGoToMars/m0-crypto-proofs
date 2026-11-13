@@ -243,6 +243,81 @@ theorem certPoint_rsbs_paired {env : Env} {bytes : List (BitVec 8)} {entry : Nat
   apply certAt_paired_step hc hi hm hpoint hnext hs₁
   simpa [Instr.accesses, h.pc_eq] using hs₂
 
+/-- Subtract-with-carry (`Rdn + NOT(Rm) + C`) preserves the paired abstract state and all NZCV flags. -/
+theorem sbcs_sound {p : Params} {bytes : List (BitVec 8)} {off : Nat}
+    {st : AbsState} {s₁ s₂ : State} (d m : LowReg)
+    (hidx : st.indicesOk) (h : LowEq p bytes off st s₁ s₂) :
+    let q := (st.get d.val).pub && (st.get m.val).pub && st.fl.c.pub
+    ∃ t₁ t₂, (Instr.dp .sbcs d m).exec s₁ = .ok t₁ ∧
+      (Instr.dp .sbcs d m).exec s₂ = .ok t₂ ∧
+      LowEq p bytes (off + (Instr.dp .sbcs d m).size)
+        { st.set d.val (AbsVal.ofPub q) with fl := AFl.all (AbsFlags.ofPub q) } t₁ t₂ := by
+  let q := (st.get d.val).pub && (st.get m.val).pub && st.fl.c.pub
+  have hd : regIndexOk d.val := by
+    constructor <;> have := d.isLt <;> simp [numRegs] <;> omega
+  have hm : regIndexOk m.val := by
+    constructor <;> have := m.isLt <;> simp [numRegs] <;> omega
+  have hd16 : d.val < 16 := by have := d.isLt; omega
+  have hm16 : m.val < 16 := by have := m.isLt; omega
+  have ha := h.regs d.val hd.1 hd.2
+  have hb := h.regs m.val hm.1 hm.2
+  rw [regAt_eq_regs s₁ d.val hd16, regAt_eq_regs s₂ d.val hd16] at ha
+  rw [regAt_eq_regs s₁ m.val hm16, regAt_eq_regs s₂ m.val hm16] at hb
+  have hca := h.flags.2.2.1
+  have hs := adc_values_sound (by simpa [State.reg, LowReg.toReg] using ha)
+    (notWord_sound (by simpa [State.reg, LowReg.toReg] using hb)) hca
+  dsimp only at hs
+  rw [notWord_pub] at hs
+  have hnext := h.withPC hidx (next := off + (Instr.dp .sbcs d m).size)
+  have hw := paired_setReg_sound hd hidx hnext hs.1
+  have hreg : (⟨d.val, by have := hd.1; simp [numRegs] at this; omega⟩ : M0Crypto.Armv6M.Reg) = d.toReg := by
+    apply Fin.ext; rfl
+  rw [hreg] at hw
+  rcases hw with ⟨hpc₁, hpc₂, hsp₁, hsp₂, hregs, _, _, hstk, hrel,
+    hlnk, hsize, hcode₁, hcode₂⟩
+  refine ⟨addFlags (s₁.setReg 15 (p.base + BitVec.ofNat 32 (off + (Instr.dp .sbcs d m).size)))
+      d.toReg (s₁.reg d) (~~~(s₁.reg m)) s₁.c,
+    addFlags (s₂.setReg 15 (p.base + BitVec.ofNat 32 (off + (Instr.dp .sbcs d m).size)))
+      d.toReg (s₂.reg d) (~~~(s₂.reg m)) s₂.c, ?_, ?_, ?_⟩
+  · simp [Instr.exec, addFlags, h.pc, ofNat_add_assoc]
+  · simp [Instr.exec, addFlags, h.pc_eq.trans h.pc, ofNat_add_assoc]
+  · simp only [addFlags]
+    refine ⟨hpc₁, hpc₂, hsp₁, hsp₂, hregs, ?_, ?_, hstk, hrel,
+      hlnk, hsize, hcode₁, hcode₂⟩
+    · simpa [FlagSem, AFl.all, State.setNZCV, State.setNZ, State.reg, LowReg.toReg, AbsVal.pub] using hs.2
+    · intro c hc
+      simp [AFl.all] at hc
+
+/-- Checked subtract-with-carry advances paired certificate executions. -/
+theorem certPoint_sbcs_paired {env : Env} {bytes : List (BitVec 8)} {entry : Nat}
+    {init : AbsState} {cert : Cert} {b : Blk} {off : Nat} {st : AbsState} {is : List Instr}
+    {p : Params} {s₁ s₂ : State} (d m : LowReg)
+    (hc : certOk env bytes entry init cert = true) (hi : certIndicesFailure cert env = none)
+    (hm : b ∈ cert) (hp : BlockPoint env b off st (.dp .sbcs d m :: is))
+    (h : LowEq p bytes off st s₁ s₂)
+    (heven : (p.base + BitVec.ofNat 32 off).getLsbD 0 = false) :
+    PairedStep (CertAt env cert p bytes) s₁ s₂ := by
+  let q := (st.get d.val).pub && (st.get m.val).pub && st.fl.c.pub
+  obtain ⟨out, hx⟩ := certPoint_xfer hc hm hp
+  have hidx := certPoint_state_indices hi hm hp
+  have ⟨hdecode, hlen⟩ := certPoint_instrAt hc hm hp
+  have hb := xfer_sp_bounds hx
+  have hw : env.win.covers st.spOff st.spOff = true := by
+    simp [StackWindow.covers, hb.1, hb.2.2]
+  have hout : out = ⟨[(.pt (off + (Instr.dp .sbcs d m).size) b.ctx,
+      { st.set d.val (AbsVal.ofPub q) with fl := AFl.all (AbsFlags.ofPub q) })], []⟩ := by
+    simpa [xfer, xferCore, fall, hw, hb.2.1, q] using hx.symm
+  have hsucc := congrArg Out.succs hout
+  have hpoint := BlockPoint.next hp hx hsucc
+  obtain ⟨t₁, t₂, he₁, he₂, hnext⟩ := sbcs_sound d m hidx h
+  have ⟨_, _, _, _, _, _, _, _, _, _, _, hc₁, hc₂⟩ := h
+  have hs₁ := step_of_instrAt hc₁ off (.dp .sbcs d m) h.pc heven hdecode hlen
+    (by simp [Instr.accesses]) he₁
+  have hs₂ := step_of_instrAt hc₂ off (.dp .sbcs d m) (h.pc_eq.trans h.pc) heven hdecode hlen
+    (by simp [Instr.accesses]) he₂
+  apply certAt_paired_step hc hi hm hpoint hnext hs₁
+  simpa [Instr.accesses, h.pc_eq] using hs₂
+
 /-- A rotate result depends on the value and amount, while its carry may
 also depend on the incoming carry when the amount is zero. -/
 theorem ror_values_sound {p : Params} {a b : AbsVal} {cf : AbsFlags}

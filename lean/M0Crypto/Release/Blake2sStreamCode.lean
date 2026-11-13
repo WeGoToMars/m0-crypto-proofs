@@ -118,11 +118,11 @@ def oOutBBne : Nat := oOutB + seqSize outB
 def oFRet : Nat := oOutBBne + brSize
 def oFPop : Nat := oFRet + seqSize fRet
 
-/-- `update` ends where `final` starts, and `final` ends the artifact: the two returns are the
-last instructions of their functions. -/
+/-- `update` ends where `final` starts, so its return is its last instruction. `final`'s
+return lies inside the artifact (the X25519 unit follows it). -/
 theorem u_end : oUPop + 2 = fStart := by decide
 
-theorem f_end : oFPop + 2 = Artifacts.Release.size := by decide
+theorem f_end : oFPop + 2 ≤ Artifacts.Release.size := by decide
 
 /-! ## `init` -/
 

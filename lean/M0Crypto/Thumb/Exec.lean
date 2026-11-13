@@ -201,6 +201,7 @@ def Instr.exec (i : Instr) (s : State) : Except Fault State :=
     | .muls => let x := r m * r dn; .ok ((next.setReg dn.toReg x).setNZ x)
     | .tst => .ok (next.setNZ (r dn &&& r m))
     | .adcs => .ok (addFlags next dn.toReg (r dn) (r m) s.c)
+    | .sbcs => .ok (addFlags next dn.toReg (r dn) (~~~(r m)) s.c)
     | .rsbs => .ok (addFlags next dn.toReg (~~~(r m)) 0#32 true)
     | .cmp => .ok (addFlags next 0 (r dn) (~~~(r m)) true false)
     | .rors =>

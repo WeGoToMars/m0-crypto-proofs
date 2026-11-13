@@ -230,6 +230,7 @@ def symStep (i : Instr) (ss : SState) : SState :=
     | .muls => let x := SExpr.mul (r m) (r dn); (next.setReg dn.toReg x).setNZ x
     | .tst => next.setNZ (.and (r dn) (r m))
     | .adcs => sAddFlags next dn.toReg (r dn) (r m) ss.c
+    | .sbcs => sAddFlags next dn.toReg (r dn) (.not (r m)) ss.c
     | .rsbs => sAddFlags next dn.toReg (.not (r m)) (.const 0#32) (.const true)
     | .cmp => sAddFlags next 0 (r dn) (.not (r m)) (.const true) false
     | .rors =>

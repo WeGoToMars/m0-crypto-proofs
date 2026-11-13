@@ -26,10 +26,10 @@ def updateUsedLoad : Nat := uStart + seqSize uPro.dropLast
 /-- The `ldr r6, [r4, #CTX_USED]` of `final`: the fifth instruction. -/
 def finalUsedLoad : Nat := fStart + seqSize (fPro.take 4)
 
-def b2iEnv : Env := ⟨⟨4, 0⟩, Artifacts.Release.size, none, []⟩
-def b2kEnv : Env := ⟨⟨20, 0⟩, Artifacts.Release.size, none, []⟩
-def b2uEnv : Env := ⟨⟨STREAM_FRAME, 0⟩, Artifacts.Release.size, none, [updateUsedLoad]⟩
-def b2fEnv : Env := ⟨⟨STREAM_FRAME, 0⟩, Artifacts.Release.size, none, [finalUsedLoad]⟩
+def b2iEnv : Env := ⟨⟨4, 0⟩, Artifacts.Release.size, none, [], false⟩
+def b2kEnv : Env := ⟨⟨20, 0⟩, Artifacts.Release.size, none, [], false⟩
+def b2uEnv : Env := ⟨⟨STREAM_FRAME, 0⟩, Artifacts.Release.size, none, [updateUsedLoad], false⟩
+def b2fEnv : Env := ⟨⟨STREAM_FRAME, 0⟩, Artifacts.Release.size, none, [finalUsedLoad], false⟩
 
 
 def b2uCert : Cert :=

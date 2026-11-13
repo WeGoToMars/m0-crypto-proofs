@@ -15,7 +15,7 @@ open M0Crypto.Artifacts M0Crypto.Release
 def b2cArgWords : Nat := 1
 
 /-- Stack window of the compression: 136 bytes below the entry `sp`, the `f0` word above. -/
-def b2cEnv : Env := ⟨⟨COMPRESS_FRAME, 4 * b2cArgWords⟩, Release.size, none, []⟩
+def b2cEnv : Env := ⟨⟨COMPRESS_FRAME, 4 * b2cArgWords⟩, Release.size, none, [], false⟩
 
 def b2cCert : Cert :=
   ct_cert% gen b2cEnv Release.bytes Release.blake2s_compress (entryState b2cArgWords) genFuel

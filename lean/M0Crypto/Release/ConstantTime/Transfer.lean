@@ -16,7 +16,12 @@ import M0Crypto.Armv6M.Step
 Obligations: SP stays in the window; every memory address is public, and stack-relative
 accesses lie in the window; literal loads lie in the artifact; conditional branches test
 only public flags (except at the declassified branch); calls are at most one level deep;
-a return goes to the address the call left, or at top level to the entry LR.
+a return goes to one of the addresses the calls left, or at top level to the entry LR.
+
+`bl` saves `ret [off + 4]` in LR, joins merge return lists, and a return has one successor
+per listed return offset. The callee's context is `callCtx`: by default the return offset,
+so each call site gets its own copy of the callee; with `Env.shareCalls` the callee's entry
+offset, so the callee is analysed once for all its call sites.
 -/
 
 namespace M0Crypto.Release.ConstantTime
@@ -35,7 +40,13 @@ structure Env where
   declared public. Soundness is a per-position obligation (`PubLoadOk`): the two runs load the
   same value there. -/
   pubLoads : List Nat := []
+  /-- Analyse each callee once for all call sites (context = callee entry) instead of once
+  per call site (context = return offset). -/
+  shareCalls : Bool := false
   deriving DecidableEq, Repr
+
+/-- Certificate context of a callee entered by the `bl` at `off` with target `tgt`. -/
+def callCtx (env : Env) (off tgt : Nat) : Nat := if env.shareCalls then tgt else off + 4
 
 inductive Tgt where
   | pt (off : Nat) (ctx : Option Nat)
@@ -314,7 +325,8 @@ def xferCore (env : Env) (off : Nat) (ctx : Option Nat) (i : Instr) (st : AbsSta
       fall off ctx i { st.set dn.val (AbsVal.ofPub p) with fl := setNZ st.fl p }
     | .mvns => fall off ctx i { st.set dn.val (notWord b) with fl := setNZ st.fl b.pub }
     | .tst => fall off ctx i { st with fl := setNZ st.fl p }
-    | .adcs =>
+    | .adcs | .sbcs =>
+      -- SBCS adds NOT(Rm), which is public exactly when Rm is.
       let q := p && st.fl.c.pub
       fall off ctx i { st.set dn.val (AbsVal.ofPub q) with fl := AFl.all (AbsFlags.ofPub q) }
     | .rsbs =>
@@ -388,8 +400,7 @@ def xferCore (env : Env) (off : Nat) (ctx : Option Nat) (i : Instr) (st : AbsSta
       let st2 := { st1 with spOff := st.spOff + (4 * cnt : Nat) }
       if pcBit then
         match stkGet st.stk (st.spOff + (4 * rs.length : Nat)), ctx with
-        | .ret r, some r' => if r == r' then .ok ⟨[(.pt r none, st2)], []⟩
-                             else .error s!"return to {r}, expected {r'}"
+        | .ret rs, some _ => .ok ⟨rs.map fun r => (.pt r none, st2), []⟩
         | .lr0, none => .ok ⟨[(.exit, st2)], []⟩
         | v, _ => .error s!"pop pc of {repr v} in context {ctx}"
       else .ok ⟨[(.pt (off + 2) ctx, st2)], []⟩
@@ -447,7 +458,7 @@ def xferCore (env : Env) (off : Nat) (ctx : Option Nat) (i : Instr) (st : AbsSta
     if ctx.isSome then .error "nested call" else
     match relTarget off (blDisp imm25) with
     | none => .error "call target before the artifact"
-    | some tgt => .ok ⟨[(.pt tgt (some (off + 4)), st.set 14 (.ret (off + 4)))], []⟩
+    | some tgt => .ok ⟨[(.pt tgt (some (callCtx env off tgt)), st.set 14 (.ret [off + 4]))], []⟩
 
 /-- Transfer with the SP-window obligation checked first. -/
 def xfer (env : Env) (off : Nat) (ctx : Option Nat) (i : Instr) (st : AbsState) : Except String Out :=

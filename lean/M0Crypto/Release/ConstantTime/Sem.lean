@@ -22,7 +22,7 @@ def Sem (p : Params) : AbsVal → Word → Word → Prop
   | .num a b, x, y => x = y ∧ a ≤ x.toNat ∧ x.toNat ≤ b
   | .sp a b, x, y => ∃ k : Int, a ≤ k ∧ k ≤ b ∧
       x = p.sp0 + BitVec.ofInt 32 k ∧ y = x
-  | .ret r, x, y => x = (p.base + BitVec.ofNat 32 r) ||| 1#32 ∧ y = x
+  | .ret rs, x, y => (∃ r ∈ rs, x = (p.base + BitVec.ofNat 32 r) ||| 1#32) ∧ y = x
   | .lr0, x, y => x = p.lr0 ∧ y = x
 
 theorem sem_public {p : Params} {v : AbsVal} {x y : Word}

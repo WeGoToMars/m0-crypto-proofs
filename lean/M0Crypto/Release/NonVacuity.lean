@@ -4,6 +4,8 @@ import M0Crypto.Release.AeadDecrypt
 import M0Crypto.Release.Blake2sHash
 import M0Crypto.Release.Blake2sCompress
 import M0Crypto.Release.Blake2sStatements
+import M0Crypto.Release.X25519Correct
+import M0Crypto.Spec.X25519Vectors
 
 /-!
 # Non-vacuity of the entry contracts
@@ -17,6 +19,8 @@ its correctness theorem (`example`s at the end).
 The calls are chosen to exercise the cases where an over-strong precondition would hide:
 in-place operation, unaligned buffers and a non-empty message.
 For BLAKE2s the witnesses are an initialized context and, for `final`, an unaligned output.
+For X25519 (`x25519_pre_nonvacuous`) `out` is `point`, at an odd address, and `scalar` is
+unaligned, on RFC 7748 vector 1.
 `copy` has its own witness, `Blake2sCopy.copy_correct_nonvacuous`.
 
 All witnesses are checked by kernel evaluation (`decide +kernel`) of the concrete facts.
@@ -212,5 +216,24 @@ theorem c4_nonvacuous : True := by
     (by simp [Blake2sHash.inputs]) rfl rfl (fun _ _ => rfl) (fun _ _ => rfl) hc hc ret_out
     ⟨rfl, rfl, rfl, fun _ _ => rfl⟩
   trivial
+
+/-! ## X25519: `out` = `point`, both at odd addresses, `scalar` unaligned (RFC 7748 vector 1) -/
+
+def xMem : Mem := memOf
+  [(0x20000401, M0Crypto.Spec.X25519.ofHex
+      "a546e36bf0527c9d3b16154b82465edd62144c0ac1fc5a18506a2244ba449ac4" ++
+    M0Crypto.Spec.X25519.ofHex
+      "e6db6867583030db3594c1a424b15f7c726624ec26b3353b10a903a6d0ab1c4c")]
+
+def xCtx : X25519.Ctx :=
+  ⟨0, BitVec.ofNat 32 sp0, 0x20000421#32, 0x20000401#32, 0x20000421#32, xMem,
+   regsOf Artifacts.Release.x25519 0x20000421 0x20000401 0x20000421 0⟩
+
+theorem x25519_pre_nonvacuous : X25519.Pre xCtx (stOf xMem xCtx.regs0) := by
+  refine ⟨⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, codeAt _⟩, ⟨rfl, rfl, ?_, ?_, ?_, ?_, ?_⟩,
+    by decide, Region.not ret_out⟩
+  all_goals first | decide +kernel | (simp only [Disj, X25519.Ctx.fp, xCtx, X25519.stackBytes, sp0, Artifacts.Release.size]; decide +kernel)
+
+example := X25519.x25519_correct _ _ x25519_pre_nonvacuous
 
 end M0Crypto.Release.NonVacuity

@@ -76,14 +76,14 @@ theorem certPoint_pop_paired {env : Env} {bytes : List (BitVec 8)} {entry : Nat}
     unfold PairedStep
     simp [step, hpc₁, hpc₂, heven', hd₁, hd₂, hal, hal₂]
 
-/-- A checked return in a call context takes the saved return offset from the
-stack and sends the updated state to the caller context. -/
-theorem pop_internal_transfer {env : Env} {off ret : Nat} {st : AbsState} {out : Out}
-    (l : BitVec 8) (hx : xfer env off (some ret) (.pop l true) st = .ok out) :
-    stkGet st.stk (st.spOff + (4 * bitCount l : Nat)) = .ret ret ∧
-    out = ⟨[(.pt ret none,
+/-- A checked return in a call context takes the saved return offsets from the stack and
+sends the updated state to each of them at top level. -/
+theorem pop_internal_transfer {env : Env} {off c : Nat} {st : AbsState} {out : Out}
+    (l : BitVec 8) (hx : xfer env off (some c) (.pop l true) st = .ok out) :
+    ∃ rs, stkGet st.stk (st.spOff + (4 * bitCount l : Nat)) = .ret rs ∧
+    out = ⟨rs.map fun r => (.pt r none,
       { loadStackRegs st.stk st.spOff (listRegs l) st with
-        spOff := st.spOff + (4 * (bitCount l + 1) : Nat) })], []⟩ := by
+        spOff := st.spOff + (4 * (bitCount l + 1) : Nat) }), []⟩ := by
   have hb := xfer_sp_bounds hx
   have hw : env.win.covers st.spOff st.spOff = true := by
     simp [StackWindow.covers, hb.1, hb.2.2]
@@ -94,33 +94,34 @@ theorem pop_internal_transfer {env : Env} {off ret : Nat} {st : AbsState} {out :
   · rw [pop_load_fold] at hx
     simp only [regsOf, List.length_map, bitCount, Int.natCast_mul, Int.natCast_add] at hx ⊢
     cases hv : stkGet st.stk (st.spOff + 4 * ((listRegs l).length : Int)) with
-    | ret r =>
-      by_cases hr : r = ret
-      · subst r
-        simpa [hv] using hx.symm
-      · simp [hv, hr] at hx
+    | ret rs =>
+      refine ⟨rs, rfl, ?_⟩
+      simpa [hv] using hx.symm
     | hi | lo | num _ _ | sp _ _ | lr0 => simp [hv] at hx
 
 /-- A checked return restores registers and transfers both executions to the
-caller block when its target address is a valid aligned instruction address. -/
+caller block when its target address is a valid aligned instruction address.
+`htarget` supplies that for every top-level block head. -/
 theorem certPoint_pop_return_paired {env : Env} {bytes : List (BitVec 8)} {entry : Nat}
-    {init : AbsState} {cert : Cert} {b : Blk} {off ret : Nat} {st : AbsState}
+    {init : AbsState} {cert : Cert} {b : Blk} {off c : Nat} {st : AbsState}
     {p : Params} {s₁ s₂ : State} (l : BitVec 8)
     (hc : certOk env bytes entry init cert = true) (hi : certIndicesFailure cert env = none)
     (hm : b ∈ cert) (hp : BlockPoint env b off st [.pop l true])
-    (hctx : b.ctx = some ret) (h : LowEq p bytes off st s₁ s₂)
-    (htarget : (((p.base + BitVec.ofNat 32 ret) ||| 1#32) &&& ~~~1#32) =
-      p.base + BitVec.ofNat 32 ret)
+    (hctx : b.ctx = some c) (h : LowEq p bytes off st s₁ s₂)
+    (htarget : ∀ r blk, findBlk cert r none = some blk →
+      (((p.base + BitVec.ofNat 32 r) ||| 1#32) &&& ~~~1#32) = p.base + BitVec.ofNat 32 r)
     (heven : (p.base + BitVec.ofNat 32 off).getLsbD 0 = false) :
     PairedStep (CertAt env cert p bytes) s₁ s₂ := by
   obtain ⟨out, hx⟩ := certPoint_xfer hc hm hp
   have hidx := certPoint_state_indices hi hm hp
   have ⟨hdecode, hlen⟩ := certPoint_instrAt hc hm hp
-  change (((p.base + BitVec.ofNat 32 ret) ||| 1#32) &&& 4294967294#32) =
-    p.base + BitVec.ofNat 32 ret at htarget
   have hf := certPoint_final_successors hc hm hp hx
-  have hx' : xfer env off (some ret) (.pop l true) st = .ok out := by simpa [hctx] using hx
-  have ⟨hslot, hout⟩ := pop_internal_transfer l hx'
+  have hx' : xfer env off (some c) (.pop l true) st = .ok out := by simpa [hctx] using hx
+  obtain ⟨rs, hslot, hout⟩ := pop_internal_transfer l hx'
+  have hv0 := h.stack (st.spOff + (4 * bitCount l : Nat))
+  rw [hslot] at hv0
+  simp only [AbsVal.Sem] at hv0
+  obtain ⟨⟨ret, hret, hr₁⟩, hr₂⟩ := hv0
   let next := loadStackRegs st.stk st.spOff (listRegs l) st
   let spNext := st.spOff + (4 * (bitCount l + 1) : Nat)
   have hpc := h.withPC hidx (next := off + (Instr.pop l true).size)
@@ -128,20 +129,24 @@ theorem certPoint_pop_return_paired {env : Env} {bytes : List (BitVec 8)} {entry
   have hnidx := loadStackRegs_indices st.stk st.spOff (listRegs l) st hidx
   have hsprel := hloads.withSP hnidx spNext
   have hfinal := hsprel.withPC hnidx (next := ret)
+  have hmember : (Tgt.pt ret none, { next with spOff := spNext }) ∈ out.succs := by
+    rw [hout]
+    simp only [List.mem_map]
+    exact ⟨ret, hret, rfl⟩
+  obtain ⟨target, hfind, hmem, hsub⟩ := checked_successor_relation hf hmember hi hfinal
+  have htarget := htarget ret target hfind
+  change (((p.base + BitVec.ofNat 32 ret) ||| 1#32) &&& 4294967294#32) =
+    p.base + BitVec.ofNat 32 ret at htarget
   have hsp₁ : s₁.sp = p.sp0 + BitVec.ofInt 32 st.spOff := by simpa [State.sp] using h.sp
   have hsp₂ : s₂.sp = p.sp0 + BitVec.ofInt 32 st.spOff := by
     simpa [State.sp, h.sp_eq] using h.sp
   have ha : p.sp0 + BitVec.ofInt 32 st.spOff + BitVec.ofNat 32 (4 * bitCount l) =
       p.sp0 + BitVec.ofInt 32 (st.spOff + (4 * bitCount l : Nat)) := by
     rw [BitVec.ofInt_add, BitVec.ofInt_natCast, BitVec.add_assoc]
-  have hv := h.stack (st.spOff + (4 * bitCount l : Nat))
-  rw [hslot] at hv
-  have hv' := hv
-  simp only [AbsVal.Sem] at hv'
   have hv₁ : M0Crypto.Armv6M.read32 s₁.mem (s₁.sp + BitVec.ofNat 32 (4 * bitCount l)) =
-      (p.base + BitVec.ofNat 32 ret) ||| 1#32 := by simpa [hsp₁, ha] using hv'.1
+      (p.base + BitVec.ofNat 32 ret) ||| 1#32 := by simpa [hsp₁, ha] using hr₁
   have hv₂ : M0Crypto.Armv6M.read32 s₂.mem (s₂.sp + BitVec.ofNat 32 (4 * bitCount l)) =
-      (p.base + BitVec.ofNat 32 ret) ||| 1#32 := by simpa [hsp₂, ha, hv'.1] using hv'.2.trans hv'.1
+      (p.base + BitVec.ofNat 32 ret) ||| 1#32 := by simpa [hsp₂, ha, hr₁] using hr₂.trans hr₁
   have haddr : p.sp0 + BitVec.ofInt 32 spNext =
       (p.sp0 + BitVec.ofInt 32 st.spOff) + BitVec.ofNat 32 (4 * (bitCount l + 1)) := by
     simp only [spNext, BitVec.ofInt_add, BitVec.ofInt_natCast, BitVec.add_assoc]
@@ -170,10 +175,6 @@ theorem certPoint_pop_return_paired {env : Env} {bytes : List (BitVec 8)} {entry
         BitVec.ofNat_add, BitVec.add_assoc]
     have hs₁ := step_of_instrAt hc₁ off (.pop l true) hpc₁ heven hdecode hlen hal he₁
     have hs₂ := step_of_instrAt hc₂ off (.pop l true) hpc₂ heven hdecode hlen hal₂ he₂
-    have hmember : (Tgt.pt ret none, { next with spOff := spNext }) ∈ out.succs := by
-      rw [hout]
-      simp [next, spNext]
-    obtain ⟨target, hfind, hmem, hsub⟩ := checked_successor_relation hf hmember hi hfinal
     have hn := certAt_resolved hc hfind hmem hsub
     unfold PairedStep
     simp only [hs₁, hs₂]

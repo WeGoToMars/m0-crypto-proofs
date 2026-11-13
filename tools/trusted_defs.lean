@@ -39,7 +39,9 @@ def roots : List Name :=
    `M0Crypto.Release.Blake2sHash.init_correct, `M0Crypto.Release.Blake2sHash.update_correct,
    `M0Crypto.Release.Blake2sHash.final_correct, `M0Crypto.Release.Blake2sHash.hash_machine,
    `M0Crypto.Release.Blake2sHash.hash_correct, `M0Crypto.Release.Blake2sHash.hash_constant_time,
-   `M0Crypto.Release.Blake2sStatements.c1, `M0Crypto.Release.Blake2sStatements.c4]
+   `M0Crypto.Release.Blake2sStatements.c1, `M0Crypto.Release.Blake2sStatements.c4,
+   `M0Crypto.Release.X25519.x25519_correct, `M0Crypto.Release.X25519.x25519_constant_time,
+   `M0Crypto.Release.X25519.x25519_reads, `M0Crypto.Release.X25519.x25519_stack]
 
 /-- Constants reachable from `start` through types, and through the bodies of everything
 except theorems. -/

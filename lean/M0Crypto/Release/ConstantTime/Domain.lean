@@ -10,7 +10,8 @@ a pair of concrete words `(x₁, x₂)`, one from each run (`AbsVal.Sem` in `Con
 * `lo`: `x₁ = x₂` (public);
 * `num a b`: public, `a ≤ x.toNat ≤ b`;
 * `sp a b`: public, `x = sp0 + k` for one `k ∈ [a, b]` common to both runs;
-* `ret r`: public, the return address `(base + r) ||| 1` into the artifact;
+* `ret rs`: public, a return address `(base + r) ||| 1` into the artifact for some `r` in `rs`
+  (a callee is analysed once, so its saved LR stands for all its call sites);
 * `lr0`: public, the entry LR.
 
 Flags have the same three-way split (`hi`, `lo`, `known b`). A flag state may also record
@@ -31,7 +32,7 @@ inductive AbsVal where
   | lo
   | num (a b : Nat)
   | sp (a b : Int)
-  | ret (r : Nat)
+  | ret (rs : List Nat)
   | lr0
   deriving DecidableEq, Repr, Inhabited
 
@@ -54,7 +55,7 @@ def le : AbsVal → AbsVal → Bool
   | _, .lo => true
   | .num a b, .num c d => decide (c ≤ a) && decide (b ≤ d)
   | .sp a b, .sp c d => decide (c ≤ a) && decide (b ≤ d)
-  | .ret r, .ret r' => r == r'
+  | .ret r, .ret r' => r.all (r'.contains ·)
   | .lr0, .lr0 => true
   | _, _ => false
 
@@ -63,7 +64,7 @@ def join : AbsVal → AbsVal → AbsVal
   | _, .hi => .hi
   | .num a b, .num c d => .num (min a c) (max b d)
   | .sp a b, .sp c d => .sp (min a c) (max b d)
-  | .ret r, .ret r' => if r == r' then .ret r else .lo
+  | .ret r, .ret r' => .ret (r ++ r'.filter (!r.contains ·))
   | .lr0, .lr0 => .lr0
   | _, _ => .lo
 

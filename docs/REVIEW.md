@@ -38,13 +38,13 @@ These are the roots from which the trusted base is computed. A reviewer reads ea
 | `Aead.encrypt_constant_time`, `_reads`, `_stack` | [`AeadEncryptConstantTime.lean`](../lean/M0Crypto/Release/AeadEncryptConstantTime.lean), [`AeadReads.lean`](../lean/M0Crypto/Release/AeadReads.lean), [`AeadEncryptStack.lean`](../lean/M0Crypto/Release/AeadEncryptStack.lean) | Same, encryption (320 bytes) |
 | `Aead.decrypt_constant_time`, `_reads`, `_stack` | [`AeadDecryptConstantTime.lean`](../lean/M0Crypto/Release/AeadDecryptConstantTime.lean), [`AeadReads.lean`](../lean/M0Crypto/Release/AeadReads.lean), [`AeadDecryptStack.lean`](../lean/M0Crypto/Release/AeadDecryptStack.lean) | Same, decryption (320 bytes; the verdict bit is public) |
 
-All twelve are in `lean/Audit.lean`, so their axioms are checked.
+All twelve, and the four X25519 theorems of section 9.1, are in `lean/Audit.lean`, so their axioms are checked.
 
 The three correctness statements are written out at the theorems (search for the theorem name in its file). The nine constant-time, read and stack statements are written once, as Props, in [`TraceSpec.lean`](../lean/M0Crypto/Release/TraceSpec.lean); those theorems only say `: TraceSpec.X`.
 
 All four theorems about one function assume the same thing, a valid call: `ChaCha20Xor.Pre c s` for ChaCha20, and `Aead.APre c off s` for the two AEAD functions (`off` selects encryption or decryption). The hypotheses are therefore read once per definition, not once per theorem.
 
-**What the golden file does and does not lock.** `tools/statements.golden` holds the printed statement of every audited theorem, and `check.sh` fails if one changes. For the three correctness theorems that is the hypothesis by name (`Pre` or `APre`) and the conclusion. For the nine trace theorems it is one line each, the name of the Prop. In both cases the *definitions* a statement names (`Pre`, `Valid`, `AValid`, `ABuf`, `pub`, `Result`, the read regions) are not in the file. A change to one of them produces no golden diff. All of them live in the four statement files of section 3.5, so the check is the diff of those files (section 6, question 2).
+**What the golden file does and does not lock.** `tools/statements.golden` holds the printed statement of every audited theorem, and `check.sh` fails if one changes. For the three correctness theorems that is the hypothesis by name (`Pre` or `APre`) and the conclusion. For the nine trace theorems it is one line each, the name of the Prop. In both cases the *definitions* a statement names (`Pre`, `Valid`, `AValid`, `ABuf`, `pub`, `Result`, the read regions) are not in the file. A change to one of them produces no golden diff. All of them live in the statement files of section 3.5 (for X25519, `X25519Contract.lean`, section 9.2), so the check is the diff of those files (section 6, question 2).
 
 ## 3. What to review, in order
 
@@ -73,7 +73,7 @@ The model is what "the code runs on a Cortex-M0+" means inside Lean. Every theor
 - PC reads as instruction address + 4; literal loads use `Align(PC + 4, 4)`.
 - Branch targets: `b`, `bcond`, `bl` add a sign-extended, halfword-scaled offset to PC + 4.
 - `bl` writes LR = return address | 1; `pop {pc}` faults if bit 0 of the loaded value is clear.
-- Carry on subtraction is NOT borrow (ARM convention).
+- Carry on subtraction is NOT borrow (ARM convention). This includes `sbcs`, which computes `Rdn + NOT(Rm) + C`, so C = 0 on entry subtracts one more.
 - Memory is little-endian; unaligned accesses fault (ARMv6-M has no unaligned access).
 - `Event` contains everything the constant-time claim should observe: PC, instruction, and the address, width and kind of every access.
 - Known scope limits are acceptable: no exceptions or interrupts, ordinary RAM, one thread.
@@ -161,7 +161,7 @@ In `Armv6M/Memory.lean` and `Armv6M/Step.lean` only the listed declarations are 
 
 | Declaration | Lines | Review note |
 |---|---:|---|
-| `Thumb.DpOp` | 4 |  |
+| `Thumb.DpOp` | 4 | `sbcs` (SBC register, T1 encoding `0100000110 Rm Rdn`) was added for X25519. Its `exec` case is the `adcs` adder with the operand complemented, as in the manual's pseudocode `AddWithCarry(R[n], NOT(R[m]), APSR.C)`; it writes N, Z, C and V. |
 | `Thumb.MemOp` | 4 |  |
 | `Thumb.MemOp.width` | 4 |  |
 | `Thumb.MemOp.isLoad` | 3 |  |
@@ -267,7 +267,7 @@ Vectors are a second check, but they do not replace reading: a spec bug on a pat
 
 Contracts say *when* a theorem applies (preconditions) and *what* it promises (postconditions). This is where a statement most easily ends up weaker than intended, and where no tool helps you.
 
-They are in four statement files, which contain definitions only and import nothing but the specification, the model and the artifact. Read each from top to bottom: [`Contract.lean`](../lean/M0Crypto/Release/Contract.lean) (shared vocabulary), [`ChaCha20Contract.lean`](../lean/M0Crypto/Release/ChaCha20Contract.lean), [`AeadContract.lean`](../lean/M0Crypto/Release/AeadContract.lean) and [`TraceSpec.lean`](../lean/M0Crypto/Release/TraceSpec.lean).
+They are in five statement files, which contain definitions only and import nothing but the specification, the model and the artifact. Read each from top to bottom: [`Contract.lean`](../lean/M0Crypto/Release/Contract.lean) (shared vocabulary), [`ChaCha20Contract.lean`](../lean/M0Crypto/Release/ChaCha20Contract.lean), [`AeadContract.lean`](../lean/M0Crypto/Release/AeadContract.lean), [`TraceSpec.lean`](../lean/M0Crypto/Release/TraceSpec.lean) and, for X25519, [`X25519Contract.lean`](../lean/M0Crypto/Release/X25519Contract.lean) (section 9.2).
 
 Two definitions carry most of the weight, so read them first:
 
@@ -419,7 +419,7 @@ lake build
 lake env lean tools/trusted_defs.lean
 ```
 
-The tool prints every trusted declaration with its file and line range, then one `FILE` line per file. Those `FILE` lines must name exactly the eleven hand-written files of section 3 and the artifact file. A file that appears for the first time holds new trusted code: move that definition into a statement file, or review the new file. When a headline theorem is added or renamed, add it to `roots` in the tool; it fails if a root is missing.
+The tool prints every trusted declaration with its file and line range, then one `FILE` line per file. Those `FILE` lines must name exactly the eleven hand-written files of section 3, the two of section 9 (`Spec/X25519.lean`, `X25519Contract.lean`) and the artifact file, plus the BLAKE2s files, which this document does not yet cover. A file that appears for the first time holds new trusted code: move that definition into a statement file, or review the new file. When a headline theorem is added or renamed, add it to `roots` in the tool; it fails if a root is missing.
 
 The tables in section 3 are this output plus one hand-written note per declaration. To refresh them, add a row (with a note) for each new declaration, drop rows that disappeared, and correct the line counts.
 
@@ -433,6 +433,7 @@ The tables in section 3 are this output plus one hand-written note per declarati
      lean/M0Crypto/Thumb/Decode.lean lean/M0Crypto/Thumb/Exec.lean lean/M0Crypto/Thumb/Listing.lean \
      lean/M0Crypto/Release/Contract.lean lean/M0Crypto/Release/ChaCha20Contract.lean \
      lean/M0Crypto/Release/AeadContract.lean lean/M0Crypto/Release/TraceSpec.lean \
+     lean/M0Crypto/Release/X25519Contract.lean \
      lean/M0Crypto/Artifacts/Release.lean lean/Audit.lean tools ../tools/build_lib.sh
    ```
 
@@ -451,7 +452,7 @@ If all three are fine, the proof changes need no correctness review.
 
 **Non-vacuity.** Each function has a concrete call that satisfies `Pre` (or `APre`), the whole hypothesis of its correctness, read and stack theorems: [`Release/NonVacuity.lean`](../lean/M0Crypto/Release/NonVacuity.lean) proves this for the three functions, with calls that are in place, unaligned and non-empty, and passes each witness to its correctness theorem. The constant-time theorems take two such calls with equal `pub` (and, for decryption, equal verdict); the same witness taken twice fits. Check that the witnesses are realistic rather than degenerate. The executable release checks (`Thumb/ReleaseCheck/`) run the real bytes on concrete inputs, which is strong evidence but not a proof that the contracts are satisfiable.
 
-**Keep the trusted base where it is.** Statements mention only definitions from `Spec/`, the model, and the four statement files. A new definition that a statement needs goes into a statement file, never into a proof file.
+**Keep the trusted base where it is.** Statements mention only definitions from `Spec/`, the model, and the five statement files. A new definition that a statement needs goes into a statement file, never into a proof file.
 
 **Known gaps.**
 
@@ -484,5 +485,66 @@ Background reading: [Theorem Proving in Lean 4](https://lean-lang.org/theorem_pr
 | [Cortex-M0+ Technical Reference Manual](https://developer.arm.com/documentation/ddi0484/latest) (DDI 0484) and [Generic User Guide](https://developer.arm.com/documentation/dui0662/latest) (DUI 0662) | Timing assumption (instruction cycle counts, no cache or branch prediction) |
 | [`include/m0crypto/chacha20.h`](https://github.com/WeGoToMars/m0-crypto-lib/blob/main/include/m0crypto/chacha20.h), [`chacha20poly1305.h`](https://github.com/WeGoToMars/m0-crypto-lib/blob/main/include/m0crypto/chacha20poly1305.h) | Contracts: what callers must guarantee and what they are promised |
 | [Library README](https://github.com/WeGoToMars/m0-crypto-lib/blob/main/README.md), [proofs README](../README.md) | The claims the theorems must support |
+| [RFC 7748](https://www.rfc-editor.org/rfc/rfc7748), Elliptic Curves for Security | `Spec/X25519.lean` (section 5), vectors (section 5.2) |
+| [`include/m0crypto/x25519.h`](https://github.com/WeGoToMars/m0-crypto-lib/blob/main/include/m0crypto/x25519.h) | X25519 contract (section 9) |
 
 Links that start with `../../` point into the library repository and work in a local checkout with submodules, not on the proofs repository's own web page.
+
+## 9. X25519 (`m0c_x25519`)
+
+The X25519 unit is four symbols of the release artifact: the entry `m0c_x25519` (offset `Artifacts.Release.x25519`) and the field routines `m0c_fe_mul`, `m0c_fe_sqr` and `m0c_fe_mulc_add`, which only the entry calls. It is reviewed like the other functions: read the statements and the definitions they use, never the proofs. This section lists what is specific to X25519. Sections 3.1-3.3 (model, decoder, artifact), 4 and 6 apply unchanged.
+
+### 9.1 Top-level theorems
+
+| Theorem | File | Claim |
+|---|---|---|
+| `X25519.x25519_correct : X25519.Correct` | [`X25519Correct.lean`](../lean/M0Crypto/Release/X25519Correct.lean) | Every valid call returns; `out` holds RFC 7748 `X25519(scalar, point)`; all other memory outside the stack window is unchanged; the 480 stack bytes below the saved registers are zero; r4-r11 and SP restored, r0 = 0 (`M0C_OK`), r1-r3 and r12 zero; only the stack window and `out` are written |
+| `X25519.x25519_constant_time : TraceSpec.X25519ConstantTime` | [`X25519Trace.lean`](../lean/M0Crypto/Release/X25519Trace.lean) | Trace depends only on the base, entry SP, LR and the three pointers |
+| `X25519.x25519_reads : TraceSpec.X25519Reads` | same | Reads only `scalar`, `point`, the artifact and the stack window |
+| `X25519.x25519_stack : TraceSpec.X25519Stack` | same | SP within 516 bytes below its entry value at every state |
+
+All four assume exactly `X25519.Pre c s`. They are in `lean/Audit.lean` and in the `EXPECTED` list of `check.sh`, with the non-vacuity witness `NonVacuity.x25519_pre_nonvacuous`: a call where `out` is `point`, at an odd address, and `scalar` is unaligned, on RFC 7748 vector 1. `tools/trusted_defs.lean` has the four theorems as roots.
+
+### 9.2 What to read
+
+| Part | File | Declarations | Lines | Reference |
+|---|---|---:|---:|---|
+| Specification | [`Spec/X25519.lean`](../lean/M0Crypto/Spec/X25519.lean) | 15 | 68 | RFC 7748 section 5 |
+| Contract | [`X25519Contract.lean`](../lean/M0Crypto/Release/X25519Contract.lean) | 15 | 87 | `include/m0crypto/x25519.h`, AAPCS32 |
+| Trace statements | [`TraceSpec.lean`](../lean/M0Crypto/Release/TraceSpec.lean): `X25519.Ctx.pub`, `X25519ReadRegion`, `X25519ConstantTime`, `X25519Reads`, `X25519Stack` | 5 | 26 | the claims of section 9.1 |
+| Model | `sbcs` in `Thumb.DpOp` and `Instr.exec` (section 3.1) | 1 | 4 | ARMv6-M manual, SBC (register) |
+| Artifact | `Artifacts.Release.x25519`, `size`, `bytes` | 3 | generated (444) | `llvm-nm -S` of the built object; section 3.3 |
+
+Produced by `tools/trusted_defs.sh x25519`. With the model (287 lines), the decoder (167) and the shared vocabulary (37), the X25519 asset trusts 672 hand-written lines in 10 files, of which 181 are its own.
+
+**Specification.** `Spec/X25519.lean` follows RFC 7748 section 5 in the RFC's own names and order. Check:
+
+- `decodeScalar25519`: clears bits 0-2 of byte 0, clears bit 7 of byte 31, sets bit 6 of byte 31.
+- `decodeUCoordinate`: masks bit 7 of byte 31 (`bits = 255`) and does *not* reduce: values of `p` or more are reduced by the field arithmetic, as the RFC requires.
+- `ladderStep`: one loop iteration for `t = 254` down to `0`, with `a24 = 121665`, `z_2 = E * (AA + a24 * E)`, and the swap carried between iterations. The RFC's `z_3 = x_1 * (DA - CB)^2` uses `x_1 = u`, the decoded (unreduced) coordinate; every result is reduced mod `p`.
+- `output`: the final `cswap`, then `x_2 * z_2^(p - 2)` written as a power, then `encodeUCoordinate` (`% p`, 32 little-endian bytes). `output_eq_fast` is a theorem marked `@[csimp]`: it changes only how compiled tests evaluate `output`, not its meaning.
+- No zero check: the function returns the all-zero output for low-order points, as wolfSSL's low-level `curve25519()` does. Rejecting those is the caller's (protocol's) job.
+
+Vectors, as `#guard`s in [`Spec/X25519Vectors.lean`](../lean/M0Crypto/Spec/X25519Vectors.lean): RFC 7748 section 5.2, both single vectors (the second has the top bit of `u` set) and the iteration after 1 and 1,000 steps. Section 6.1 (Diffie-Hellman) is not separately run. The machine code itself is run on vector 1 under QEMU by step 7b.
+
+**Contract.** Read `X25519Contract.lean` from top to bottom. Points to check:
+
+- `Pre` = `Valid` + `Entry` + Thumb-mode LR + return address outside the artifact. `Valid` asks that `out` not overlap the code and that none of the three buffers overlap the 516-byte stack window; `scalar` and `point` may overlap the code (they are only read). The three buffers may be unaligned and may overlap each other in any way (the entry reads `scalar` and `point` completely before it writes `out`); the witness uses `out = point`.
+- `Result.mem` says memory *outside the stack window* is unchanged except `out`. Inside the window, `wipe` says the 480 bytes below the saved registers are zero. `Result` says nothing about the top 36 bytes. By the code they hold the caller's r4-r11 and LR as saved at entry, the caller's own values rather than secrets of this call; this is read from the epilogue, not stated by a theorem.
+- `X25519.Ctx.pub` lists what is public: base, entry SP, LR, and the three pointers. Scalar and point bytes, all other memory and the other registers are secret.
+- `X25519ReadRegion` is `scalar` ∪ `point` ∪ artifact ∪ stack window. `out` is not in it, so the code never reads `out` unless `out` overlaps an input.
+
+### 9.3 Assumptions the X25519 theorems carry
+
+These are in addition to section 5, and no review removes them:
+
+- **The Thumb model is faithful for the instructions used.** Evidence: the decoder is compared with `llvm-objdump` on every instruction (step 4b), the model with QEMU after every instruction of six sampled windows of one call (step 7b: prologue, one ladder step, the exit of each loop kind, epilogue; 25,548 instructions, 3,230 of the asset's 3,462 distinct instructions), and `sbcs` on a fixture covering both carries, overflow and zero. Not proved.
+- **The bytes proved are the bytes linked.** `check.sh` step 2b regenerates the artifact from the built object; `src/x25519.S` is generated by `tools/gen_x25519.py` and compared in step 2b. The object is relocation-free.
+- **The caller meets `Pre`:** three 32-byte buffers, 516 bytes of stack, no buffer overlapping the code or the stack window, a Thumb-mode return address outside the artifact.
+- **Interrupts are outside the model.** An exception taken during the call pushes r0-r3, r12, LR, PC and xPSR, which may hold secret-dependent values, *below* the current SP. That is below the stack window, so the final wipe does not clear it, and the handler's own stack use can overwrite or leave it. A handler also sees the call's secrets in the window until the wipe. `wipe` and the constant-time claim are therefore about uninterrupted calls; a caller that needs the guarantee with interrupts enabled must mask them or clear the stack below the window itself.
+- **Constant time is a statement about the model's trace.** Whether equal traces take equal time depends on the chip, in particular on `muls` taking the same number of cycles for every operand (the Cortex-M0+ multiplier is a build option of the core, single-cycle or 32-cycle iterative; either takes a fixed time). That is checked by measurement on the MSPM0L2228, not by Lean.
+
+### 9.4 Checks specific to X25519
+
+- [`tools/mutate_x25519.py`](../tools/mutate_x25519.py): 14 single-instruction mutants over the four symbols (flipped `adcs`/`sbcs`, changed shifts and constants, a swapped register, a changed loop count, a skipped wipe store, a register not cleared, a store replaced by a branch on a secret carry). Each is patched into a copy of the object; the executable release checks (`Thumb/ReleaseCheck/X25519*`) must reject the functional ones and the constant-time certificate the timing one. A byte change is also expected to break the proofs, since they are about these bytes; the run does not check that.
+- [`tools/qemu_x25519_windows.py`](../tools/qemu_x25519_windows.py): the sampled QEMU comparison of step 7b.

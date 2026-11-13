@@ -75,7 +75,7 @@ def memName : MemOp → String
   | .ldr => "ldr" | .ldrh => "ldrh" | .ldrb => "ldrb"
 
 def dpName : DpOp → String
-  | .ands => "ands" | .eors => "eors" | .adcs => "adcs" | .rors => "rors" | .tst => "tst"
+  | .ands => "ands" | .eors => "eors" | .adcs => "adcs" | .sbcs => "sbcs" | .rors => "rors" | .tst => "tst"
   | .rsbs => "rsbs" | .cmp => "cmp" | .orrs => "orrs" | .muls => "muls" | .mvns => "mvns"
 
 def addr (base : String) (off : Nat) : String :=

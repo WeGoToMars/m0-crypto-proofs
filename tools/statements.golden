@@ -2212,6 +2212,13 @@ M0Crypto.Release.Blake2sCopy.copy_correct_nonvacuous : M0Crypto.Release.Blake2sC
     i < M0Crypto.Artifacts.Release.size →
       M0Crypto.Release.Blake2sCopy.wState.regs 14 &&& ~~~1#32 ≠ 0 + BitVec.ofNat 32 i
 M0Crypto.Release.NonVacuity.c4_nonvacuous : True
+M0Crypto.Spec.X25519.output_eq_fast : M0Crypto.Spec.X25519.output = M0Crypto.Spec.X25519.outputFast
+M0Crypto.Release.NonVacuity.x25519_pre_nonvacuous : M0Crypto.Release.X25519.Pre M0Crypto.Release.NonVacuity.xCtx
+  (M0Crypto.Release.NonVacuity.stOf M0Crypto.Release.NonVacuity.xMem M0Crypto.Release.NonVacuity.xCtx.regs0)
+M0Crypto.Release.X25519.x25519_correct : M0Crypto.Release.X25519.Correct
+M0Crypto.Release.X25519.x25519_constant_time : M0Crypto.Release.TraceSpec.X25519ConstantTime
+M0Crypto.Release.X25519.x25519_reads : M0Crypto.Release.TraceSpec.X25519Reads
+M0Crypto.Release.X25519.x25519_stack : M0Crypto.Release.TraceSpec.X25519Stack
 def M0Crypto.Release.Blake2sStatements.C1 : Prop :=
 ∀ {base c : M0Crypto.Armv6M.Word} {s0 : M0Crypto.Armv6M.State},
   M0Crypto.Release.Blake2sInit.InitEntry base s0 →
@@ -2315,3 +2322,164 @@ constructors:
 M0Crypto.Release.Blake2sHash.All2.nil : ∀ {α β : Type} {R : α → β → Prop}, M0Crypto.Release.Blake2sHash.All2 R [] []
 M0Crypto.Release.Blake2sHash.All2.cons : ∀ {α β : Type} {R : α → β → Prop} {a : α} {b : β} {as : List α} {bs : List β},
   R a b → M0Crypto.Release.Blake2sHash.All2 R as bs → M0Crypto.Release.Blake2sHash.All2 R (a :: as) (b :: bs)
+def M0Crypto.Release.X25519.Correct : Prop :=
+∀ (c : M0Crypto.Release.X25519.Ctx) (s : M0Crypto.Armv6M.State),
+  M0Crypto.Release.X25519.Pre c s →
+    ∃ n,
+      ∀ (fuel : Nat),
+        n ≤ fuel →
+          ∃ t tr,
+            M0Crypto.Thumb.runUntil c.ret fuel s = Except.ok (t, tr) ∧
+              M0Crypto.Release.X25519.Result c t ∧ M0Crypto.Release.WritesTo (M0Crypto.Release.X25519.WrOk c) tr
+def M0Crypto.Release.TraceSpec.X25519ConstantTime : Prop :=
+∀ (c₁ c₂ : M0Crypto.Release.X25519.Ctx) (s₁ s₂ : M0Crypto.Armv6M.State),
+  M0Crypto.Release.X25519.Pre c₁ s₁ →
+    M0Crypto.Release.X25519.Pre c₂ s₂ →
+      c₁.pub = c₂.pub →
+        ∀ (fuel : Nat),
+          Except.map Prod.snd (M0Crypto.Thumb.runUntil c₁.ret fuel s₁) =
+            Except.map Prod.snd (M0Crypto.Thumb.runUntil c₂.ret fuel s₂)
+def M0Crypto.Release.TraceSpec.X25519Reads : Prop :=
+∀ (c : M0Crypto.Release.X25519.Ctx) (s : M0Crypto.Armv6M.State),
+  M0Crypto.Release.X25519.Pre c s →
+    ∃ n,
+      ∀ (fuel : Nat),
+        n ≤ fuel →
+          ∃ t tr,
+            M0Crypto.Thumb.runUntil c.ret fuel s = Except.ok (t, tr) ∧
+              M0Crypto.Release.TraceSpec.ReadsFrom (M0Crypto.Release.TraceSpec.X25519ReadRegion c) tr
+def M0Crypto.Release.TraceSpec.X25519Stack : Prop :=
+∀ (c : M0Crypto.Release.X25519.Ctx) (s : M0Crypto.Armv6M.State),
+  M0Crypto.Release.X25519.Pre c s →
+    ∃ n,
+      ∀ (fuel : Nat),
+        n ≤ fuel →
+          ∃ states tr,
+            M0Crypto.Release.runStates c.ret fuel s = Except.ok (states, tr) ∧
+              ∀ (st : M0Crypto.Armv6M.State),
+                st ∈ states →
+                  M0Crypto.Release.TraceSpec.InStackWindow c.sp0 M0Crypto.Release.X25519.stackBytes (st.regs 13)
+structure M0Crypto.Release.X25519.Pre (c : M0Crypto.Release.X25519.Ctx) (s : M0Crypto.Armv6M.State) : Prop
+number of parameters: 2
+fields:
+  M0Crypto.Release.X25519.Pre.valid : M0Crypto.Release.X25519.Valid c
+  M0Crypto.Release.X25519.Pre.entry : M0Crypto.Release.X25519.Entry c s
+  M0Crypto.Release.X25519.Pre.thumb : BitVec.getLsbD (c.regs0 14) 0 = Bool.true
+  M0Crypto.Release.X25519.Pre.retOut : ¬M0Crypto.Release.Region c.base M0Crypto.Artifacts.Release.size c.ret
+constructor:
+  M0Crypto.Release.X25519.Pre.mk {c : M0Crypto.Release.X25519.Ctx} {s : M0Crypto.Armv6M.State}
+    (valid : M0Crypto.Release.X25519.Valid c) (entry : M0Crypto.Release.X25519.Entry c s)
+    (thumb : BitVec.getLsbD (c.regs0 14) 0 = Bool.true)
+    (retOut : ¬M0Crypto.Release.Region c.base M0Crypto.Artifacts.Release.size c.ret) : M0Crypto.Release.X25519.Pre c s
+structure M0Crypto.Release.X25519.Valid (c : M0Crypto.Release.X25519.Ctx) : Prop
+number of parameters: 1
+fields:
+  M0Crypto.Release.X25519.Valid.base4 : BitVec.toNat c.base % 4 = 0
+  M0Crypto.Release.X25519.Valid.sp4 : BitVec.toNat c.sp0 % 4 = 0
+  M0Crypto.Release.X25519.Valid.spLo : M0Crypto.Release.X25519.stackBytes ≤ BitVec.toNat c.sp0
+  M0Crypto.Release.X25519.Valid.codeS : M0Crypto.Release.Frame.Disj c.base M0Crypto.Artifacts.Release.size c.fp
+      M0Crypto.Release.X25519.stackBytes
+  M0Crypto.Release.X25519.Valid.codeO : M0Crypto.Release.Frame.Disj c.base M0Crypto.Artifacts.Release.size c.out 32
+  M0Crypto.Release.X25519.Valid.outS : M0Crypto.Release.Frame.Disj c.out 32 c.fp M0Crypto.Release.X25519.stackBytes
+  M0Crypto.Release.X25519.Valid.scalarS : M0Crypto.Release.Frame.Disj c.scalar 32 c.fp
+      M0Crypto.Release.X25519.stackBytes
+  M0Crypto.Release.X25519.Valid.pointS : M0Crypto.Release.Frame.Disj c.point 32 c.fp M0Crypto.Release.X25519.stackBytes
+  M0Crypto.Release.X25519.Valid.code : M0Crypto.Thumb.CodeAt c.m0 c.base M0Crypto.Release.B
+constructor:
+  M0Crypto.Release.X25519.Valid.mk {c : M0Crypto.Release.X25519.Ctx} (base4 : BitVec.toNat c.base % 4 = 0)
+    (sp4 : BitVec.toNat c.sp0 % 4 = 0) (spLo : M0Crypto.Release.X25519.stackBytes ≤ BitVec.toNat c.sp0)
+    (codeS : M0Crypto.Release.Frame.Disj c.base M0Crypto.Artifacts.Release.size c.fp M0Crypto.Release.X25519.stackBytes)
+    (codeO : M0Crypto.Release.Frame.Disj c.base M0Crypto.Artifacts.Release.size c.out 32)
+    (outS : M0Crypto.Release.Frame.Disj c.out 32 c.fp M0Crypto.Release.X25519.stackBytes)
+    (scalarS : M0Crypto.Release.Frame.Disj c.scalar 32 c.fp M0Crypto.Release.X25519.stackBytes)
+    (pointS : M0Crypto.Release.Frame.Disj c.point 32 c.fp M0Crypto.Release.X25519.stackBytes)
+    (code : M0Crypto.Thumb.CodeAt c.m0 c.base M0Crypto.Release.B) : M0Crypto.Release.X25519.Valid c
+structure M0Crypto.Release.X25519.Entry (c : M0Crypto.Release.X25519.Ctx) (s : M0Crypto.Armv6M.State) : Prop
+number of parameters: 2
+fields:
+  M0Crypto.Release.X25519.Entry.regs : s.regs = c.regs0
+  M0Crypto.Release.X25519.Entry.mem : s.mem = c.m0
+  M0Crypto.Release.X25519.Entry.pc : c.regs0 15 = c.base + BitVec.ofNat 32 M0Crypto.Artifacts.Release.x25519
+  M0Crypto.Release.X25519.Entry.sp : c.regs0 13 = c.sp0
+  M0Crypto.Release.X25519.Entry.r0 : c.regs0 0 = c.out
+  M0Crypto.Release.X25519.Entry.r1 : c.regs0 1 = c.scalar
+  M0Crypto.Release.X25519.Entry.r2 : c.regs0 2 = c.point
+constructor:
+  M0Crypto.Release.X25519.Entry.mk {c : M0Crypto.Release.X25519.Ctx} {s : M0Crypto.Armv6M.State}
+    (regs : s.regs = c.regs0) (mem : s.mem = c.m0)
+    (pc : c.regs0 15 = c.base + BitVec.ofNat 32 M0Crypto.Artifacts.Release.x25519) (sp : c.regs0 13 = c.sp0)
+    (r0 : c.regs0 0 = c.out) (r1 : c.regs0 1 = c.scalar) (r2 : c.regs0 2 = c.point) : M0Crypto.Release.X25519.Entry c s
+structure M0Crypto.Release.X25519.Result (c : M0Crypto.Release.X25519.Ctx) (t : M0Crypto.Armv6M.State) : Prop
+number of parameters: 2
+fields:
+  M0Crypto.Release.X25519.Result.pc : t.pc = c.ret
+  M0Crypto.Release.X25519.Result.sp : t.regs 13 = c.sp0
+  M0Crypto.Release.X25519.Result.callee : ∀ (r : M0Crypto.Armv6M.Reg), 4 ≤ ↑r → ↑r < 12 → t.regs r = c.regs0 r
+  M0Crypto.Release.X25519.Result.r0 : t.regs 0 = 0
+  M0Crypto.Release.X25519.Result.r1 : t.regs 1 = 0
+  M0Crypto.Release.X25519.Result.r2 : t.regs 2 = 0
+  M0Crypto.Release.X25519.Result.r3 : t.regs 3 = 0
+  M0Crypto.Release.X25519.Result.r12 : t.regs 12 = 0
+  M0Crypto.Release.X25519.Result.mem : ∀ (y : M0Crypto.Armv6M.Word),
+      ¬M0Crypto.Release.Region c.fp M0Crypto.Release.X25519.stackBytes y →
+        t.mem y = if M0Crypto.Release.Region c.out 32 y then c.outB (c.oidx y) else c.m0 y
+  M0Crypto.Release.X25519.Result.wipe : ∀ (y : M0Crypto.Armv6M.Word),
+      M0Crypto.Release.Region c.fp M0Crypto.Release.X25519.wipeBytes y → t.mem y = 0
+constructor:
+  M0Crypto.Release.X25519.Result.mk {c : M0Crypto.Release.X25519.Ctx} {t : M0Crypto.Armv6M.State} (pc : t.pc = c.ret)
+    (sp : t.regs 13 = c.sp0) (callee : ∀ (r : M0Crypto.Armv6M.Reg), 4 ≤ ↑r → ↑r < 12 → t.regs r = c.regs0 r)
+    (r0 : t.regs 0 = 0) (r1 : t.regs 1 = 0) (r2 : t.regs 2 = 0) (r3 : t.regs 3 = 0) (r12 : t.regs 12 = 0)
+    (mem :
+      ∀ (y : M0Crypto.Armv6M.Word),
+        ¬M0Crypto.Release.Region c.fp M0Crypto.Release.X25519.stackBytes y →
+          t.mem y = if M0Crypto.Release.Region c.out 32 y then c.outB (c.oidx y) else c.m0 y)
+    (wipe :
+      ∀ (y : M0Crypto.Armv6M.Word), M0Crypto.Release.Region c.fp M0Crypto.Release.X25519.wipeBytes y → t.mem y = 0) :
+    M0Crypto.Release.X25519.Result c t
+def M0Crypto.Release.X25519.WrOk : M0Crypto.Release.X25519.Ctx → M0Crypto.Armv6M.Word → Prop :=
+fun c y => M0Crypto.Release.Region c.fp M0Crypto.Release.X25519.stackBytes y ∨ M0Crypto.Release.Region c.out 32 y
+def M0Crypto.Release.X25519.Ctx.outB : M0Crypto.Release.X25519.Ctx → Nat → M0Crypto.Spec.X25519.Byte :=
+fun c i => (M0Crypto.Spec.X25519.x25519 c.scalarB c.pointB)[i]!
+def M0Crypto.Release.X25519.Ctx.pub : M0Crypto.Release.X25519.Ctx →
+  M0Crypto.Armv6M.Word ×
+    M0Crypto.Armv6M.Word × M0Crypto.Armv6M.Word × M0Crypto.Armv6M.Word × M0Crypto.Armv6M.Word × M0Crypto.Armv6M.Word :=
+fun c => (c.base, c.sp0, c.regs0 14, c.out, c.scalar, c.point)
+def M0Crypto.Release.TraceSpec.X25519ReadRegion : M0Crypto.Release.X25519.Ctx → M0Crypto.Armv6M.Word → Prop :=
+fun c y =>
+  M0Crypto.Release.Region c.scalar 32 y ∨
+    M0Crypto.Release.Region c.point 32 y ∨
+      M0Crypto.Release.Region c.base M0Crypto.Artifacts.Release.size y ∨
+        M0Crypto.Release.Region c.fp M0Crypto.Release.X25519.stackBytes y
+def M0Crypto.Spec.X25519.x25519 : List M0Crypto.Spec.X25519.Byte →
+  List M0Crypto.Spec.X25519.Byte → List M0Crypto.Spec.X25519.Byte :=
+fun k u =>
+  have s :=
+    M0Crypto.Spec.X25519.ladder (M0Crypto.Spec.X25519.decodeScalar25519 k) ↑(M0Crypto.Spec.X25519.decodeUCoordinate u);
+  match M0Crypto.Spec.X25519.cswap s.swap s.x2 s.x3 with
+  | (x_2, snd) =>
+    match M0Crypto.Spec.X25519.cswap s.swap s.z2 s.z3 with
+    | (z_2, snd) => M0Crypto.Spec.X25519.output x_2 z_2
+def M0Crypto.Spec.X25519.ladderStep : Nat →
+  Int → M0Crypto.Spec.X25519.LadderState → Nat → M0Crypto.Spec.X25519.LadderState :=
+fun k x1 s t =>
+  have k_t := k >>> t &&& 1;
+  have swap := s.swap ^^^ k_t;
+  match M0Crypto.Spec.X25519.cswap swap s.x2 s.x3 with
+  | (x_2, x_3) =>
+    match M0Crypto.Spec.X25519.cswap swap s.z2 s.z3 with
+    | (z_2, z_3) =>
+      have swap := k_t;
+      have A := (x_2 + z_2) % M0Crypto.Spec.X25519.p;
+      have AA := A ^ 2 % M0Crypto.Spec.X25519.p;
+      have B := (x_2 - z_2) % M0Crypto.Spec.X25519.p;
+      have BB := B ^ 2 % M0Crypto.Spec.X25519.p;
+      have E := (AA - BB) % M0Crypto.Spec.X25519.p;
+      have C := (x_3 + z_3) % M0Crypto.Spec.X25519.p;
+      have D := (x_3 - z_3) % M0Crypto.Spec.X25519.p;
+      have DA := D * A % M0Crypto.Spec.X25519.p;
+      have CB := C * B % M0Crypto.Spec.X25519.p;
+      have x_3 := (DA + CB) ^ 2 % M0Crypto.Spec.X25519.p;
+      have z_3 := x1 * (DA - CB) ^ 2 % M0Crypto.Spec.X25519.p;
+      have x_2 := AA * BB % M0Crypto.Spec.X25519.p;
+      have z_2 := E * (AA + M0Crypto.Spec.X25519.a24 * E) % M0Crypto.Spec.X25519.p;
+      { x2 := x_2, z2 := z_2, x3 := x_3, z3 := z_3, swap := swap }
