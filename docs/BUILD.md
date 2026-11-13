@@ -16,7 +16,7 @@ lake build +M0Crypto.Release.Poly1305Mac
 lake build +M0Crypto.Thumb.ReleaseCheck.ChaCha20Poly1305
 ```
 
-The second command runs the asset's executable release checks in parallel shards (`M0Crypto.Thumb.ReleaseCheck.X25519` for X25519). Their case descriptors are defined once; coverage checks require all 83 ChaCha20 cases, 45 AEAD cases and every shard, and the five pairwise guards remain required. Use a Lake build to refresh these checks after changing the artifact or model: executing the import root with `lake env lean` alone does not rebuild imports. The full `tools/check.sh` remains the release gate.
+The second command runs the asset's executable release checks in parallel shards (`M0Crypto.Thumb.ReleaseCheck.X25519` for X25519; for BLAKE2s, `Blake2sShard0` to `Blake2sShard3` and `Blake2sPairwise`, which the asset root imports). Their case descriptors are defined once; coverage checks require all 83 ChaCha20 cases, 45 AEAD cases and every shard, and the five pairwise guards remain required. Use a Lake build to refresh these checks after changing the artifact or model: executing the import root with `lake env lean` alone does not rebuild imports. The full `tools/check.sh` remains the release gate.
 
 ## Memory-aware build runner
 
@@ -39,4 +39,4 @@ For a clean-build profile, run these commands in an isolated source copy with no
 python3 -I tools/build_profile.py build.log --json profile.json
 ```
 
-The profiler uses the current source graph, so run it in the source snapshot that produced the log. One clean build of the combined tree, before the split into assets, took 162 s wall time on an 18-core Apple M5 Pro; the longest import chain (158 s) bounds it, not the core count. Import what a file uses rather than the file before it, so that independent proofs build in parallel.
+The profiler uses the current source graph, so run it in the source snapshot that produced the log. One clean build of the 0.2.0 proofs (ChaCha20-Poly1305 only) took 162 s wall time on an 18-core Apple M5 Pro; the longest import chain (158 s) bounds it, not the core count. Import what a file uses rather than the file before it, so that independent proofs build in parallel.

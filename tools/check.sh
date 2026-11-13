@@ -92,6 +92,14 @@ if has chacha20poly1305; then
 echo "== 4c. specification agrees with the library's test vectors (RFC 8439, Wycheproof, pyca/cryptography)"
 python3 -I tools/spec_vectors.py "$LIB/tests/aead_vectors.h"
 fi
+if has blake2s; then
+echo "== 4c. BLAKE2s specification agrees with the library's test vectors (Python hashlib)"
+python3 -I tools/spec_vectors.py "$LIB/tests/blake2s_vectors.h"
+fi
+if has x25519; then
+echo "== 4c. X25519 specification agrees with the library's test vectors (RFC 7748, Wycheproof)"
+python3 -I tools/spec_vectors.py "$LIB/tests/x25519_vectors.h"
+fi
 
 echo "== 5. no admissions or custom axioms in sources"
 if grep -rnE '\b(sorry|admit|axiom|native_decide|implemented_by|extern)\b' lean/M0Crypto assets/*/artifact; then
@@ -127,7 +135,7 @@ for a in $ASSETS; do
 done
 
 echo "== 7. library primitives on QEMU Cortex-M0 (behaviour only, not timing)"
-"$LIB/tools/test_qemu.sh" > "$TMP/qemu.txt" 2>&1 || { cat "$TMP/qemu.txt"; echo "FAIL: QEMU primitive tests" >&2; exit 1; }
+"$LIB/tools/test_qemu.sh" $ASSETS > "$TMP/qemu.txt" 2>&1 || { cat "$TMP/qemu.txt"; echo "FAIL: QEMU primitive tests" >&2; exit 1; }
 grep -E 'peak stack|RESULT' "$TMP/qemu.txt"
 
 echo "== 7b. machine model agrees with QEMU after every instruction of sampled calls"

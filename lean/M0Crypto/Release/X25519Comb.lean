@@ -3,7 +3,7 @@ import M0Crypto.Release.X25519Diff
 set_option linter.unusedSimpArgs false
 
 /-!
-Macro `combine128` of `m0c_fe_mul` (plan `x25519-proofs.md`, phase 8), the product case
+Macro `combine128` of `m0c_fe_mul`, the product case
 (`square = False`): the last step of one level of Karatsuba multiplication at 128 bits.
 
 On entry `r0`-`r3` hold the middle product `P` (`|aL - aH| * |bL - bH|`) and `r4` the mask

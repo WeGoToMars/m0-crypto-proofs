@@ -6,7 +6,7 @@ set_option linter.unusedSimpArgs false
 set_option linter.deprecated false
 
 /-!
-The scalar-bit block of the ladder step (`X25519EntryCode.bitL`, plan phase 9, step 3).
+The scalar-bit block of the ladder step (`X25519EntryCode.bitL`).
 
 From the counter `t` in `LV_T`, the block loads word `t / 32` of the clamped scalar (index
 `(t >>> 3) &&& 28`, `X25519Decode.word_index`), extracts bit `t mod 32` (`rors`, `ands #1`,

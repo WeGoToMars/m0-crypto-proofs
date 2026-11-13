@@ -1,7 +1,7 @@
 import M0Crypto.Release.X25519Carry
 
 /-!
-Four-word carry chains (plan `x25519-proofs.md`, phase 8): the value equations of
+Four-word carry chains: the value equations of
 `adds/adcs` and `subs/sbcs` chains over four words, and of a word-wise xor with a mask of
 zeros or ones, stated on the exact terms the machine semantics produces. A macro proof
 instantiates these on its symbolic state instead of summing per-word equations itself.

@@ -1,5 +1,5 @@
 import M0Crypto.Release.Blake2sHash
-import M0Crypto.Release.Blake2sCtCommon
+import M0Crypto.Release.Blake2sConstantTimeCommon
 import M0Crypto.Release.ConstantTime.Blake2sStreamEntries
 import M0Crypto.Release.ConstantTime.EntrySound
 import M0Crypto.Release.ConstantTime.ReachableWindow

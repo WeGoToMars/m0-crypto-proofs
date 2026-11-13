@@ -3,7 +3,7 @@ import M0Crypto.Release.X25519Chain
 import M0Crypto.Spec.X25519
 
 /-!
-The ladder algebra of `m0c_x25519` against RFC 7748 (plan phase 6, items 7 and 8).
+The ladder algebra of `m0c_x25519` against RFC 7748.
 
 The entry works on frame slots, and each field operation leaves a value that is only
 congruent modulo `p` to its exact result. These lemmas take one congruence per slot
@@ -19,7 +19,7 @@ operation, in the code's order (generator `emit_x25519`, `dbl`), and conclude co
   `X25519` is the ladder over bits 254 to 3, the pending swap, three doublings and `output`.
 * `output_canon`: the canonical residue of `x * z^(p - 2)` encodes as `output x z`.
 
-Polynomial identities are closed by `grind` in small named lemmas (plan section 6.4).
+Polynomial identities are closed by `grind` in small named lemmas.
 -/
 
 namespace M0Crypto.Release.X25519Ladder

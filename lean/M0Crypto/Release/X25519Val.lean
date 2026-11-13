@@ -1,5 +1,5 @@
 /-!
-Value of a little-endian list of 32-bit words, for the X25519 arithmetic (plan phase 6, item 1).
+Value of a little-endian list of 32-bit words, for the X25519 arithmetic.
 
 `val ws` reads `ws` as a number in base `2^32`, least significant word first. The split
 lemma `val_append` is one generic lemma for every boundary the code uses (64, 128 and 256

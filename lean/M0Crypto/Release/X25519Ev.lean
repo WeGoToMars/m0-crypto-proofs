@@ -2,7 +2,7 @@ import M0Crypto.Release.X25519Sites
 import M0Crypto.Release.X25519PrologueWords
 
 /-!
-The event condition of a whole `m0c_x25519` run (plan `x25519-proofs.md`, phase 10, sites).
+The event condition of a whole `m0c_x25519` run.
 
 `Ev c`: every event is at a PC of the artifact, writes only `X25519.WrOk c`, reads only the
 inputs at a load site (`X25519Code.loadSites`) and writes only `out` at a store site

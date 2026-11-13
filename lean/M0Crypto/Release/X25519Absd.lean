@@ -3,7 +3,7 @@ import M0Crypto.Release.X25519Diff
 set_option linter.unusedSimpArgs false
 
 /-!
-The 64-bit absolute difference of `mul128` and `sqr128` (plan `x25519-proofs.md`, phase 8):
+The 64-bit absolute difference of `mul128` and `sqr128`:
 `subs x0, y0; sbcs x1, y1; sbcs m, m; eors x0, m; eors x1, m; subs x0, m; sbcs x1, m`. The
 pair `x1:x0` becomes `|X - Y|` and `m` the mask of `X < Y`. `m` may be `y0` or `y1`: it is
 written only after both are read.

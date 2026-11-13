@@ -4,7 +4,7 @@ set_option linter.unusedSectionVars false
 set_option linter.unusedSimpArgs false
 
 /-!
-The inversion chain segment of `m0c_x25519` (plan `x25519-proofs.md`, phase 9).
+The inversion chain segment of `m0c_x25519`.
 
 `chain_run` folds `stepChain_w` over a list of steps whose destination is not the frame slot
 `Z2` (offsets threaded as in `chainAt`): the values before and after form an

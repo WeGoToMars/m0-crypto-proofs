@@ -5,7 +5,7 @@ import M0Crypto.Release.X25519Sqr64
 set_option linter.unusedSimpArgs false
 
 /-!
-Macro `sqr128` of `m0c_fe_sqr` (plan `x25519-proofs.md`, phase 8): one level of Karatsuba
+Macro `sqr128` of `m0c_fe_sqr`: one level of Karatsuba
 squaring of the 4-word operand at `r1`. As `mul128`, a `Runs` composition of its pieces.
 `L = aL^2` and `H = aH^2` are kept half in memory and half in `r8`, `r10`, `r11`, `r12`
 (`combine128sq`'s layout); the middle product is `(aL - aH)^2`, always subtracted.

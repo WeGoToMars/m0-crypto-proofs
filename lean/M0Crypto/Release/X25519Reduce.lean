@@ -1,8 +1,7 @@
 import M0Crypto.Release.X25519Congr
 
 /-!
-Reduction modulo `p = 2^255 - 19` as the field routines perform it (plan phase 6, items 4
-and 5).
+Reduction modulo `p = 2^255 - 19` as the field routines perform it.
 
 Every lemma is stated over `Nat` values of multi-word quantities: a machine proof sums the
 carry equations of one routine into the value-level hypotheses below (linear arithmetic),

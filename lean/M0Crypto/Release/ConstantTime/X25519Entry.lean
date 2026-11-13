@@ -12,8 +12,8 @@ import M0Crypto.Release.X25519Sites
 The entry calls its three field routines from 47 sites. With `shareCalls` each routine is
 analysed once for all its call sites (its saved return value lists every return offset), so
 the certificate covers each instruction once: 3,462 positions in 73 blocks. Followed per call
-site instead, the callees would be copied 47 times (about 46,000 positions, over the plan's
-checking budget). `genFast` builds the certificate (the association lists of `gen` are
+site instead, the callees would be copied 47 times (about 46,000 positions, too many to
+check in reasonable time). `genFast` builds the certificate (the association lists of `gen` are
 quadratic at this size). The generator is untrusted: the kernel checks the result with
 `certOk` and the companion checks below.
 

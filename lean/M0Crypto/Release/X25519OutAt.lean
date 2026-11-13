@@ -6,7 +6,7 @@ import M0Crypto.Release.X25519ReadBlock
 set_option linter.unusedSimpArgs false
 
 /-!
-The tail of `m0c_x25519` from `oStore` to the return (plan `x25519-proofs.md`, phase 9, step 6):
+The tail of `m0c_x25519` from `oStore` to the return:
 `storeOut`, `wipe` and `epilogue` at their offsets in the entry.
 
 `tail_at` takes the three `seqAt` facts from `entry_at` by `seqAt_append` (no offset is written

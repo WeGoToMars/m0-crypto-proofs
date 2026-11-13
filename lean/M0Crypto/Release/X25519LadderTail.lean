@@ -4,7 +4,7 @@ import M0Crypto.Release.X25519Branch
 set_option linter.unusedSectionVars false
 
 /-!
-The ladder tail of `m0c_x25519` (`swapAt`, `dblAt`; plan `x25519-proofs.md`, phase 9, step 4).
+The ladder tail of `m0c_x25519` (`swapAt`, `dblAt`).
 
 `swap_w` runs the final conditional swap with mask `-swap` and sets `t = 3`. `dbl_loop` runs the
 doubling loop: with `t = j + 1` in `LV_T` it applies `dbl` `j + 1` times (`dblN`) to the slots

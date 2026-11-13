@@ -4,7 +4,7 @@ set_option linter.unusedSimpArgs false
 set_option linter.deprecated false
 
 /-!
-The memory side of the prologue of `m0c_x25519` (plan `x25519-proofs.md`, phase 9, step 2).
+The memory side of the prologue of `m0c_x25519`.
 
 * `push_run`, `stm_run`: `push {r4-r7[, lr]}` and `stm r3!, {r4-r7}` as `Runs`.
 * `str_step`, `stm_step`: stores into a `FrameOk` frame of any size, in continuation form.

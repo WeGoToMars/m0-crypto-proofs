@@ -4,7 +4,7 @@ import M0Crypto.Release.X25519Absd
 set_option linter.unusedSimpArgs false
 
 /-!
-Macro `mul128` of `m0c_fe_mul` (plan `x25519-proofs.md`, phase 8): one level of Karatsuba
+Macro `mul128` of `m0c_fe_mul`: one level of Karatsuba
 multiplication of the 4-word operands at `r1` and `r2`. `L` (low halves) and `H` (high halves)
 are stored at slot `k`; the middle product `|aL - aH| * |bL - bH|` and the sign mask go to
 `combine128`.

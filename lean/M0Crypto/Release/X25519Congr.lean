@@ -4,7 +4,7 @@ Congruence modulo `p = 2^255 - 19` on `Int`, for the X25519 proofs.
 `a ≡p b` is `a % p = b % p`. The compatibility lemmas (`add`, `sub`, `mul`, `pow`) carry a
 chain of slot congruences, one per field operation of the code, to a congruence between
 polynomials. The remaining polynomial equality is a commutative-ring identity, closed by
-core `grind` in a small named lemma (plan `x25519-proofs.md`, section 6.4). No machine term
+core `grind` in a small named lemma. No machine term
 appears in this file.
 -/
 
@@ -55,7 +55,7 @@ instance : Trans ModP ModP ModP := ⟨trans⟩
 
 end ModP
 
-/-! ### Test: one doubling of the ladder (plan, section 4, R7)
+/-! ### Test: one doubling of the ladder
 
 The code computes one doubling as eight field operations on frame slots (generator `dbl`):
 `A = x + z`, `B = x - z`, `AA = A^2`, `BB = B^2`, `x' = AA * BB`, `E = AA - BB`,

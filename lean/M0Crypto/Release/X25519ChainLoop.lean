@@ -4,8 +4,7 @@ set_option linter.unusedSectionVars false
 set_option linter.unusedSimpArgs false
 
 /-!
-The counted squaring loop of the inversion chain of `m0c_x25519` (plan `x25519-proofs.md`,
-phase 9).
+The counted squaring loop of the inversion chain of `m0c_x25519`.
 
 `sqrLoopAt o d n` is `setT (n - 1)`, then a loop of `opAt (o + 4) (sqr d d)`, `decT` and a
 `bne` back to the squaring. `sqrLoop_w` runs it: slot `d` ends congruent to its old value

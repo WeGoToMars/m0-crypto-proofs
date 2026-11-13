@@ -6,7 +6,7 @@ import M0Crypto.Release.X25519InlSel
 set_option linter.unusedSimpArgs false
 
 /-!
-The three inline slot operations of `m0c_x25519` (plan `x25519-proofs.md`, phase 9): `OpW .add`,
+The three inline slot operations of `m0c_x25519`: `OpW .add`,
 `OpW .sub` and `OpW .sel`.
 
 `InlRun fn bd` is the shape of an inline body lemma: run from any site with `r0 = dst`,

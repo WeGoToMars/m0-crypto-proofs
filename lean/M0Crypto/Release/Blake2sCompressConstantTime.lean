@@ -29,12 +29,12 @@ open M0Crypto.Release.Blake2sCode (compressSites SiteAt siteAt_of_compress)
 
 /-- Further separation the trace proof needs: the argument word `f0` at the stack top is outside
 the code and the chain window. -/
-structure CtExtra (base : Word) (s : State) : Prop where
+structure ConstantTimeExtra (base : Word) (s : State) : Prop where
   codeA : Disj base Artifacts.Release.size (s.regs 13) 4
   hA : Disj (s.regs 0) 32 (s.regs 13) 4
 
 /-- The code and the chain window are each separated from the stack window (frame and `f0`). -/
-theorem window_disj {base : Word} {s : State} (e : Entry base s) (x : CtExtra base s) :
+theorem window_disj {base : Word} {s : State} (e : Entry base s) (x : ConstantTimeExtra base s) :
     Disj base Artifacts.Release.size (s.regs 13 - BitVec.ofNat 32 COMPRESS_FRAME) (COMPRESS_FRAME + 4) ∧
     Disj (s.regs 0) 32 (s.regs 13 - BitVec.ofNat 32 COMPRESS_FRAME) (COMPRESS_FRAME + 4) := by
   have hv : (s.regs 13 - BitVec.ofNat 32 COMPRESS_FRAME).toNat = (s.regs 13).toNat - COMPRESS_FRAME := by
@@ -74,7 +74,7 @@ theorem bitCount_le (l : BitVec 8) : bitCount l ≤ 8 := by
 
 /-- Every write of a `Writes`-bounded `stm` event lies in the chain window, so the store is
 separated from the code and the stack window. -/
-theorem stm_sep {base : Word} {s : State} (e : Entry base s) (x : CtExtra base s)
+theorem stm_sep {base : Word} {s : State} (e : Entry base s) (x : ConstantTimeExtra base s)
     {y : State} {n : M0Crypto.Armv6M.LowReg} {l : BitVec 8} (hl : 0 < bitCount l)
     (hw : ∀ a, Writes ((Instr.stm n l).accesses y) a → HOf s a) :
     Disj base Artifacts.Release.size (y.reg n) (4 * bitCount l) ∧
@@ -123,7 +123,7 @@ theorem wrOf_misses_code {base : Word} {s : State} (e : Entry base s) :
     omega
 
 /-- Every checked store of the recorded run satisfies the certificate's separation premise. -/
-theorem bufferStoreOk {base : Word} {s : State} (e : Entry base s) (x : CtExtra base s)
+theorem bufferStoreOk {base : Word} {s : State} (e : Entry base s) (x : ConstantTimeExtra base s)
     (hret : ∀ i < Artifacts.Release.size, s.regs 14 &&& ~~~1#32 ≠ base + BitVec.ofNat 32 i)
     {fuel : Nat} {states : List State} {events : List Event}
     (hrun : M0Crypto.Release.runStates (s.regs 14 &&& ~~~1#32) fuel s = .ok (states, events))
@@ -167,7 +167,7 @@ theorem compress_hP {base : Word} {s : State} (e : Entry base s) {fuel : Nat}
       (fun _ _ h => h.1) (fun _ h => h))) hrun
 
 /-- The certificate's per-position obligations hold along a recorded run. -/
-theorem compress_hlocal {base : Word} {s₁ s₂ : State} (e : Entry base s₁) (x : CtExtra base s₁)
+theorem compress_hlocal {base : Word} {s₁ s₂ : State} (e : Entry base s₁) (x : ConstantTimeExtra base s₁)
     (hret : ∀ i < Artifacts.Release.size, s₁.regs 14 &&& ~~~1#32 ≠ base + BitVec.ofNat 32 i)
     {fuel : Nat} {states : List State} {events : List Event}
     (hrun : M0Crypto.Release.runStates (s₁.regs 14 &&& ~~~1#32) fuel s₁ = .ok (states, events)) :
@@ -197,7 +197,7 @@ satisfying the entry contract, agreeing on the pointers, the counter words, the 
 word, `sp` and `lr`, have equal event traces for every fuel. The chain words and the message
 block may differ arbitrarily. -/
 theorem compress_constant_time {base : Word} {s₁ s₂ : State}
-    (e₁ : Entry base s₁) (e₂ : Entry base s₂) (x₁ : CtExtra base s₁)
+    (e₁ : Entry base s₁) (e₂ : Entry base s₂) (x₁ : ConstantTimeExtra base s₁)
     (hret : ∀ i < Artifacts.Release.size, s₁.regs 14 &&& ~~~1#32 ≠ base + BitVec.ofNat 32 i)
     (hpc : s₂.pc = s₁.pc) (hsp : s₂.regs 13 = s₁.regs 13) (hlr : s₂.regs 14 = s₁.regs 14)
     (hpub : ∀ r : Reg, r.val < 4 → s₂.regs r = s₁.regs r)

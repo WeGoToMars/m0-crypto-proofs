@@ -3,7 +3,7 @@ import M0Crypto.Release.X25519OpRun
 set_option linter.unusedSimpArgs false
 
 /-!
-The epilogue of `m0c_x25519` (plan `x25519-proofs.md`, phase 9, step 6).
+The epilogue of `m0c_x25519`.
 
 `epilogue` is `add sp, #(CALLEE + LFRAME); movs r0, #0; mov r12, r0; pop {r4-r7};
 mov r8-r11, r4-r7; pop {r4-r7, pc}` (`X25519EntryCode.epilogue`). The prologue saved, from

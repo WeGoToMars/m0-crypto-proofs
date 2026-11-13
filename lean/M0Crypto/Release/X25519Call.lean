@@ -4,7 +4,7 @@ import M0Crypto.Release.X25519MulcAdd
 import M0Crypto.Release.Call
 
 /-!
-Calls of the three field routines from `m0c_x25519` (plan `x25519-proofs.md`, phase 9).
+Calls of the three field routines from `m0c_x25519`.
 
 `RoutineRun` is the shape of the routines' `run` theorems: from a valid entry the routine
 reaches its return address with `Post`, executing only its own bytes and writing only its

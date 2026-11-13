@@ -6,7 +6,7 @@ set_option linter.unusedSimpArgs false
 set_option linter.unusedSectionVars false
 
 /-!
-Field operations on frame slots of `m0c_x25519` (plan `x25519-proofs.md`, phase 9, step 1).
+Field operations on frame slots of `m0c_x25519`.
 
 An operation `op fn d a b` of the generator is `add r0, sp, #d; add r1, sp, #a;
 [add r2, sp, #b;]` followed by an inline body or a `bl` to a routine. `opCall o tgt d a b`
@@ -150,8 +150,8 @@ theorem size_lt : Artifacts.Release.size < 2 ^ 22 := by decide
 
 `PcOk base lo hi Pc`: `Pc` covers the field routines (the code below the entry) and the entry
 code at offsets `[lo, hi)`. The functional proof runs each part of the entry under its own `Pc`,
-so that a part's events are known to lie outside the other parts (phase 10 uses this to place
-the byte loads and stores of the entry). -/
+so that a part's events are known to lie outside the other parts (the constant-time proof uses this
+to place the byte loads and stores of the entry). -/
 structure PcOk (base : Word) (lo hi : Nat) (Pc : Word → Prop) : Prop where
   rout : ∀ y, Region base Artifacts.Release.x25519 y → Pc y
   ent : InRegion Pc base lo (hi - lo)

@@ -3,7 +3,7 @@ import M0Crypto.Release.X25519MulcFacts
 set_option linter.unusedSimpArgs false
 
 /-!
-The contract of `m0c_fe_mulc_add` (plan `x25519-proofs.md`, phase 8):
+The contract of `m0c_fe_mulc_add`:
 `X25519Routines.MulcAddSpec feMulcAdd feMulcAddSize`.
 
 The run (`run`) chains the piece lemmas: `pre` (push, `r12 = dst`, the literal `60833`

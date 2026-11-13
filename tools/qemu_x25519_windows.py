@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""Compare the Lean machine model with QEMU on sampled windows of one m0c_x25519 call
-(plan docs/design/x25519-proofs.md, phase 11 F).
+"""Compare the Lean machine model with QEMU on sampled windows of one m0c_x25519 call.
 
     python3 -I tools/qemu_x25519_windows.py [--obj OBJ] [--work DIR] [--qemu QEMU]
                                             [--hit N] [--no-model]

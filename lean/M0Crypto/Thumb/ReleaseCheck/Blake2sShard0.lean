@@ -9,13 +9,13 @@ private def check (r : Option String) : IO Unit :=
 -- The specification is RFC 7693's BLAKE2s-256: the empty-message digest starts 69 21 7a 30.
 #guard (M0Crypto.Spec.Blake2s.blake2s []).take 4 == [0x69#8, 0x21#8, 0x7a#8, 0x30#8]
 
--- C2: chosen counters and finalization words, including carries
+-- compress: chosen counters and finalization words, including carries
 #eval do
   for (t0, t1) in [(0, 0), (64, 0), (0xffffffc0, 0), (0xffffffc0, 1), (0xffffffff, 0xffffffff), (128, 5)] do
     for f0 in [0, 0xffffffff] do
       check (b2sCompressCase t0 t1 f0 (t0 + f0))
 
--- C1: one-shot lengths 0-70 at input/output offsets 0-3
+-- hash: one-shot lengths 0-70 at input/output offsets 0-3
 #eval do
   for len in List.range 71 do
     for off in [0, 1, 2, 3] do

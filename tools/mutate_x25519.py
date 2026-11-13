@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Mutation check for the X25519 release code (plan docs/design/x25519-proofs.md, phase 11 D).
+"""Mutation check for the X25519 release code.
 
     python3 -I tools/mutate_x25519.py --dry-run [--obj OBJ] [--work DIR]
     python3 -I tools/mutate_x25519.py --exec    [--obj OBJ] [--work DIR] [--cert] [--only NAME ...]
@@ -20,23 +20,23 @@ Modes:
   symbol and check that exactly one instruction changed, at the target, into the expected text;
   then run tools/extract_release.py on the patched object (its structural checks) into WORK.
   Nothing else is run. This is the part that needs no Lean.
-* --exec: the dry run, then the executable release checks of plan phase 5 on each mutant, in a
+* --exec: the dry run, then the executable release checks (the `#guard`s of the modules below) on each mutant, in a
   copy of the proofs tree under WORK (rsync, .lake included, so only the modules that import
   the artifact rebuild): regenerate the X25519 asset's Artifacts/Release.lean from the patched
   object and build, in that asset's workspace (assets/x25519),
   M0Crypto.Thumb.ReleaseCheck.X25519Routines and .X25519Shard0-3. A mutant is DETECTED when
   one of those modules fails with "release check FAILED" or a failing `#guard`. Any other
   failure (an upstream module, a timeout) is a tool ERROR, never a detection.
-  --cert also builds M0Crypto.Release.ConstantTime.X25519Entry (the phase 3 constant-time
+  --cert also builds M0Crypto.Release.ConstantTime.X25519Entry (the constant-time
   certificate; about 5 minutes and up to 6 GB per mutant).
 * --list SYMBOL: print the symbol's instructions in the normalised form the patterns use.
 
 Expected catchers (column `expect`):
 
-* exec   the phase 5 executable checks must detect it;
+* exec   the executable release checks must detect it;
 * cert   timing-only: the executable checks are expected to miss it, the constant-time
-         certificate (phase 3, --cert) and later `x25519_constant_time` (phase 10) must not.
-Every mutant also names the future proof that must reject it (`proof`, phases 8-10); those are
+         certificate (--cert) and `x25519_constant_time` must not.
+Every mutant also names the proof that must reject it (`proof`); those are
 recorded, not run. Lean runs go under `nice -n 5` with an alarm (--timeout seconds per build).
 Exit status 1 if a mutant does not apply to exactly one instruction, an `exec` mutant is not
 detected by the executable checks, a --cert run misses a mutant, or a tool fails.
@@ -78,25 +78,25 @@ BHS_NEXT = 0xD2FF                    # bhs to the next instruction (offset -1 ha
 
 # Each mutant: name, symbol, window (normalised instruction texts, consecutive), index of the
 # target inside the window, transform of its halfword, regex the new text must match,
-# expected catcher (exec / cert), and the future proof that must reject it.
+# expected catcher (exec / cert), and the proof that must reject it.
 MUTANTS = [
     # m0c_fe_mul
     dict(name="fe_mul: Karatsuba sign mask sbcs -> adcs", sym="m0c_fe_mul",
          window=["str r2, [sp, #0x8c]", "mov r12, r1", "mov r11, r2", "ldm r1!, {r4, r6}", "ldm r2!, {r5, r7}", "mov r8, r5",
                  "mov r10, r7", "subs r0, r6, r4", "sbcs r2, r2"], at=8, patch=SBCS_TO_ADCS, new=r"adcs r2, r2$",
-         expect="exec", proof="phase 8 m0c_fe_mul contract"),
+         expect="exec", proof="m0c_fe_mul contract"),
     dict(name="fe_mul: reduction constant 38 -> 39", sym="m0c_fe_mul",
          window=["movs r7, #0x26", "movs r2, #0x0", "uxth r6, r4"], at=0,
          patch=field(0, 8, 39), new=r"movs r7, #0x27$",
-         expect="exec", proof="phase 8 m0c_fe_mul contract"),
+         expect="exec", proof="m0c_fe_mul contract"),
     dict(name="fe_mul: bit-255 fold shift 31 -> 30", sym="m0c_fe_mul",
          window=["lsls r4, r4, #0x1", "lsrs r3, r5, #0x1f", "adds r4, r4, r3",
                  "lsls r5, r5, #0x1"], at=1, patch=field(6, 5, 30), new=r"lsrs r3, r5, #0x1e$",
-         expect="exec", proof="phase 8 m0c_fe_mul contract"),
+         expect="exec", proof="m0c_fe_mul contract"),
     dict(name="fe_mul: top limb adds r1 swapped for r3", sym="m0c_fe_mul",
          window=["mov r2, r12", "adds r2, r2, r1", "str r2, [r0, #0x1c]"], at=1,
          patch=field(6, 3, 3), new=r"adds r2, r2, r3$",
-         expect="exec", proof="phase 8 m0c_fe_mul contract"),
+         expect="exec", proof="m0c_fe_mul contract"),
     # m0c_fe_sqr
     dict(name="fe_sqr: doubled cross term shift 17 -> 16", sym="m0c_fe_sqr",
          window=["str r1, [sp, #0x88]", "mov r12, r1", "ldm r1!, {r4, r6}", "subs r0, r6, r4",
@@ -104,48 +104,48 @@ MUTANTS = [
                  "uxth r0, r0", "movs r2, r1", "muls r2, r0, r2", "muls r1, r1, r1",
                  "muls r0, r0, r0", "lsls r3, r2, #0x11"], at=13,
          patch=field(6, 5, 16), new=r"lsls r3, r2, #0x10$",
-         expect="exec", proof="phase 8 m0c_fe_sqr contract"),
+         expect="exec", proof="m0c_fe_sqr contract"),
     dict(name="fe_sqr: reduction carry adcs -> sbcs", sym="m0c_fe_sqr",
          window=["adds r5, r5, r6", "adcs r4, r2", "adds r5, r5, r3", "adcs r4, r2",
                  "mov r3, r12"], at=1, patch=ADCS_TO_SBCS, new=r"sbcs r4, r2$",
-         expect="exec", proof="phase 8 m0c_fe_sqr contract"),
+         expect="exec", proof="m0c_fe_sqr contract"),
     # m0c_fe_mulc_add
     dict(name="fe_mulc_add: top limb high-half shift 17 -> 16", sym="m0c_fe_mulc_add",
          window=["ldr r3, [r1, #0x1c]", "uxth r4, r3", "lsrs r3, r3, #0x10", "muls r4, r7, r4",
                  "muls r3, r7, r3", "lsls r5, r3, #0x11"], at=5,
          patch=field(6, 5, 16), new=r"lsls r5, r3, #0x10$",
-         expect="exec", proof="phase 8 m0c_fe_mulc_add contract"),
+         expect="exec", proof="m0c_fe_mulc_add contract"),
     dict(name="fe_mulc_add: fold constant 19 -> 18", sym="m0c_fe_mulc_add",
          window=["movs r5, #0x13", "muls r3, r5, r3"], at=0,
          patch=field(0, 8, 18), new=r"movs r5, #0x12$",
-         expect="exec", proof="phase 8 m0c_fe_mulc_add contract"),
+         expect="exec", proof="m0c_fe_mulc_add contract"),
     # m0c_x25519
     dict(name="x25519: ladder count 254 -> 253", sym="m0c_x25519",
          window=["movs r0, #0xfe", "str r0, [sp, #0x140]"], at=0,
          patch=field(0, 8, 253), new=r"movs r0, #0xfd$",
-         expect="exec", proof="phase 9 ladder loop / x25519_correct"),
+         expect="exec", proof="ladder loop / x25519_correct"),
     dict(name="x25519: scalar clamp shift 3 -> 2", sym="m0c_x25519",
          window=["lsrs r4, r4, #0x3", "lsls r4, r4, #0x3", "str r4, [sp, #0x120]"], at=0,
          patch=field(6, 5, 2), new=r"lsrs r4, r4, #0x2$",
-         expect="exec", proof="phase 9 prologue / x25519_correct"),
+         expect="exec", proof="prologue / x25519_correct"),
     dict(name="x25519: ladder X2+Z2 carry adcs -> sbcs", sym="m0c_x25519",
          window=["movs r0, #0xfe", "str r0, [sp, #0x140]", "add r0, sp, #0xa0", "add r1, sp, #0x20",
                  "add r2, sp, #0x40", "ldm r1!, {r3, r4}", "ldm r2!, {r5, r6}", "adds r3, r3, r5",
                  "adcs r4, r6"], at=8, patch=ADCS_TO_SBCS, new=r"sbcs r4, r6$",
-         expect="exec", proof="phase 9 ladder step / x25519_correct"),
+         expect="exec", proof="ladder step / x25519_correct"),
     dict(name="x25519: last wipe store skipped", sym="m0c_x25519",
          window=["stm r0!, {r1, r2, r3, r4, r5}", "add sp, #0x1e0"], at=0,
          patch=const(NOP), new=r"mov r8, r8$",
-         expect="exec", proof="phase 9 wipe / x25519_correct (Result)"),
+         expect="exec", proof="wipe / x25519_correct (Result)"),
     dict(name="x25519: r12 not cleared at exit", sym="m0c_x25519",
          window=["add sp, #0x1e0", "movs r0, #0x0", "mov r12, r0"], at=2,
          patch=const(0x46E4), new=r"mov r12, r12$",
-         expect="exec", proof="phase 9 epilogue / x25519_correct (Result)"),
+         expect="exec", proof="epilogue / x25519_correct (Result)"),
     dict(name="x25519: dead store -> branch on secret carry", sym="m0c_x25519",
          window=["adcs r1, r2", "str r1, [r0, #0x1c]", "lsls r1, r1, #0x1",
                  "lsrs r1, r1, #0x1", "str r1, [r0, #0x1c]"], at=1,
          patch=const(BHS_NEXT), new=r"bhs ",
-         expect="cert", proof="phase 10 x25519_constant_time"),
+         expect="cert", proof="x25519_constant_time"),
 ]
 
 

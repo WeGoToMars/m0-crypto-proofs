@@ -5,7 +5,7 @@ import M0Crypto.Release.X25519Reduce
 set_option linter.unusedSimpArgs false
 
 /-!
-Facts for the routine proof of `m0c_fe_mulc_add` (plan `x25519-proofs.md`, phase 8): the code
+Facts for the routine proof of `m0c_fe_mulc_add`: the code
 pieces at their offsets (`pieces`), the routine's PC region (`inReg`), the literal `60833`
 read from the code bytes (`lit_val`), address disjointness, `feVal` as a partial sum, and the
 step from a `ReachW` run to the model's `runUntil` when the stop address lies outside the

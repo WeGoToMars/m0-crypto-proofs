@@ -47,7 +47,7 @@ import M0Crypto.Release.Blake2sCompressStack
 import M0Crypto.Release.Blake2sCopyConstantTime
 import M0Crypto.Release.Blake2sCopyReads
 import M0Crypto.Release.Blake2sCopySites
-import M0Crypto.Release.Blake2sCtCommon
+import M0Crypto.Release.Blake2sConstantTimeCommon
 import M0Crypto.Release.Blake2sFinalConstantTime
 import M0Crypto.Release.Blake2sFinalW
 import M0Crypto.Release.Blake2sInitConstantTime
@@ -181,7 +181,13 @@ import M0Crypto.Release.Blake2sNonVacuity
 import M0Crypto.Release.Blake2sContract
 import M0Crypto.Release.Blake2sTraceSpec
 import M0Crypto.Release.Blake2sClaims
+import M0Crypto.Thumb.ReleaseCheck.Blake2sPairwise
+import M0Crypto.Thumb.ReleaseCheck.Blake2sShard0
+import M0Crypto.Thumb.ReleaseCheck.Blake2sShard1
+import M0Crypto.Thumb.ReleaseCheck.Blake2sShard2
+import M0Crypto.Thumb.ReleaseCheck.Blake2sShard3
 
-/-! Root of the BLAKE2s-256 (RFC 7693) release asset: every proof and check about the bytes of
+/-! Root of the BLAKE2s-256 (RFC 7693) release asset: every proof about the bytes of
 `src/m0crypto_blake2s.S` in the library. Built by the asset's Lake workspace
-(`proofs/assets/blake2s`), whose `M0Crypto.Artifacts.Release` holds those bytes. -/
+(`proofs/assets/blake2s`), whose `M0Crypto.Artifacts.Release` holds those bytes, and the executable
+release checks `Thumb/ReleaseCheck/Blake2s*` on those bytes. -/

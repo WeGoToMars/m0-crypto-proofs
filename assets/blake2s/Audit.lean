@@ -39,5 +39,5 @@ contracts are proved and used inside the claims of `update` and `final`. -/
 -- whose update calls get different message bytes.
 #print axioms M0Crypto.Release.Blake2s.hash_correct
 #print axioms M0Crypto.Release.Blake2s.hash_constant_time
-#print axioms M0Crypto.Release.NonVacuity.c1_nonvacuous
-#print axioms M0Crypto.Release.NonVacuity.c4_nonvacuous
+#print axioms M0Crypto.Release.NonVacuity.hash_correct_nonvacuous
+#print axioms M0Crypto.Release.NonVacuity.hash_constant_time_nonvacuous

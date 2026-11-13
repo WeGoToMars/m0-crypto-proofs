@@ -7,7 +7,7 @@ import M0Crypto.Release.Contract
 
 The constant-time certificate of `m0c_x25519` tracks every stack access. Its only other
 accesses are the byte loads that decode `scalar` and `point` and the byte stores that encode
-`out` (plan `x25519-proofs.md`, R3). This file names them by what they are, the `ldrb` and
+`out`. This file names them by what they are, the `ldrb` and
 `strb` instructions of the entry, not by offset, so a change of the code moves the lists with
 it.
 
@@ -16,9 +16,9 @@ function of the release unit). `x25519_code_decodes` checks that this walk cover
 exactly and finds no undecodable halfword.
 
 The two site statements (`LoadSiteOk`, `StoreSiteOk`) say what a run must do at these pcs:
-read only from `scalar` and `point`, write only to `out`. They are definitions here. Phase 10 of
-the plan proves them for every event of a run from a valid entry state, using the generic
-region lemmas (`EntryReads.certificate_run_reads`, `RegionStores.bufferStoreOk_of_region`).
+read only from `scalar` and `point`, write only to `out`. They are definitions only and no
+other module refers to them: the trace and read proofs (`X25519Ev`, `X25519Trace`) use the
+site lists `loadSites` and `storeSites` directly.
 -/
 
 namespace M0Crypto.Release.X25519Code
@@ -72,7 +72,7 @@ theorem loadSites_lt : ∀ off ∈ loadSites, off < Release.size := by decide +k
 
 theorem storeSites_lt : ∀ off ∈ storeSites, off < Release.size := by decide +kernel
 
-/-! ## Site statements (proved in phase 10) -/
+/-! ## Site statements (definitions only; no claim uses them) -/
 
 /-- The run is at a listed site. -/
 def AtSite (sites : List Nat) (base pc : Word) : Prop :=

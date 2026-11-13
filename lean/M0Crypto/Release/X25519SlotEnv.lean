@@ -3,7 +3,7 @@ import M0Crypto.Release.X25519OpRun
 set_option linter.unusedSectionVars false
 
 /-!
-Slot values through runs of operations (plan `x25519-proofs.md`, phase 9).
+Slot values through runs of operations.
 
 `env c m e` is the field value of the slot at frame offset `e`. `Op.step` is what one operation
 does to these values: the destination is related to the operands by `Fn.rel` and every other

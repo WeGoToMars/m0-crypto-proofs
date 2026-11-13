@@ -3,7 +3,7 @@ import M0Crypto.Release.X25519EntryCode
 set_option linter.unusedSectionVars false
 
 /-!
-Runs of slot operations of `m0c_x25519` (plan `x25519-proofs.md`, phase 9, step 1).
+Runs of slot operations of `m0c_x25519`.
 
 `Fn.rel` is what one operation computes on slot values: a congruence mod p for the five
 arithmetic operations, the exact choice for `select` (mask in `r7`). `Eff` is the effect of one

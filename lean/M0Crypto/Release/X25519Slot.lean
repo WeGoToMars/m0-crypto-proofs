@@ -1,7 +1,7 @@
 import M0Crypto.Release.X25519Comb
 
 /-!
-The 8-word product slot of `mul128` and `sqr128` (plan `x25519-proofs.md`, phase 8).
+The 8-word product slot of `mul128` and `sqr128`.
 
 Both macros leave a 256-bit product partly in memory at an 8-word slot `a`: words 0 and 1
 stay where the first half-product put them, and `combine128` (or `combine128sq`) stores

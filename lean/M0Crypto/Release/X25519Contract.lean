@@ -7,8 +7,7 @@ import M0Crypto.Release.Contract
 Statement file: definitions only, no proofs (see `Contract.lean`). In reading order: the stack
 sizes, the call (`Ctx`), its preconditions (`Valid`), the entry state (`Entry`), the two
 bundled as the hypothesis of every top-level theorem (`Pre`), and what a returned call
-guarantees (`Result`, `WrOk`). Compare with `include/m0crypto/x25519.h` and with
-`docs/design/x25519-freeze.md` (dev repository) section 4.
+guarantees (`Result`, `WrOk`). Compare with `include/m0crypto/x25519.h`.
 
 C prototype: `int m0c_x25519(uint8_t out[32], const uint8_t scalar[32],
 const uint8_t point[32])`, always returning `M0C_OK` (0).
@@ -140,7 +139,7 @@ structure Result (c : Ctx) (t : State) : Prop where
 def WrOk (c : Ctx) (y : Word) : Prop :=
   Region c.fp stackBytes y ∨ Region c.out 32 y
 
-/-! ## Functional statement (claims X1-X3) -/
+/-! ## Functional statement -/
 
 /-- Every valid call returns, with `Result` and only allowed writes. -/
 def Correct : Prop :=

@@ -9,7 +9,7 @@ private def check (r : Option String) : IO Unit :=
 private def cut (len k : Nat) : List Nat :=
   (List.range ((len + k - 1) / k)).map fun i => min k (len - i * k)
 
--- C1: length 4096, one-shot, 17-byte and 64-byte pieces
+-- hash: length 4096, one-shot, 17-byte and 64-byte pieces
 #eval do
   check (b2sStreamCase 4096 0 0 [4096] 4096)
   check (b2sStreamCase 4096 1 3 (cut 4096 17) 4097)

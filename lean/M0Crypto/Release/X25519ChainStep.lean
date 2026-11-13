@@ -5,7 +5,7 @@ set_option linter.unusedSimpArgs false
 set_option linter.deprecated false
 
 /-!
-One step of the inversion chain of `m0c_x25519` (plan `x25519-proofs.md`, phase 9).
+One step of the inversion chain of `m0c_x25519`.
 
 `stepChainAt o st` emits one step of `X25519Chain.invChain`: a multiplication (`mul_opW`), or
 a squaring followed by nothing (`n = 1`), one more squaring (`n = 2`) or the counted loop

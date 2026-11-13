@@ -1,6 +1,6 @@
 # m0-crypto proofs
 
-Lean 4 proofs that the machine code of [m0-crypto](https://github.com/WeGoToMars/m0-crypto-lib) computes ChaCha20, Poly1305 and ChaCha20-Poly1305 as specified in [RFC 8439](https://www.rfc-editor.org/info/rfc8439/), and that its instruction and memory-address trace does not depend on secret data. This repository is the `proofs/` submodule of the library and is not meant to be used on its own.
+Lean 4 proofs that the machine code of [m0-crypto](https://github.com/WeGoToMars/m0-crypto-lib) computes ChaCha20 and ChaCha20-Poly1305 as specified in [RFC 8439](https://www.rfc-editor.org/info/rfc8439/), X25519 as specified in [RFC 7748](https://www.rfc-editor.org/rfc/rfc7748) and unkeyed BLAKE2s-256 as specified in [RFC 7693](https://www.rfc-editor.org/rfc/rfc7693), and that its instruction and memory-address trace does not depend on secret data. The proofs are about the exact `.text` bytes of each release object, run in a Lean model of ARMv6-M. This repository is the `proofs/` submodule of the library and is not meant to be used on its own.
 
 ## Release assets
 
@@ -12,7 +12,7 @@ Each primitive of the library is its own independently released asset: one reloc
 | BLAKE2s-256 | `m0crypto_blake2s.o` | 4,748 bytes, sha256 `baf869bf5a30e81fc79956d2d61fde332555816d1cc0b0b0daede80a3dd4c68b` | `assets/blake2s` |
 | X25519 | `m0crypto_x25519.o` | 7,022 bytes, sha256 `bb9c315f5a91a6fb35f81859c1c7562a8e084efef1bddfef2ef949dbd37fec94` | `assets/x25519` |
 
-The Lean sources in `lean/` are shared. Each asset's Lake workspace compiles them against that asset's own artifact, `assets/ASSET/artifact/M0Crypto/Artifacts/Release.lean`, and builds only the asset root `M0Crypto.Assets.*` and its imports. So `Artifacts.Release.bytes` in an asset's theorems is that asset's `.text`. Modules of one primitive never import another primitive's modules. Each workspace holds the asset's axiom audit (`Audit.lean`), the audited theorems that must be present (`expected-axioms.txt`) and the printed statements (`statements.golden`).
+The Lean sources in `lean/` are shared. Each asset's Lake workspace compiles them against that asset's own artifact, `assets/ASSET/artifact/M0Crypto/Artifacts/Release.lean`, and builds only the asset root `M0Crypto.Assets.*` and its imports. So `Artifacts.Release.bytes` in an asset's theorems is that asset's `.text`. Modules of one primitive never import another primitive's modules. Each workspace holds the asset's axiom audit (`Audit.lean`, which lists the claims) and the printed statements of its claims and of every trusted definition they reach (`statements.golden`).
 
 ## Check
 
@@ -28,16 +28,16 @@ Needs Lean v4.35.0 (via `elan`), LLVM/LLD 23.1.4 and QEMU 11.1.3. Set `M0C_LIB` 
 1. builds the asset and checks that its `.text` equals the asset's checked-in artifact.
 2. builds the asset's proofs with `lake build` in its workspace, including executions of the artifact in the model against the specification.
 3. checks that the model's decoder agrees with `llvm-objdump` on every instruction.
-4. for ChaCha20-Poly1305, evaluates the Lean specification on the library's test vectors (RFC 8439, Wycheproof, pyca/cryptography).
+4. evaluates the Lean specification on the library's test vectors: RFC 8439, Wycheproof and pyca/cryptography for ChaCha20-Poly1305; `hashlib` digests at 204 lengths for BLAKE2s (one-shot and streaming); RFC 7748 and Wycheproof for X25519. The specifications also carry `#guard` vectors (for BLAKE2s, `Spec/Blake2sVectors.lean`: RFC 7693 appendix B and `hashlib`).
 5. rejects `sorry` and new axioms. The asset's `Audit.lean` lists its claims; every claim may depend only on `propext`, `Classical.choice` and `Quot.sound`. Its `statements.golden` locks the claim statements and every trusted definition they reach.
-6. runs the library's QEMU tests.
-7. single-steps sampled calls in QEMU and requires the model to have the same registers and flags after every instruction, and the same RAM at the return.
+6. runs the library's QEMU tests for the selected assets.
+7. single-steps sampled calls in QEMU and requires the model to have the same registers and flags after every instruction, and the same RAM at the return (for X25519, six sampled windows of one call, since a whole call is about three million instructions).
 
-`tools/mutate_aead.py`, `tools/mutate_blake2s.py` and `tools/mutate_x25519.py` apply deliberate bugs to the assembly and confirms that the tests or the model checks detect each one. For development builds, release check sharding, and memory budgeting, see [docs/BUILD.md](docs/BUILD.md).
+`tools/mutate_aead.py`, `tools/mutate_blake2s.py` and `tools/mutate_x25519.py` apply deliberate bugs to the assembly or the object and check that the tests, the model checks or (for BLAKE2s) the proofs detect each one. They are not part of `check.sh`. On the release objects (2026-11-13) all 19 AEAD mutants were detected, and the BLAKE2s proofs rejected all 13 BLAKE2s mutants; for X25519 see [docs/REVIEW.md](docs/REVIEW.md) section 9.4. For development builds, release check sharding, and memory budgeting, see [docs/BUILD.md](docs/BUILD.md).
 
 ## Contents
 
-- `lean/M0Crypto/Spec`: RFC 8439 specification.
+- `lean/M0Crypto/Spec`: the specifications (RFC 8439, RFC 7748, RFC 7693) and their test vectors.
 - `lean/M0Crypto/Thumb`: the ARMv6-M model of the release code (decoder and executor).
 - `lean/M0Crypto/Armv6M`, `Proofs`, `fixtures/`, `link/`: a six-instruction model and proofs for two standalone ChaCha20 fragments (quarter round, double round).
 - `lean/M0Crypto/Sym`: a symbolic executor used by some of the ChaCha20 proofs.
@@ -47,33 +47,50 @@ Needs Lean v4.35.0 (via `elan`), LLVM/LLD 23.1.4 and QEMU 11.1.3. Set `M0C_LIB` 
 - `assets/`: one Lake workspace per release asset (see above).
 - `docs/`: reviewer guide ([REVIEW.md](docs/REVIEW.md)), build instructions ([BUILD.md](docs/BUILD.md)), and naming conventions ([NAMING.md](docs/NAMING.md)).
 
+## Claims
+
+Each asset's `Audit.lean` lists its claims: for each exported function a correctness, a constant-time, a read-bound and a stack-bound theorem, and a non-vacuity witness, a concrete call that satisfies the correctness precondition and is passed to the correctness theorem; then the asset's composition claims. Every claim of a function assumes the same hypothesis, a valid call (`Pre`), which includes the entry state, the buffer placement rules and a return address outside the code. Internal routines (Poly1305 `init`/`blocks`/`finish`, BLAKE2s `compress`/`copy`, X25519 `fe_mul`/`fe_sqr`/`fe_mulc_add`) are local symbols, not claims: their proved contracts are used inside the claims of the functions that call them.
+
+| Asset | Functions | Claims |
+|---|---|---:|
+| ChaCha20-Poly1305 | `m0c_chacha20_xor`, `m0c_chacha20poly1305_encrypt`, `m0c_chacha20poly1305_decrypt`; composition `Aead.rejected_writes` | 16 |
+| X25519 | `m0c_x25519` | 5 |
+| BLAKE2s-256 | `m0c_blake2s_init`, `m0c_blake2s_update`, `m0c_blake2s_final`; composition `Blake2s.hash_correct`, `Blake2s.hash_constant_time` and their witnesses | 19 |
+
 ## Functional correctness
 
-The functional proofs connect the release bytes to RFC 8439 and establish:
+The functional theorems connect the release bytes to the specifications in `lean/M0Crypto/Spec`. Each says that every valid call returns, writes only the allowed memory, and restores SP and r4-r11.
 
-- ChaCha20 output and counter-overflow rejection (`ChaCha20Xor.xor_correct`).
-- Poly1305 modular arithmetic and init → blocks → finish composition.
-- AEAD ciphertext and authentication tags (`Aead.encrypt_correct`).
-- Checked decryption, verification before writes, and unchanged output on failure (`Aead.decrypt_correct`).
-- Confined writes, restored SP and callee-saved registers, and the working-stack clearing specified by the function contracts.
+- **ChaCha20** (`ChaCha20Xor.xor_correct`): output = RFC 8439 ChaCha20, and rejection of messages that would wrap the 32-bit block counter.
+- **ChaCha20-Poly1305** (`Aead.encrypt_correct`, `Aead.decrypt_correct`): ciphertext and tag = RFC 8439 §2.8; decryption checks the tag before it writes, and leaves `out` unchanged on failure. The Poly1305 arithmetic and the init → blocks → finish composition are proved as internal lemmas.
+- **X25519** (`X25519.x25519_correct`): `out` = RFC 7748 `X25519(scalar, point)`, for any alignment and any overlap of the three buffers; r0 = 0 (`M0C_OK`); r0-r3 and r12 zero; the 480 stack bytes below the saved registers zero. There is no low-order-point check, as in RFC 7748 section 5.
+- **BLAKE2s-256** (`Blake2s.Init.init_correct`, `Update.update_correct`, `Final.final_correct`): `init` puts the empty stream in the context; `update` absorbs its input into the stream the context holds; `final` writes the RFC 7693 digest of that stream; `update` and `final` return with r0-r3 zero. The composed `Blake2s.hash_correct` says that `init; update*; final` on one context, with any caller code between calls that leaves the 112 context bytes alone, returns and writes the BLAKE2s-256 digest of the concatenated inputs.
 
-The proofs cover any buffer length, byte alignment, and in-place calls (out == in). Preconditions are standard: buffers cannot wrap around memory, cannot partially overlap, and require adequate stack space. The ARMv6-M model describes sequential byte-addressed memory; its decoder is checked against LLVM, and its execution is compared with QEMU instruction by instruction on sampled calls.
+Clearing of working state is proved only as each contract states it: ChaCha20 zeroes the 140 bytes of its frame below the saved registers for an accepted non-empty call; the AEAD functions zero 96 bytes of their own frame and return with r1-r3 zero; X25519 zeroes the 480 bytes above. No BLAKE2s claim states the stack contents after a call, and the BLAKE2s context (chain value and up to 64 pending message bytes) is left to the caller to wipe. [docs/REVIEW.md](docs/REVIEW.md) lists the exact limits per asset.
+
+The ARMv6-M model describes sequential, byte-addressed, ordinary memory without interrupts. Its decoder is compared with LLVM on every instruction of each object, and its execution with QEMU instruction by instruction on sampled calls.
 
 ## Constant-time traces, read bounds and stack bounds
 
-`lean/M0Crypto/Release/ChaCha20TraceSpec.lean` states three properties for each entry point. All nine are proved, under the same hypothesis as the functional theorems (a valid call: `ChaCha20Xor.Pre`, `Aead.APre`):
+The trace, read and stack statements are Props in `lean/M0Crypto/Release/ChaCha20TraceSpec.lean`, `X25519TraceSpec.lean` and `Blake2sTraceSpec.lean`, under the same hypothesis as the functional theorems:
 
-| Property | `m0c_chacha20_xor` | `m0c_chacha20poly1305_encrypt` | `m0c_chacha20poly1305_decrypt` |
-|---|---|---|---|
-| Equal traces | `M0Crypto.Release.ChaCha20Xor.xor_constant_time` | `M0Crypto.Release.Aead.encrypt_constant_time` | `M0Crypto.Release.Aead.decrypt_constant_time` |
-| Read bounds | `M0Crypto.Release.ChaCha20Xor.xor_reads` | `M0Crypto.Release.Aead.encrypt_reads` | `M0Crypto.Release.Aead.decrypt_reads` |
-| Stack bounds | `M0Crypto.Release.ChaCha20Xor.xor_stack` | `M0Crypto.Release.Aead.encrypt_stack` | `M0Crypto.Release.Aead.decrypt_stack` |
+| Function | Equal traces | Read bounds | Stack bound |
+|---|---|---|---:|
+| `m0c_chacha20_xor` | `ChaCha20Xor.xor_constant_time` | `ChaCha20Xor.xor_reads` | 176 |
+| `m0c_chacha20poly1305_encrypt` | `Aead.encrypt_constant_time` | `Aead.encrypt_reads` | 320 |
+| `m0c_chacha20poly1305_decrypt` | `Aead.decrypt_constant_time` | `Aead.decrypt_reads` | 320 |
+| `m0c_x25519` | `X25519.x25519_constant_time` | `X25519.x25519_reads` | 516 |
+| `m0c_blake2s_init` | `Blake2s.Init.init_constant_time` | `Blake2s.Init.init_reads` | 4 |
+| `m0c_blake2s_update` | `Blake2s.Update.update_constant_time` | `Blake2s.Update.update_reads` | 160 |
+| `m0c_blake2s_final` | `Blake2s.Final.final_constant_time` | `Blake2s.Final.final_reads` | 160 |
 
-- **Equal traces.** Two calls that agree on public inputs (addresses, SP, return address, arguments, and decrypt verdict bit) produce identical trace events (PC, instruction, data access addresses and widths).
-- **Read bounds.** Every data read lies in caller inputs, code, or the function's stack frame.
-- **Stack bounds.** At every step SP lies in `[sp0 - 176, sp0]` for ChaCha20 and `[sp0 - 320, sp0]` for AEAD.
+All names are in `M0Crypto.Release`; the stack theorems are the `*_stack` of the same namespaces.
 
-Proofs use kernel-checked abstract interpretation certificates in `Release/ConstantTime/`. For details on the trusted base and reviewing these theorems, see [docs/REVIEW.md](docs/REVIEW.md).
+- **Equal traces.** Two valid calls that agree on the public inputs produce identical trace events (PC, instruction, data access addresses and widths). Public inputs: addresses, SP, return address and lengths; for ChaCha20 the counter; for decryption the verdict bit; for BLAKE2s `update` and `final` the number of bytes pending in the context, which is a function of the lengths absorbed. Keys, nonces, messages, scalars, points and the hash state are secret. `Blake2s.hash_constant_time` extends this to a whole `init; update*; final` sequence.
+- **Read bounds.** Every data read lies in the caller's inputs, the code or the function's stack window.
+- **Stack bounds.** At every step SP lies in `[sp0 - N, sp0]`, with N in bytes as in the table, including internal callees.
+
+Equal traces are a statement about the model. That equal traces take equal time on the chip is an assumption (the Cortex-M0+ has no cache or branch prediction), tested by cycle measurements on one MSPM0L2228, not proved. Proofs use kernel-checked abstract interpretation certificates in `Release/ConstantTime/`. For the trusted base and how to review these theorems, see [docs/REVIEW.md](docs/REVIEW.md).
 
 ## License
 

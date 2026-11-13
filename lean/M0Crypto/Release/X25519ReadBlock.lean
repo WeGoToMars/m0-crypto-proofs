@@ -2,7 +2,7 @@ import M0Crypto.Release.X25519Block
 import M0Crypto.Release.SymReadChk
 
 /-!
-Blocks with bounded reads (plan `x25519-proofs.md`, phase 10, sites).
+Blocks with bounded reads.
 
 `ReachR base Pc Wr R`: a `ReachW` whose every event also reads only bytes in `R`. The prologue of
 `m0c_x25519` is proved in this form with `R` the two inputs: its only reads are the byte loads

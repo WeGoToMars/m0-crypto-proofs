@@ -2,7 +2,7 @@ import M0Crypto.Thumb.ReleaseCheck.Cases
 import M0Crypto.Spec.Blake2s
 
 /-!
-Executable checks of the BLAKE2s entries of the release artifact (C1, C2 under the model).
+Executable checks of the BLAKE2s entries of the release artifact (hash and compress, under the model).
 
 A streaming case runs `init; update*; final` on one context, threading memory between the
 calls, and checks per call: the exact read and write ranges of the trace, `r4-r11` and `SP`

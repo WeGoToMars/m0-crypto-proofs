@@ -7,10 +7,10 @@ import M0Crypto.Release.X25519EntrySeg
 set_option linter.unusedSimpArgs false
 
 /-!
-The final multiplication and canonical reduction of `m0c_x25519` (plan `x25519-proofs.md`,
-phase 9, step 6): `finishAt oFinish` is `X2 = X2 * Z2` (a call), `add r0, sp, #X2`, and the
-inline `canon_body` on `X2`. From `oFinish` to `oStore`, the slot `X2` ends congruent to the
-product and below p, `r0` points at it, and the rest of the frame is unchanged.
+The final multiplication and canonical reduction of `m0c_x25519`: `finishAt oFinish` is
+`X2 = X2 * Z2` (a call), `add r0, sp, #X2`, and the inline `canon_body` on `X2`. From `oFinish`
+to `oStore`, the slot `X2` ends congruent to the product and below p, `r0` points at it, and the
+rest of the frame is unchanged.
 -/
 
 namespace M0Crypto.Release.X25519Finish

@@ -3,7 +3,7 @@ import M0Crypto.Release.X25519OpRun
 set_option linter.unusedSimpArgs false
 
 /-!
-The stack wipe of `m0c_x25519` (plan `x25519-proofs.md`, phase 9, step 6).
+The stack wipe of `m0c_x25519`.
 
 `wipe` is `sub sp, #CALLEE; movs r1-r5, #0; add r0, sp, #0` and `(LFRAME + CALLEE) / 20`
 copies of `stm r0!, {r1-r5}` (`X25519EntryCode.wipe`). `zeros_run_w` runs `n` copies of the

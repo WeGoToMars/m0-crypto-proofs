@@ -4,10 +4,9 @@ import M0Crypto.Release.X25519Congr
 /-!
 # Contracts of the X25519 field routines (internal)
 
-Not audited statements (owner decision O6): these are the contracts the entry's proof uses
+Not audited statements: these are the contracts the entry's proof uses
 for `m0c_fe_mul`, `m0c_fe_sqr` and `m0c_fe_mulc_add`, proved as ordinary lemmas. They are not
-callable from C. Source: `docs/design/x25519-freeze.md` (dev repository) section 4, "Internal
-contract of the three routines".
+callable from C.
 
 Each routine takes `r0 = dst`, `r1 = a`, `r2 = b` (`m0c_fe_sqr` ignores `b`): 8 little-endian
 words, any value below 2^256. The result is congruent modulo `p` to the routine's function of
@@ -16,9 +15,10 @@ scratch; SP is restored. The routine uses `frame` bytes below SP: 148 for multip
 square (`push {lr}` and a 144-byte frame), 4 for `mulc_add` (`push {lr}`).
 
 The routine's offset and byte size in the artifact are parameters here: the routines are not
-exported, and the release artifact names only exported functions. Phase 8 binds them to the
-code. The return address must lie outside the routine's bytes, not outside the artifact: every
-call comes from a `bl` in `m0c_x25519`.
+exported, and the release artifact names only exported functions. The routine proofs
+(`X25519FeMul`, `X25519FeSqr`, `X25519MulcAdd`) bind them to the code. The return address must lie
+outside the routine's bytes, not outside the artifact: every call comes from a `bl` in
+`m0c_x25519`.
 -/
 
 namespace M0Crypto.Release.X25519Routines

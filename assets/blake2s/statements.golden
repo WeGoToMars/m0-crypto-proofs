@@ -18,10 +18,11 @@ M0Crypto.Release.NonVacuity.final_pre_nonvacuous : M0Crypto.Release.Blake2s.Fina
   (M0Crypto.Release.NonVacuity.stOf M0Crypto.Release.NonVacuity.bufMem M0Crypto.Release.NonVacuity.fCtx.regs0)
 M0Crypto.Release.Blake2s.hash_correct : M0Crypto.Release.Blake2s.HashCorrect
 M0Crypto.Release.Blake2s.hash_constant_time : M0Crypto.Release.Blake2s.HashConstantTime
-M0Crypto.Release.NonVacuity.c1_nonvacuous : M0Crypto.Release.Blake2s.HashCorrectHyp M0Crypto.Release.NonVacuity.iCtx
+M0Crypto.Release.NonVacuity.hash_correct_nonvacuous : M0Crypto.Release.Blake2s.HashCorrectHyp
+  M0Crypto.Release.NonVacuity.iCtx
   (M0Crypto.Release.NonVacuity.stOf M0Crypto.Release.NonVacuity.bufMem M0Crypto.Release.NonVacuity.iCtx.regs0)
   [M0Crypto.Release.NonVacuity.stOf M0Crypto.Release.NonVacuity.bufMem M0Crypto.Release.NonVacuity.uCtx.regs0]
-M0Crypto.Release.NonVacuity.c4_nonvacuous : ∃ t0 w w',
+M0Crypto.Release.NonVacuity.hash_constant_time_nonvacuous : ∃ t0 w w',
   M0Crypto.Release.Blake2s.HashConstantTimeHyp M0Crypto.Release.NonVacuity.iCtx M0Crypto.Release.NonVacuity.iCtx
       (M0Crypto.Release.NonVacuity.stOf M0Crypto.Release.NonVacuity.bufMem M0Crypto.Release.NonVacuity.iCtx.regs0)
       (M0Crypto.Release.NonVacuity.stOf M0Crypto.Release.NonVacuity.bufMem M0Crypto.Release.NonVacuity.iCtx.regs0) t0 t0
@@ -339,6 +340,17 @@ def M0Crypto.Release.Blake2s.UpdatesReturn : M0Crypto.Armv6M.Word →
   fun base c x x_1 x_2 =>
   List.brecOn (motive := fun x => M0Crypto.Armv6M.Mem → (M0Crypto.Armv6M.Mem → Prop) → Prop) x_1
     (M0Crypto.Release.Blake2s.UpdatesReturn._f base c) x x_2
+unfold M0Crypto.Release.Blake2s.UpdatesReturn.eq_def : ∀ (base c : M0Crypto.Armv6M.Word) (x : M0Crypto.Armv6M.Mem) (x_1 : List M0Crypto.Armv6M.State)
+  (x_2 : M0Crypto.Armv6M.Mem → Prop),
+  M0Crypto.Release.Blake2s.UpdatesReturn base c x x_1 x_2 =
+    match x, x_1, x_2 with
+    | m, [], K => K m
+    | m, s :: rest, K =>
+      M0Crypto.Release.Blake2s.ContextKept c m s →
+        M0Crypto.Release.Blake2s.Update.EntryOn base c s →
+          ∃ fuel w tr,
+            M0Crypto.Thumb.runUntil (M0Crypto.Release.Blake2s.returnAddr s) fuel s = Except.ok (w, tr) ∧
+              M0Crypto.Release.Blake2s.UpdatesReturn base c w.mem rest K
 inductive M0Crypto.Release.Blake2s.HashCorrectHyp : M0Crypto.Release.Blake2s.Init.Ctx → M0Crypto.Armv6M.State → List M0Crypto.Armv6M.State → Prop
   | M0Crypto.Release.Blake2s.HashCorrectHyp.mk : ∀ {ci : M0Crypto.Release.Blake2s.Init.Ctx} {s0 : M0Crypto.Armv6M.State} {calls : List M0Crypto.Armv6M.State},
   M0Crypto.Release.Blake2s.Init.Pre ci s0 →
@@ -361,9 +373,24 @@ def M0Crypto.Release.Blake2s.UpdatesRan : M0Crypto.Armv6M.Word →
   M0Crypto.Armv6M.Word → M0Crypto.Armv6M.Mem → List (M0Crypto.Armv6M.State × M0Crypto.Armv6M.State) → Prop :=
   fun base c x x_1 =>
   List.brecOn (motive := fun x => M0Crypto.Armv6M.Mem → Prop) x_1 (M0Crypto.Release.Blake2s.UpdatesRan._f base c) x
+unfold M0Crypto.Release.Blake2s.UpdatesRan.eq_def : ∀ (base c : M0Crypto.Armv6M.Word) (x : M0Crypto.Armv6M.Mem)
+  (x_1 : List (M0Crypto.Armv6M.State × M0Crypto.Armv6M.State)),
+  M0Crypto.Release.Blake2s.UpdatesRan base c x x_1 =
+    match x, x_1 with
+    | x, [] => True
+    | m, (s, w) :: rest =>
+      M0Crypto.Release.Blake2s.ContextKept c m s ∧
+        M0Crypto.Release.Blake2s.Update.EntryOn base c s ∧
+          (∃ fuel tr, M0Crypto.Thumb.runUntil (M0Crypto.Release.Blake2s.returnAddr s) fuel s = Except.ok (w, tr)) ∧
+            M0Crypto.Release.Blake2s.UpdatesRan base c w.mem rest
 def M0Crypto.Release.Blake2s.lastMem : M0Crypto.Armv6M.Mem → List (M0Crypto.Armv6M.State × M0Crypto.Armv6M.State) → M0Crypto.Armv6M.Mem :=
   fun x x_1 =>
   List.brecOn (motive := fun x => M0Crypto.Armv6M.Mem → M0Crypto.Armv6M.Mem) x_1 M0Crypto.Release.Blake2s.lastMem._f x
+unfold M0Crypto.Release.Blake2s.lastMem.eq_def : ∀ (x : M0Crypto.Armv6M.Mem) (x_1 : List (M0Crypto.Armv6M.State × M0Crypto.Armv6M.State)),
+  M0Crypto.Release.Blake2s.lastMem x x_1 =
+    match x, x_1 with
+    | m, [] => m
+    | x, (fst, w) :: rest => M0Crypto.Release.Blake2s.lastMem w.mem rest
 def M0Crypto.Release.Blake2s.Update.pubAt : M0Crypto.Armv6M.State →
   M0Crypto.Armv6M.Word × M0Crypto.Armv6M.Word × M0Crypto.Armv6M.Word × M0Crypto.Armv6M.Word × M0Crypto.Armv6M.Word :=
   fun s => (s.regs 13, s.regs 14, s.regs 0, s.regs 1, s.regs 2)
@@ -531,6 +558,21 @@ def M0Crypto.Release.runStates : M0Crypto.Armv6M.Word →
   Nat.brecOn (motive := fun x =>
     M0Crypto.Armv6M.State → Except M0Crypto.Thumb.Fault (List M0Crypto.Armv6M.State × List M0Crypto.Thumb.Event)) x
     (M0Crypto.Release.runStates._f stop) x_1
+unfold M0Crypto.Release.runStates.eq_def : ∀ (stop : M0Crypto.Armv6M.Word) (x : Nat) (x_1 : M0Crypto.Armv6M.State),
+  M0Crypto.Release.runStates stop x x_1 =
+    match x, x_1 with
+    | fuel, s =>
+      if s.pc = stop then Except.ok ([s], [])
+      else
+        match fuel with
+        | 0 => Except.error M0Crypto.Thumb.Fault.fuel
+        | n.succ =>
+          match M0Crypto.Thumb.step s with
+          | Except.error e => Except.error e
+          | Except.ok (s', e) =>
+            match M0Crypto.Release.runStates stop n s' with
+            | Except.error e' => Except.error e'
+            | Except.ok (states, es) => Except.ok (s :: states, e :: es)
 def M0Crypto.Release.Frame.Disj : M0Crypto.Armv6M.Word → Nat → M0Crypto.Armv6M.Word → Nat → Prop :=
   fun a n b m =>
   BitVec.toNat a + n ≤ 2 ^ 32 ∧
@@ -595,6 +637,11 @@ def M0Crypto.Spec.Blake2s.rounds : Array M0Crypto.Spec.Blake2s.Word → Nat → 
   fun m x x_1 =>
   Nat.brecOn (motive := fun x => M0Crypto.Spec.Blake2s.Vec → M0Crypto.Spec.Blake2s.Vec) x
     (M0Crypto.Spec.Blake2s.rounds._f m) x_1
+unfold M0Crypto.Spec.Blake2s.rounds.eq_def : ∀ (m : Array M0Crypto.Spec.Blake2s.Word) (x : Nat) (x_1 : M0Crypto.Spec.Blake2s.Vec),
+  M0Crypto.Spec.Blake2s.rounds m x x_1 =
+    match x, x_1 with
+    | 0, v => v
+    | n.succ, v => M0Crypto.Spec.Blake2s.round (M0Crypto.Spec.Blake2s.rounds m n v) m n
 def M0Crypto.Spec.Blake2s.initVec : Array M0Crypto.Spec.Blake2s.Word → Nat → Bool → M0Crypto.Spec.Blake2s.Vec :=
   fun h t f =>
   have t0 := BitVec.ofNat 32 t;
@@ -614,6 +661,12 @@ def M0Crypto.Spec.Blake2s.wordOfBytes : M0Crypto.Spec.Blake2s.Byte →
     BitVec.setWidth 32 b3 <<< 24
 def M0Crypto.Spec.Blake2s.wordsOfBytes : List M0Crypto.Spec.Blake2s.Byte → List M0Crypto.Spec.Blake2s.Word :=
   fun x => List.brecOn x M0Crypto.Spec.Blake2s.wordsOfBytes._f
+unfold M0Crypto.Spec.Blake2s.wordsOfBytes.eq_def : ∀ (x : List M0Crypto.Spec.Blake2s.Byte),
+  M0Crypto.Spec.Blake2s.wordsOfBytes x =
+    match x with
+    | b0 :: b1 :: b2 :: b3 :: rest =>
+      M0Crypto.Spec.Blake2s.wordOfBytes b0 b1 b2 b3 :: M0Crypto.Spec.Blake2s.wordsOfBytes rest
+    | x => []
 def M0Crypto.Spec.Blake2s.bytesOfWord : M0Crypto.Spec.Blake2s.Word → List M0Crypto.Spec.Blake2s.Byte :=
   fun w => [BitVec.extractLsb' 0 8 w, BitVec.extractLsb' 8 8 w, BitVec.extractLsb' 16 8 w, BitVec.extractLsb' 24 8 w]
 def M0Crypto.Spec.Blake2s.pad : List M0Crypto.Spec.Blake2s.Byte → List M0Crypto.Spec.Blake2s.Byte :=
@@ -626,6 +679,13 @@ def M0Crypto.Spec.Blake2s.digestOf : Array M0Crypto.Spec.Blake2s.Word → List M
   fun h => List.flatMap M0Crypto.Spec.Blake2s.bytesOfWord (List.take 8 h.toList)
 def M0Crypto.Spec.Blake2s.loop : Array M0Crypto.Spec.Blake2s.Word → Nat → List M0Crypto.Spec.Blake2s.Byte → Array M0Crypto.Spec.Blake2s.Word :=
   fun h c msg => M0Crypto.Spec.Blake2s.loop._unary ⟨h, ⟨c, msg⟩⟩
+unfold M0Crypto.Spec.Blake2s.loop.eq_def : ∀ (h : Array M0Crypto.Spec.Blake2s.Word) (c : Nat) (msg : List M0Crypto.Spec.Blake2s.Byte),
+  M0Crypto.Spec.Blake2s.loop h c msg =
+    if hl : 64 < msg.length then
+      M0Crypto.Spec.Blake2s.loop
+        (M0Crypto.Spec.Blake2s.compress h (M0Crypto.Spec.Blake2s.blockWords (List.take 64 msg)) (c + 64) Bool.false)
+        (c + 64) (List.drop 64 msg)
+    else M0Crypto.Spec.Blake2s.compress h (M0Crypto.Spec.Blake2s.blockWords msg) (c + msg.length) Bool.true
 def M0Crypto.Spec.Blake2s.blake2s : List M0Crypto.Spec.Blake2s.Byte → List M0Crypto.Spec.Blake2s.Byte :=
   fun msg => M0Crypto.Spec.Blake2s.digestOf (M0Crypto.Spec.Blake2s.loop M0Crypto.Spec.Blake2s.h0 0 msg)
 inductive M0Crypto.Spec.Blake2s.State : Type
@@ -1006,12 +1066,22 @@ def M0Crypto.Thumb.storeWords : M0Crypto.Armv6M.Mem → M0Crypto.Armv6M.Word →
   fun m x x_1 =>
   List.brecOn (motive := fun x => M0Crypto.Armv6M.Mem → M0Crypto.Armv6M.Word → M0Crypto.Armv6M.Mem) x_1
     M0Crypto.Thumb.storeWords._f m x
+unfold M0Crypto.Thumb.storeWords.eq_def : ∀ (m : M0Crypto.Armv6M.Mem) (x : M0Crypto.Armv6M.Word) (x_1 : List M0Crypto.Armv6M.Word),
+  M0Crypto.Thumb.storeWords m x x_1 =
+    match x, x_1 with
+    | x, [] => m
+    | a, v :: vs => M0Crypto.Thumb.storeWords (M0Crypto.Armv6M.write32 m a v) (a + 4#32) vs
 def M0Crypto.Thumb.wordAccesses : M0Crypto.Thumb.Kind → M0Crypto.Armv6M.Word → Nat → List M0Crypto.Thumb.Access :=
   fun k a n => List.map (fun i => { kind := k, addr := a + BitVec.ofNat 32 (4 * i), width := 4 }) (List.range n)
 def M0Crypto.Thumb.loadRegs : M0Crypto.Armv6M.State → M0Crypto.Armv6M.Word → List M0Crypto.Armv6M.Reg → M0Crypto.Armv6M.State :=
   fun s x x_1 =>
   List.brecOn (motive := fun x => M0Crypto.Armv6M.State → M0Crypto.Armv6M.Word → M0Crypto.Armv6M.State) x_1
     M0Crypto.Thumb.loadRegs._f s x
+unfold M0Crypto.Thumb.loadRegs.eq_def : ∀ (s : M0Crypto.Armv6M.State) (x : M0Crypto.Armv6M.Word) (x_1 : List M0Crypto.Armv6M.Reg),
+  M0Crypto.Thumb.loadRegs s x x_1 =
+    match x, x_1 with
+    | x, [] => s
+    | a, r :: rs => M0Crypto.Thumb.loadRegs (s.setReg r (M0Crypto.Armv6M.read32 s.mem a)) (a + 4#32) rs
 def M0Crypto.Thumb.Instr.accesses : M0Crypto.Thumb.Instr → M0Crypto.Armv6M.State → List M0Crypto.Thumb.Access :=
   fun i s =>
   have pc := s.pc;
@@ -1177,6 +1247,21 @@ def M0Crypto.Thumb.runUntil : M0Crypto.Armv6M.Word →
   Nat.brecOn (motive := fun x =>
     M0Crypto.Armv6M.State → Except M0Crypto.Thumb.Fault (M0Crypto.Armv6M.State × List M0Crypto.Thumb.Event)) x
     (M0Crypto.Thumb.runUntil._f stop) x_1
+unfold M0Crypto.Thumb.runUntil.eq_def : ∀ (stop : M0Crypto.Armv6M.Word) (x : Nat) (x_1 : M0Crypto.Armv6M.State),
+  M0Crypto.Thumb.runUntil stop x x_1 =
+    match x, x_1 with
+    | fuel, s =>
+      if s.pc = stop then Except.ok (s, [])
+      else
+        match fuel with
+        | 0 => Except.error M0Crypto.Thumb.Fault.fuel
+        | n.succ =>
+          match M0Crypto.Thumb.step s with
+          | Except.error e => Except.error e
+          | Except.ok (s', e) =>
+            match M0Crypto.Thumb.runUntil stop n s' with
+            | Except.error e' => Except.error e'
+            | Except.ok (s'', es) => Except.ok (s'', e :: es)
 def M0Crypto.Thumb.CodeAt : M0Crypto.Armv6M.Mem → M0Crypto.Armv6M.Word → List (BitVec 8) → Prop :=
   fun m base bytes => ∀ (i : Nat) (h : i < bytes.length), m (base + BitVec.ofNat 32 i) = bytes[i]
 def M0Crypto.Thumb.Writes : List M0Crypto.Thumb.Access → M0Crypto.Armv6M.Word → Prop :=

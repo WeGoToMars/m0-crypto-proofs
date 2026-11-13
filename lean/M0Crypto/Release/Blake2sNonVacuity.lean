@@ -16,8 +16,8 @@ correctness theorem (`example`s below):
   block, compresses it and buffers the rest.
 * `final_pre_nonvacuous`: the digest of the buffered stream to an odd address.
 
-The composed claims have `c1_nonvacuous` (`HashCorrectHyp` at a concrete call) and
-`c4_nonvacuous` (`HashConstantTimeHyp` for two executions that differ in their message bytes).
+The composed claims have `hash_correct_nonvacuous` (`HashCorrectHyp` at a concrete call) and
+`hash_constant_time_nonvacuous` (`HashConstantTimeHyp` for two executions that differ in their message bytes).
 The internal compression has its own entry witness (`compress_entry_nonvacuous`), as does
 `copy` (`Blake2sCopy.copy_correct_nonvacuous`).
 -/
@@ -107,19 +107,19 @@ theorem compress_entry_nonvacuous :
 
 example := Blake2sCompress.compress_correct compress_entry_nonvacuous ret_out
 
-/-! ## C1 -/
+/-! ## `hash_correct` -/
 
 /-- The hypotheses of the composed `HashCorrect` hold for a concrete call: the `init` witness
 and the `update` call of `update_pre_nonvacuous`. (The premises inside `UpdatesReturn` are
 per-call obligations; `update_pre_nonvacuous` and `final_pre_nonvacuous` show them
 satisfiable.) -/
-theorem c1_nonvacuous :
+theorem hash_correct_nonvacuous :
     Blake2s.HashCorrectHyp iCtx (stOf bufMem iCtx.regs0) [stOf bufMem uCtx.regs0] :=
   ⟨init_pre_nonvacuous, by decide +kernel⟩
 
-example := Blake2s.hash_correct _ _ _ c1_nonvacuous
+example := Blake2s.hash_correct _ _ _ hash_correct_nonvacuous
 
-/-! ## C4: two executions with different message bytes
+/-! ## `hash_constant_time`: two executions with different message bytes
 
 Both executions run the `init` witness, then one `update` of three bytes at `msgBase`, then
 `final` to an odd address. They differ only in the message bytes (`msgA`, `msgB`), the
@@ -250,7 +250,7 @@ theorem update_then_final {t0 : State} (msg : List (BitVec 8)) (hl : msg.length 
 /-- The hypotheses of the composed `HashConstantTime` hold for two executions that differ in
 their secret input: the same `init`, then one `update` on `msgA` in the first and on `msgB` in
 the second (same address and length), then `final`. -/
-theorem c4_nonvacuous :
+theorem hash_constant_time_nonvacuous :
     ∃ t0 w w' : State,
       Blake2s.HashConstantTimeHyp iCtx iCtx (stOf bufMem iCtx.regs0) (stOf bufMem iCtx.regs0)
         t0 t0 (fState w.mem) (fState w'.mem) [(uState t0.mem msgA, w)] [(uState t0.mem msgB, w')] ∧

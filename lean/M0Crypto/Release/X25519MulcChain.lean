@@ -4,7 +4,7 @@ import M0Crypto.Release.X25519Frame
 set_option linter.unusedSimpArgs false
 
 /-!
-The carry chain of `m0c_fe_mulc_add` over words 0 to 6 (plan `x25519-proofs.md`, phase 8).
+The carry chain of `m0c_fe_mulc_add` over words 0 to 6.
 
 `Inv c q j k x`: before chain step `j`, the words `0..j-1` of `dst` hold the low words of the
 chain so far, the words from `j` still read as at entry (after `push`), the carry-in is in

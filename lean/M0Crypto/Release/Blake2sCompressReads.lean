@@ -49,7 +49,7 @@ theorem compress_hPR {base : Word} {s : State} (e : Entry base s) {fuel : Nat}
 
 /-- **Every byte `m0c_blake2s_compress` reads is in its stack window, the artifact, the block or
 the chain words.** -/
-theorem compress_reads {base : Word} {s : State} (e : Entry base s) (x : CtExtra base s)
+theorem compress_reads {base : Word} {s : State} (e : Entry base s) (x : ConstantTimeExtra base s)
     (hret : ∀ i < Artifacts.Release.size, s.regs 14 &&& ~~~1#32 ≠ base + BitVec.ofNat 32 i) :
     ∃ n, ∀ fuel, n ≤ fuel → ∃ t tr, Thumb.runUntil (s.regs 14 &&& ~~~1#32) fuel s = .ok (t, tr) ∧
       TraceSpec.ReadsFrom (fun y => ReadOk (params base s) b2cEnv y ∨ RR s y) tr := by

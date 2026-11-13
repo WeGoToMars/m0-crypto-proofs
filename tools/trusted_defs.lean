@@ -12,6 +12,12 @@ which imports the asset root `M0Crypto.Assets.*` and evaluates `report` on the a
 every theorem in `assets/ASSET/Audit.lean` except the non-vacuity witnesses (`*_nonvacuous`),
 whose witness values are checked by the kernel, not trusted. `tools/statements.sh` evaluates
 `printTrusted` on the same roots to print every trusted definition into `statements.golden`.
+A definition by structural or well-founded recursion is compiled to a term that only names its
+generated helpers (`Nat.brecOn … f._f`, `WellFounded.fix … f._unary`), which are not printed.
+For such a definition `printTrusted` also prints its unfolding theorem `f.eq_def`
+(`Lean.Meta.getUnfoldEqnFor?`), which Lean derives from the compiled definition and which states
+the body as written, recursive calls included. So the golden file changes whenever that body
+changes, as it does for a non-recursive definition.
 Output: one line per declaration, `module<TAB>first line<TAB>last line<TAB>kind<TAB>name`,
 then one `FILE` line per module with its number of declarations and source lines.
 docs/REVIEW.md section 3 names the files a reviewer reads; the `FILE` lines must name the same
@@ -84,7 +90,10 @@ def report (roots : List Name) : MetaM Unit := do
 inductive type of `M0Crypto` reached from the statements of `roots`, except the artifact module
 (its bytes are pinned by `tools/extract_release.py --check`) and compiler-generated helpers
 (matchers, recursion and constructor-index helpers, projections; they are part of what they
-belong to).
+belong to). A recursive definition is printed with its compiled value and then its unfolding
+theorem `f.eq_def`, the only place its body appears (the compiled value names the helper
+`f._f` or `f._unary` instead). `getUnfoldEqnFor? (nonRec := false)` returns none for a
+non-recursive definition, whose value already is its body.
 Ordered by module and source line. -/
 def printTrusted (roots : List Name) : MetaM Unit := do
   let env ← getEnv
@@ -109,7 +118,16 @@ def printTrusted (roots : List Name) : MetaM Unit := do
     let some ci := env.find? n | continue
     let ty ← ppExpr ci.type
     match ci with
-    | .defnInfo d => IO.println s!"def {n} : {ty} :=\n  {← ppExpr d.value}"
+    | .defnInfo d =>
+      IO.println s!"def {n} : {ty} :=\n  {← ppExpr d.value}"
+      if let some eq ← getUnfoldEqnFor? n (nonRec := false) then
+        IO.println s!"unfold {eq} : {← ppExpr (← getConstInfo eq).type}"
+      -- Fail closed: a value that goes through a generated helper definition of its own other
+      -- than a matcher (`n._f`, `n._unary`, ...) is recursive and must have had an unfolding
+      -- theorem above.
+      else if d.value.getUsedConstants.any fun c => c != n && n.isPrefixOf c && c.isInternalDetail
+          && !isMatcherCore env c && (env.find? c matches some (.defnInfo _)) then
+        throwError s!"{n} is compiled through a helper but has no unfolding theorem"
     | .opaqueInfo d => IO.println s!"opaque {n} : {ty} :=\n  {← ppExpr d.value}"
     | .axiomInfo _ => IO.println s!"axiom {n} : {ty}"
     | .inductInfo i =>

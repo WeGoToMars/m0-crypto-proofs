@@ -7,10 +7,9 @@ set_option linter.unusedSimpArgs false
 set_option linter.deprecated false
 
 /-!
-Step lemmas for the routine proofs of `m0c_fe_mul` and `m0c_fe_sqr` (plan `x25519-proofs.md`,
-phase 8), in continuation form over `Runs`: each takes the frame (`FrameOk` over 37 slots from
-`P`, SP at `P`) and hands the next state, the updated frame and the step's facts to the rest of
-the block.
+Step lemmas for the routine proofs of `m0c_fe_mul` and `m0c_fe_sqr`, in continuation form over
+`Runs`: each takes the frame (`FrameOk` over 37 slots from `P`, SP at `P`) and hands the next
+state, the updated frame and the step's facts to the rest of the block.
 
 * `cons`, `one`: a single instruction; a register-only one runs to `i.next s`.
 * `enter_step`: `push {lr}; sub sp, #144`, building the frame.

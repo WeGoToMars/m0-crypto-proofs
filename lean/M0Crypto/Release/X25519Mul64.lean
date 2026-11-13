@@ -8,7 +8,7 @@ import M0Crypto.Thumb.ReleaseCheck.X25519Cases
 set_option linter.unusedSimpArgs false
 
 /-!
-Macro `mul64` of the X25519 field routines (plan `x25519-proofs.md`, phase 7): one level of
+Macro `mul64` of the X25519 field routines: one level of
 Karatsuba with a signed middle term, `b1:a1:b0:a0 = (a1:a0) * (b1:b0)`.
 
 The macro is split as the generator writes it: `mul64Pre` (save `b0`, `b1` in two high
@@ -18,7 +18,7 @@ three `mul32`, two short register moves (`mul64Mid1`, `mul64Mid2`) and the carry
 names the operands of the inner macros: `generalize` takes them from the goal and the
 `_eq` forms of the step lemmas read them from the run equation, and register disequalities
 are closed by `regne`. So renaming the scratch registers of an inner `mul32`, or reordering
-independent instructions inside a piece, needs no edit here (phase 7 drills (a) and (b)).
+independent instructions inside a piece, needs no edit here.
 
 The value of the tail is `X25519Kara.mul64_tail_nat`; the middle term comes from
 `X25519Kara.cross`. `mul64_run_w` is the `ReachW` block lemma, generic in the registers and

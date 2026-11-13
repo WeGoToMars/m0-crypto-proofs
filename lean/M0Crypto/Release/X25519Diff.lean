@@ -4,7 +4,7 @@ import M0Crypto.Release.X25519W4
 set_option linter.unusedSimpArgs false
 
 /-!
-Macro `diff256` of `m0c_fe_mul` and `m0c_fe_sqr` (plan `x25519-proofs.md`, phase 8): load the
+Macro `diff256` of `m0c_fe_mul` and `m0c_fe_sqr`: load the
 pointer in a frame slot, load the 8 words `X` it points to, and store `|X0 - X1|` (4 words) at
 another frame slot; the mask of `X0 < X1` is left in `r0`. `X0` is words 0-3, `X1` words 4-7.
 

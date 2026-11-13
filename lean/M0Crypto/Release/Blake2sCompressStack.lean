@@ -20,7 +20,7 @@ open M0Crypto.Release
 open M0Crypto.Release.ConstantTime
 
 theorem compress_stack {base : Word} {s : State}
-    (e : Entry base s) (x : CtExtra base s)
+    (e : Entry base s) (x : ConstantTimeExtra base s)
     (hret : ∀ i < Artifacts.Release.size, s.regs 14 &&& ~~~1#32 ≠ base + BitVec.ofNat 32 i) :
     ∃ n, ∀ fuel, n ≤ fuel → ∃ states tr,
       M0Crypto.Release.runStates (s.regs 14 &&& ~~~1#32) fuel s = .ok (states, tr) ∧

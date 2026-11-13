@@ -13,6 +13,7 @@ Modules, namespaces and theorems follow one convention:
   - A `<Stem>Defs` file holds definitions split out of `<Stem>` so that other files can import them without waiting for its proofs. It shares `<Stem>`'s namespace.
 - Casing conventions: theorems are snake_case, Props and types are UpperCamelCase, and data is lowerCamelCase (acronyms are capitalized as words, e.g. `keyOk`). Each specification and theorem has one name without aliases.
 - Top-level theorems are `<Component>.<operation>_<property>`, with property one of `correct`, `constant_time`, `reads` or `stack`.
+- Exceptions among the claims: the composition claims `Aead.rejected_writes`, `Blake2s.hash_correct` and `Blake2s.hash_constant_time`, and the non-vacuity witnesses in namespace `NonVacuity`, which end in `_nonvacuous` but whose stems differ by asset (`xor_correct_nonvacuous`, `init_pre_nonvacuous`, `x25519_pre_nonvacuous`; `hash_correct_nonvacuous` and `hash_constant_time_nonvacuous` for the two BLAKE2s composition claims).
 - Lean defs that mirror an assembly macro keep the macro's name (`ach`, `mac4`, `narrow`, `colend`, `qr`, `dround`).
 
 Names changed after 0.1.0 without compatibility aliases; earlier commits (such as `e10ef67`) retain the old names.

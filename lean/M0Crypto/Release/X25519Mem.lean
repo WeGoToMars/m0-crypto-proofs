@@ -5,7 +5,7 @@ set_option linter.unusedSimpArgs false
 
 /-!
 Per-instruction effects of the loads, stores and flag-preserving instructions of the X25519
-field routines (plan `x25519-proofs.md`, phase 8): registers away from the PC, memory, and the
+field routines: registers away from the PC, memory, and the
 carry flag. One lemma per instruction form, generic in the registers, the list and the
 offset. `regs_ldm` gives a load-multiple by the index of the register in its list
 (`List.idxOf`), so a concrete list needs only `listRegs l` evaluated.

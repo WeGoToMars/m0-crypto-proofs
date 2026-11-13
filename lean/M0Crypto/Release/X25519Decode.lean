@@ -3,8 +3,7 @@ import M0Crypto.Release.X25519Val
 import M0Crypto.Spec.X25519
 
 /-!
-Bytes, words and scalar bits of the X25519 entry (plan phase 6, item 9, and the byte side of
-decoding and encoding).
+Bytes, words and scalar bits of the X25519 entry.
 
 * `leWord bs i`: the little-endian word that `load_le32` builds from bytes `4i` to `4i + 3`.
   `decodeScalar_val` and `decodeU_val` give the RFC decodings as `val` of the eight words,

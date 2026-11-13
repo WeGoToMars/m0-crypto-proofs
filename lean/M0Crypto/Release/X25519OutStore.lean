@@ -4,7 +4,7 @@ import M0Crypto.Release.X25519Decode
 set_option linter.unusedSimpArgs false
 
 /-!
-The output stores of `m0c_x25519` (plan `x25519-proofs.md`, phase 9, step 6).
+The output stores of `m0c_x25519`.
 
 `storeOut` is `ldr r2, [sp, #LV_OUT]` and eight word stores `storeLe32 r1 r0 r2 i (4i)`
 (`X25519EntryCode.storeOut`). `words_run_w` runs the first `n` word stores by induction on `n`,

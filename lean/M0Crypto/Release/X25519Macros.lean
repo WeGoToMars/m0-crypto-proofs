@@ -2,7 +2,7 @@ import M0Crypto.Release.X25519Sqr64
 
 /-!
 The three field routines of the X25519 release as instruction lists built from the
-generator's macros (plan `x25519-proofs.md`, phase 8). Every macro is a function of its
+generator's macros. Every macro is a function of its
 registers and frame slots, as in `bench/x25519/gen_x25519.py`; `mul64`, `sqr32` and `absdiff`
 come from `X25519Mul`/`X25519Mul64`/`X25519Sqr64`.
 

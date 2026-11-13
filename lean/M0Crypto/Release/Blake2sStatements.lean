@@ -10,11 +10,11 @@ context bytes alone. Each call is stated with the per-function vocabulary of
 state (`*.callAt`), and its obligations are that function's `Pre` for whatever stream the
 context holds (`*.EntryOn`).
 
-* `HashCorrect` (C1, total correctness): from a valid `init` call, `init` returns; then every
+* `HashCorrect` (total correctness): from a valid `init` call, `init` returns; then every
   `update` call meeting its obligations returns; then every `final` call meeting its
   obligations returns, and the 32 bytes at its output pointer are the RFC 7693 BLAKE2s-256
   digest of the concatenated inputs. No run is assumed.
-* `HashConstantTime` (C4, constant time): two executions whose calls have equal public inputs
+* `HashConstantTime` (constant time): two executions whose calls have equal public inputs
   (pointers, lengths, SP, LR) run every call with the same event trace, whatever the message
   bytes. The runs are hypotheses here; `HashCorrect` shows they exist.
 -/
@@ -56,7 +56,7 @@ def Final.EntryOn (base c : Word) (s : State) : Prop :=
   s.regs 0 = c ∧ ∀ st, ContextHolds s.mem c st → st.count + st.pending.length < 2 ^ 64 →
     Final.Pre (Final.callAt base st s) s
 
-/-! ## C1: total correctness -/
+/-! ## Total correctness -/
 
 /-- The `update` calls entered in the states `calls`, in order, on the context at `c`, starting
 from memory `m`, each return, and `K` holds of the memory after the last. Each call's entry is
@@ -73,7 +73,7 @@ structure HashCorrectHyp (ci : Init.Ctx) (s0 : State) (calls : List State) : Pro
   pre : Init.Pre ci s0
   lengthLt : (calls.map fun s => (s.regs 2).toNat).sum < 2 ^ 64
 
-/-- Claim C1 (total correctness of `init; update*; final`). -/
+/-- Composed claim (total correctness of `init; update*; final`). -/
 def HashCorrect : Prop :=
   ∀ ci s0 calls, HashCorrectHyp ci s0 calls →
     ∃ fuel t0 tr, Thumb.runUntil ci.ret fuel s0 = .ok (t0, tr) ∧
@@ -83,7 +83,7 @@ def HashCorrect : Prop :=
             bytesAt tf.mem (sf.regs 1) digestBytes =
               Spec.Blake2s.blake2s (calls.map inputAt).flatten
 
-/-! ## C4: constant time -/
+/-! ## Constant time -/
 
 /-- The `update` calls `calls` (entry state, returned state), in order, on the context at `c`,
 starting from memory `m`: each entry meets `update`'s obligations and runs to its return
@@ -129,7 +129,7 @@ structure HashConstantTimeHyp (ci ci' : Init.Ctx) (s0 s0' t0 t0' sf sf' : State)
   final' : Final.EntryOn ci.base ci.context sf'
   finalPub : Final.pubAt sf = Final.pubAt sf'
 
-/-- Claim C4 (equal event traces for equal public inputs, composed). -/
+/-- Composed claim (equal event traces for equal public inputs, composed). -/
 def HashConstantTime : Prop :=
   ∀ ci ci' s0 s0' t0 t0' sf sf' calls calls',
     HashConstantTimeHyp ci ci' s0 s0' t0 t0' sf sf' calls calls' →

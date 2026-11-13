@@ -6,7 +6,7 @@ set_option linter.unusedSimpArgs false
 # Byte loads and byte stores of `m0c_x25519`
 
 The entry reads `scalar` and `point` with the generator's `load_le32` and writes `out` with a
-four-byte store sequence (`bench/x25519/gen_x25519.py` in the dev repository):
+four-byte store sequence (`tools/gen_x25519.py` in the library):
 
 * `load_le32 rd, rt, rb, k`: `ldrb rd, [rb, #k]`, then for `i = 1, 2, 3`
   `ldrb rt, [rb, #k+i]; lsls rt, rt, #8i; orrs rd, rt`. `rd` ends as the little-endian word of the

@@ -8,7 +8,7 @@ import M0Crypto.Release.ConstantTime.RegionStores
 set_option linter.unusedSimpArgs false
 
 /-!
-Claims X4-X6 for `m0c_x25519` (plan `x25519-proofs.md`, phase 10): `x25519_constant_time`,
+The trace, read and stack claims for `m0c_x25519`: `x25519_constant_time`,
 `x25519_reads`, `x25519_stack`, each from `X25519.Pre` alone.
 
 The certificate (`ConstantTime/X25519Entry.lean`) tracks every access except the 64 byte loads

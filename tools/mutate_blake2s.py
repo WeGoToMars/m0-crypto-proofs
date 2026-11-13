@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Mutation check for the BLAKE2s release code (plan section 5, phase 10D).
+"""Mutation check for the BLAKE2s release code.
 
     python3 -I tools/mutate_blake2s.py [WORKDIR]      (default WORKDIR /tmp/m0c-mut-b2s)
 

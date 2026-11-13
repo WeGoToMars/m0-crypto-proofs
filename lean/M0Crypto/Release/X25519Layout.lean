@@ -1,7 +1,7 @@
 import M0Crypto.Release.X25519Contract
 
 /-!
-Frame layout of `m0c_x25519` (plan `x25519-proofs.md`, phase 9). This is the only place
+Frame layout of `m0c_x25519`. This is the only place
 that names stack offsets of the entry; it mirrors the layout section of
 `tools/gen_x25519.py`, and the instance checks of `X25519EntryCode` tie it to the bytes.
 

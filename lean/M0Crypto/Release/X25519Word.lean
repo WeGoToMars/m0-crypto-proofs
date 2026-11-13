@@ -1,7 +1,7 @@
 import M0Crypto.Armv6M.State
 
 /-!
-Word-level identities of the X25519 field routines (plan phase 6, items 2 and 5).
+Word-level identities of the X25519 field routines.
 
 Each lemma takes as hypotheses the equations a machine proof gets from one macro: the 16-bit
 halves, the 16x16 products, and one equation per `adds`/`adcs` (result plus `2^32` times the

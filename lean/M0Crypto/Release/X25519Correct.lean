@@ -8,7 +8,7 @@ import M0Crypto.Release.X25519Ev
 set_option linter.unusedSimpArgs false
 
 /-!
-Claims X1-X3 for `m0c_x25519` (plan `x25519-proofs.md`, phase 9, step 7): `x25519_correct`.
+The functional claim for `m0c_x25519`: `x25519_correct`.
 
 The run is composed from the segment lemmas in code order: prologue (`prologue_w`), the ladder
 over bits 254 to 3 (`loop_w`), the pending swap (`swap_w`), three doublings (`dbl_loop`), the
@@ -255,8 +255,8 @@ end M0Crypto.Release.X25519Correct
 
 namespace M0Crypto.Release.X25519
 
-/-- Claims X1-X3: every valid call of `m0c_x25519` returns with `Result` (RFC 7748 output in
-`out`, callee-saved registers and SP restored, r1-r3 and r12 zero, the 480 stack bytes below the
+/-- Every valid call of `m0c_x25519` returns with `Result` (RFC 7748 output in
+`out`, callee-saved registers and SP restored, r0-r3 and r12 zero, the 480 stack bytes below the
 saved registers zero) and writes
 only its stack window and `out`. -/
 theorem x25519_correct : Correct := X25519Correct.x25519_correct

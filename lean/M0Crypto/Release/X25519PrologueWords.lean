@@ -4,7 +4,7 @@ import M0Crypto.Release.X25519ReadBlock
 set_option linter.unusedSimpArgs false
 
 /-!
-The input loads of the prologue of `m0c_x25519` (plan `x25519-proofs.md`, phase 9, step 2).
+The input loads of the prologue of `m0c_x25519`.
 
 * `scalarWord_w`, `pointWord_w`: one word of the scalar (clamped) or of the u-coordinate
   (bit 255 masked), loaded with `X25519Bytes.loadLe32_run_w` and stored in the frame, for any

@@ -5,7 +5,7 @@ set_option linter.unusedSimpArgs false
 set_option linter.deprecated false
 
 /-!
-Pieces of the prologue proof of `m0c_x25519` (plan `x25519-proofs.md`, phase 9, step 2).
+Pieces of the prologue proof of `m0c_x25519`.
 
 * The input words as the code builds them: `kWords c` (the clamped scalar, `kWords_val`) and
   `uWords c` (u with bit 255 masked, `uWords_val`), both as `X25519Decode.words` of the input

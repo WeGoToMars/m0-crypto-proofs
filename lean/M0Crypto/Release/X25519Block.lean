@@ -2,7 +2,7 @@ import M0Crypto.Release.X25519Mem
 import M0Crypto.Release.ReachSteps
 
 /-!
-Blocks with memory accesses in `ReachW` proofs (plan `x25519-proofs.md`, phase 8).
+Blocks with memory accesses in `ReachW` proofs.
 
 `AccAll P is s`: every data access of the block's trace satisfies `P`. One statement gives both
 side conditions of `ReachW.block`: alignment (`alignedAll_of_acc`) and the write set

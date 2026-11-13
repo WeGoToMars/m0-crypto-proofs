@@ -9,7 +9,7 @@ private def check (r : Option String) : IO Unit :=
 private def cut (len k : Nat) : List Nat :=
   (List.range ((len + k - 1) / k)).map fun i => min k (len - i * k)
 
--- C1: lengths 71-200, one-shot and partitions 1, 17, 64
+-- hash: lengths 71-200, one-shot and partitions 1, 17, 64
 #eval do
   for len in List.range' 71 130 do
     for off in [0, 3] do

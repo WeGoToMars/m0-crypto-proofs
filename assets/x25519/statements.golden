@@ -59,9 +59,29 @@ def M0Crypto.Release.runStates : M0Crypto.Armv6M.Word →
   Nat.brecOn (motive := fun x =>
     M0Crypto.Armv6M.State → Except M0Crypto.Thumb.Fault (List M0Crypto.Armv6M.State × List M0Crypto.Thumb.Event)) x
     (M0Crypto.Release.runStates._f stop) x_1
+unfold M0Crypto.Release.runStates.eq_def : ∀ (stop : M0Crypto.Armv6M.Word) (x : Nat) (x_1 : M0Crypto.Armv6M.State),
+  M0Crypto.Release.runStates stop x x_1 =
+    match x, x_1 with
+    | fuel, s =>
+      if s.pc = stop then Except.ok ([s], [])
+      else
+        match fuel with
+        | 0 => Except.error M0Crypto.Thumb.Fault.fuel
+        | n.succ =>
+          match M0Crypto.Thumb.step s with
+          | Except.error e => Except.error e
+          | Except.ok (s', e) =>
+            match M0Crypto.Release.runStates stop n s' with
+            | Except.error e' => Except.error e'
+            | Except.ok (states, es) => Except.ok (s :: states, e :: es)
 def M0Crypto.Release.Frame.Ctx.bytesAt : M0Crypto.Armv6M.Mem → M0Crypto.Armv6M.Word → Nat → List (BitVec 8) :=
   fun m x x_1 =>
   Nat.brecOn (motive := fun x => M0Crypto.Armv6M.Word → List (BitVec 8)) x_1 (M0Crypto.Release.Frame.Ctx.bytesAt._f m) x
+unfold M0Crypto.Release.Frame.Ctx.bytesAt.eq_def : ∀ (m : M0Crypto.Armv6M.Mem) (x : M0Crypto.Armv6M.Word) (x_1 : Nat),
+  M0Crypto.Release.Frame.Ctx.bytesAt m x x_1 =
+    match x, x_1 with
+    | x, 0 => []
+    | a, n.succ => m a :: M0Crypto.Release.Frame.Ctx.bytesAt m (a + 1#32) n
 def M0Crypto.Release.Frame.Disj : M0Crypto.Armv6M.Word → Nat → M0Crypto.Armv6M.Word → Nat → Prop :=
   fun a n b m =>
   BitVec.toNat a + n ≤ 2 ^ 32 ∧
@@ -193,6 +213,11 @@ def M0Crypto.Spec.X25519.bits : Nat :=
   255
 def M0Crypto.Spec.X25519.decodeLittleEndian : List M0Crypto.Spec.X25519.Byte → Nat :=
   fun x => List.brecOn x M0Crypto.Spec.X25519.decodeLittleEndian._f
+unfold M0Crypto.Spec.X25519.decodeLittleEndian.eq_def : ∀ (x : List M0Crypto.Spec.X25519.Byte),
+  M0Crypto.Spec.X25519.decodeLittleEndian x =
+    match x with
+    | [] => 0
+    | b :: bs => BitVec.toNat b + 256 * M0Crypto.Spec.X25519.decodeLittleEndian bs
 def M0Crypto.Spec.X25519.decodeUCoordinate : List M0Crypto.Spec.X25519.Byte → Nat :=
   fun u => M0Crypto.Spec.X25519.decodeLittleEndian (u.set 31 (u.getD 31 0 &&& 127#8))
 def M0Crypto.Spec.X25519.decodeScalar25519 : List M0Crypto.Spec.X25519.Byte → Nat :=
@@ -604,12 +629,22 @@ def M0Crypto.Thumb.storeWords : M0Crypto.Armv6M.Mem → M0Crypto.Armv6M.Word →
   fun m x x_1 =>
   List.brecOn (motive := fun x => M0Crypto.Armv6M.Mem → M0Crypto.Armv6M.Word → M0Crypto.Armv6M.Mem) x_1
     M0Crypto.Thumb.storeWords._f m x
+unfold M0Crypto.Thumb.storeWords.eq_def : ∀ (m : M0Crypto.Armv6M.Mem) (x : M0Crypto.Armv6M.Word) (x_1 : List M0Crypto.Armv6M.Word),
+  M0Crypto.Thumb.storeWords m x x_1 =
+    match x, x_1 with
+    | x, [] => m
+    | a, v :: vs => M0Crypto.Thumb.storeWords (M0Crypto.Armv6M.write32 m a v) (a + 4#32) vs
 def M0Crypto.Thumb.wordAccesses : M0Crypto.Thumb.Kind → M0Crypto.Armv6M.Word → Nat → List M0Crypto.Thumb.Access :=
   fun k a n => List.map (fun i => { kind := k, addr := a + BitVec.ofNat 32 (4 * i), width := 4 }) (List.range n)
 def M0Crypto.Thumb.loadRegs : M0Crypto.Armv6M.State → M0Crypto.Armv6M.Word → List M0Crypto.Armv6M.Reg → M0Crypto.Armv6M.State :=
   fun s x x_1 =>
   List.brecOn (motive := fun x => M0Crypto.Armv6M.State → M0Crypto.Armv6M.Word → M0Crypto.Armv6M.State) x_1
     M0Crypto.Thumb.loadRegs._f s x
+unfold M0Crypto.Thumb.loadRegs.eq_def : ∀ (s : M0Crypto.Armv6M.State) (x : M0Crypto.Armv6M.Word) (x_1 : List M0Crypto.Armv6M.Reg),
+  M0Crypto.Thumb.loadRegs s x x_1 =
+    match x, x_1 with
+    | x, [] => s
+    | a, r :: rs => M0Crypto.Thumb.loadRegs (s.setReg r (M0Crypto.Armv6M.read32 s.mem a)) (a + 4#32) rs
 def M0Crypto.Thumb.Instr.accesses : M0Crypto.Thumb.Instr → M0Crypto.Armv6M.State → List M0Crypto.Thumb.Access :=
   fun i s =>
   have pc := s.pc;
@@ -775,6 +810,21 @@ def M0Crypto.Thumb.runUntil : M0Crypto.Armv6M.Word →
   Nat.brecOn (motive := fun x =>
     M0Crypto.Armv6M.State → Except M0Crypto.Thumb.Fault (M0Crypto.Armv6M.State × List M0Crypto.Thumb.Event)) x
     (M0Crypto.Thumb.runUntil._f stop) x_1
+unfold M0Crypto.Thumb.runUntil.eq_def : ∀ (stop : M0Crypto.Armv6M.Word) (x : Nat) (x_1 : M0Crypto.Armv6M.State),
+  M0Crypto.Thumb.runUntil stop x x_1 =
+    match x, x_1 with
+    | fuel, s =>
+      if s.pc = stop then Except.ok (s, [])
+      else
+        match fuel with
+        | 0 => Except.error M0Crypto.Thumb.Fault.fuel
+        | n.succ =>
+          match M0Crypto.Thumb.step s with
+          | Except.error e => Except.error e
+          | Except.ok (s', e) =>
+            match M0Crypto.Thumb.runUntil stop n s' with
+            | Except.error e' => Except.error e'
+            | Except.ok (s'', es) => Except.ok (s'', e :: es)
 def M0Crypto.Thumb.CodeAt : M0Crypto.Armv6M.Mem → M0Crypto.Armv6M.Word → List (BitVec 8) → Prop :=
   fun m base bytes => ∀ (i : Nat) (h : i < bytes.length), m (base + BitVec.ofNat 32 i) = bytes[i]
 def M0Crypto.Thumb.Writes : List M0Crypto.Thumb.Access → M0Crypto.Armv6M.Word → Prop :=

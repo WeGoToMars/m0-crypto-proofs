@@ -3,7 +3,7 @@ import M0Crypto.Release.X25519Comb
 set_option linter.unusedSimpArgs false
 
 /-!
-Macro `combine128sq` of `m0c_fe_sqr` (plan `x25519-proofs.md`, phase 8), the square case of
+Macro `combine128sq` of `m0c_fe_sqr`, the square case of
 `combine128`.
 
 On entry `r0`-`r3` hold `P = (aL - aH)^2`, always subtracted (the words are complemented and

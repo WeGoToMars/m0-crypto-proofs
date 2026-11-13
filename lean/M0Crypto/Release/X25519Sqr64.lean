@@ -3,7 +3,7 @@ import M0Crypto.Release.X25519Mul64
 set_option linter.unusedSimpArgs false
 
 /-!
-Macro `sqr64` of the X25519 field routines (plan `x25519-proofs.md`, phase 7): one level of
+Macro `sqr64` of the X25519 field routines: one level of
 Karatsuba squaring, `o3:a1:o1:a0 = (a1:a0)^2`.
 
 The macro is split as the generator writes it: the absolute difference `|a1 - a0|`

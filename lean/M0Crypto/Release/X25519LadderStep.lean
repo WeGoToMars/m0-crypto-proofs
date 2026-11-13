@@ -5,7 +5,7 @@ import M0Crypto.Release.X25519Ladder
 set_option linter.unusedSectionVars false
 
 /-!
-One Montgomery-ladder step of `m0c_x25519` (`X25519EntryCode.stepAt`, plan phase 9, step 3).
+One Montgomery-ladder step of `m0c_x25519` (`X25519EntryCode.stepAt`).
 
 `step_w` runs the step: the four sums and differences, the scalar-bit block `bitL`, the two
 selects with mask `-(swap ^ bit)`, and the thirteen remaining operations. `StepOut` gives the

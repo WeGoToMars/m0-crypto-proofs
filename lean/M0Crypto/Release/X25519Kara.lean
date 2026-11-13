@@ -1,5 +1,5 @@
 /-!
-Subtractive Karatsuba with explicit sign (plan phase 6, items 3 and 6).
+Subtractive Karatsuba with explicit sign.
 
 The field routines compute every product of two `2k`-bit numbers from three `k`-bit products:
 `a * b = lo + W * mid + W^2 * hi` with `W = 2^k`, `lo = a0 * b0`, `hi = a1 * b1`, and the

@@ -2,7 +2,7 @@ import M0Crypto.Release.FrameBase
 
 /-!
 The stack frame of the X25519 field routines as a function from word slots to words
-(plan `x25519-proofs.md`, phase 8).
+.
 
 `FrameOk fp n m0 F m`: the `n` words from `fp` read as `F`, and every byte outside them is as
 in `m0`. Stores into the frame update `F` (`write`, `storeWords`); words outside the frame

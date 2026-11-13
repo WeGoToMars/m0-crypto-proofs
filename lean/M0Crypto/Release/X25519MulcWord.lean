@@ -3,7 +3,7 @@ import M0Crypto.Release.X25519Block
 set_option linter.unusedSimpArgs false
 
 /-!
-Macro `word` of `m0c_fe_mulc_add` (`X25519Macros.mulcWord`; plan `x25519-proofs.md`, phase 8):
+Macro `word` of `m0c_fe_mulc_add` (`X25519Macros.mulcWord`):
 load `a[i]` through `r1` and `b[i]` through `r2`, and leave `121666 * a[i] + b[i] (+ k)` in
 `t` (low word) and `a` (high word), with `r7 = 60833` and `r6 = 0`.
 

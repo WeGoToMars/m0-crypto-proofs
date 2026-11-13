@@ -3,8 +3,7 @@ import M0Crypto.Release.X25519MulcStep
 set_option linter.unusedSimpArgs false
 
 /-!
-The straight-line pieces of `m0c_fe_mulc_add` around the chain (plan `x25519-proofs.md`,
-phase 8), each as a `ReachW` block lemma:
+The straight-line pieces of `m0c_fe_mulc_add` around the chain, each as a `ReachW` block lemma:
 
 * `pre`: `push {lr}; mov r12, r0; ldr r7, =60833; movs r6, #0` (`pre_run_w`; the literal's
   value is left as a read of the code word, which the routine proof evaluates);

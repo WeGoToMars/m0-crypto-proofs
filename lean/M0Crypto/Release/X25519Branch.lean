@@ -1,7 +1,7 @@
 import M0Crypto.Release.X25519OpRun
 
 /-!
-Branch targets of `m0c_x25519`'s loops at any offset (plan `x25519-proofs.md`, phase 11 E):
+Branch targets of `m0c_x25519`'s loops at any offset:
 the forward `b<cond>` over one 2-byte instruction (`bcTo c q (q + 4)`) and the backward `b`
 of up to 2044 bytes (`bTo (p + k) p`). With these the loop proofs never name a code offset.
 -/

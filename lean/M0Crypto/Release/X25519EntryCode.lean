@@ -6,7 +6,7 @@ import M0Crypto.Thumb.SeqScan
 set_option linter.deprecated false
 
 /-!
-The code of `m0c_x25519` as Lean lists (plan `x25519-proofs.md`, phase 9).
+The code of `m0c_x25519` as Lean lists.
 
 The lists follow `emit_x25519` of `tools/gen_x25519.py`. Field operations are `Op` values
 (`op(g, fn, d, a, b)` of the generator); `opsAt o ops` emits them from code offset `o`, so every

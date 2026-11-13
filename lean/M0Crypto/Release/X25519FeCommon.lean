@@ -6,8 +6,7 @@ set_option linter.unusedSimpArgs false
 set_option linter.deprecated false
 
 /-!
-Pieces shared by the routine proofs of `m0c_fe_mul` and `m0c_fe_sqr` (plan `x25519-proofs.md`,
-phase 8).
+Pieces shared by the routine proofs of `m0c_fe_mul` and `m0c_fe_sqr`.
 
 * Runs of the single memory instructions of the prologue and epilogue: `push {lr}`
   (`push_run`), `str rd, [sp, #4k]` (`strSp_run`), `ldr rd, [sp, #4k]` (`ldrSp_run`). The

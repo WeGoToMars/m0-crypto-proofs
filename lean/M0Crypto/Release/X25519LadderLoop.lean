@@ -7,8 +7,7 @@ import M0Crypto.Release.X25519Branch
 set_option linter.unusedSectionVars false
 
 /-!
-The ladder loop of `m0c_x25519` (`X25519EntryCode.ladderAt`, plan `x25519-proofs.md`, phase 9,
-step 3).
+The ladder loop of `m0c_x25519` (`X25519EntryCode.ladderAt`).
 
 `Inv` is the loop invariant at the head with counter `t` in `LV_T`: the swap word is the RFC
 `swap`, `X1` is `u`, the slots `X2, Z2, X3, Z3` match the RFC state (`X25519Ladder.Matches`)

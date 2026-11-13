@@ -1,7 +1,7 @@
 import M0Crypto.Release.X25519EntryCode
 
 /-!
-The segments of `m0c_x25519` at their offsets (plan `x25519-proofs.md`, phase 9).
+The segments of `m0c_x25519` at their offsets.
 
 Each `*_seg` lemma gives the `seqAt` of one segment of `X25519EntryCode.entryList` at its
 offset, from the single byte check `entry_at`, and `segs_end` orders the offsets up to the

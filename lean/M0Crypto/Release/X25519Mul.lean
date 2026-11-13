@@ -5,7 +5,7 @@ import M0Crypto.Release.X25519Word
 set_option linter.unusedSimpArgs false
 
 /-!
-The 32-bit multiply macros of the X25519 field routines (plan `x25519-proofs.md`, phase 7):
+The 32-bit multiply macros of the X25519 field routines:
 `mul32` and `sqr32` as instruction lists that mirror the generator
 (`bench/x25519/gen_x25519.py`), and their effect on a state.
 

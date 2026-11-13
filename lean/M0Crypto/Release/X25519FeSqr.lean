@@ -5,7 +5,7 @@ set_option linter.unusedSimpArgs false
 set_option linter.deprecated false
 
 /-!
-The contract of `m0c_fe_sqr` (plan `x25519-proofs.md`, phase 8):
+The contract of `m0c_fe_sqr`:
 `X25519Routines.SqrSpec feSqr feSqrSize`.
 
 The routine (`X25519Macros.feSqrList`) is `body` followed by `pop {pc}`. `body_runs` runs the

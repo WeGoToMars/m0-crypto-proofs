@@ -3,9 +3,8 @@ import M0Crypto.Release.X25519MulcWord
 set_option linter.unusedSimpArgs false
 
 /-!
-Macro step of the `m0c_fe_mulc_add` chain (`X25519Macros.mulcStep`; plan `x25519-proofs.md`,
-phase 8): one `word` with carry-in register `k` (low word in `r4`, high word in `a`), then
-`mov r5, r12; str r4, [r5, #4i]`.
+Macro step of the `m0c_fe_mulc_add` chain (`X25519Macros.mulcStep`): one `word` with carry-in
+register `k` (low word in `r4`, high word in `a`), then `mov r5, r12; str r4, [r5, #4i]`.
 
 `mulcStep_run_w` is generic in the word index `i` and the registers `k`, `a`: the store goes
 to word `i` from the pointer in `r12`, and the high word is left in `a` as the next carry-in.

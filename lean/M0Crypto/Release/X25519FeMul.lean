@@ -5,7 +5,7 @@ set_option linter.unusedSimpArgs false
 set_option linter.deprecated false
 
 /-!
-The contract of `m0c_fe_mul` (plan `x25519-proofs.md`, phase 8):
+The contract of `m0c_fe_mul`:
 `X25519Routines.MulSpec feMul feMulSize`.
 
 The routine (`X25519Macros.feMulList`) is `body` followed by `pop {pc}`. `body_runs` runs the

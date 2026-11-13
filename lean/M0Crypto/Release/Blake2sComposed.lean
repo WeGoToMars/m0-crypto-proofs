@@ -4,11 +4,11 @@ import M0Crypto.Release.Blake2sStatements
 set_option linter.unusedSimpArgs false
 
 /-!
-# The streaming hash composed: claims C1 and C4
+# The streaming hash composed: `hash_correct` and `hash_constant_time`
 
-`hash_correct` (C1) chains the per-function correctness claims: each call's `Result` gives the
+`hash_correct` chains the per-function correctness claims: each call's `Result` gives the
 stream the next call's context holds, and the digest follows from
-`Spec.Blake2s.stream_partition`. `hash_constant_time` (C4) chains the per-function
+`Spec.Blake2s.stream_partition`. `hash_constant_time` chains the per-function
 constant-time claims: the only stream-dependent public input, the number of pending bytes,
 depends on the input lengths alone (`absorb_pend`).
 -/
@@ -43,7 +43,7 @@ theorem Update.returns {c : Update.Ctx} {s w : State} {fuel : Nat} {tr : List Ev
   obtain ⟨w', _, hr, R, _⟩ := hn (max n fuel) (Nat.le_max_left _ _)
   rw [runUntil_unique hrun hr]; exact R
 
-/-! ## C1 -/
+/-! ## `hash_correct` -/
 
 /-- Every chain of `update` calls meeting their obligations returns, and the context then holds
 the stream with all inputs absorbed. -/
@@ -69,7 +69,7 @@ theorem updates_return {base c : Word} : ∀ (calls : List State) (m : Mem)
     · simp only [List.map_cons, List.foldl_cons, List.sum_cons] at h2 ⊢
       rw [h2, ht, inputAt_length]; omega
 
-/-- **Claim C1, total correctness.** From a valid `init` call, `init` returns; then every chain
+/-- **Total correctness.** From a valid `init` call, `init` returns; then every chain
 of `update` calls meeting their obligations returns; then every `final` call meeting its
 obligations returns, with the RFC 7693 BLAKE2s-256 digest of the concatenated inputs at its
 output pointer. -/
@@ -87,7 +87,7 @@ theorem hash_correct : HashCorrect := by
   obtain ⟨tf, trf, hruf, Rf, -⟩ := hnf nf (Nat.le_refl nf)
   exact ⟨nf, tf, trf, hruf, Rf.out.trans (Spec.Blake2s.stream_partition (calls.map inputAt))⟩
 
-/-! ## C4 -/
+/-! ## `hash_constant_time` -/
 
 theorem push_pend (st : Spec.Blake2s.State) (b : Byte) :
     (st.push b).pending.length = if st.pending.length = 64 then 1 else st.pending.length + 1 := by
@@ -172,7 +172,7 @@ theorem updates_trace {base c : Word} : ∀ (calls calls' : List (State × State
       (absorb_pend _ _ _ _ hl hp) (by rw [ht, inputAt_length]; omega)
       (by rw [ht', inputAt_length]; omega) hpubr]
 
-/-- **Claim C4, constant time composed.** Two executions of `init; update*; final` whose calls
+/-- **Constant time, composed.** Two executions of `init; update*; final` whose calls
 have equal public inputs (pointers, lengths, SP, LR), call by call, run every call with the
 same event trace, whatever the message bytes. -/
 theorem hash_constant_time : HashConstantTime := by

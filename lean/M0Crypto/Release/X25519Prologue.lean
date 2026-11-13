@@ -3,7 +3,7 @@ import M0Crypto.Release.X25519PrologueWords
 set_option linter.unusedSimpArgs false
 
 /-!
-The prologue of `m0c_x25519` (plan `x25519-proofs.md`, phase 9, step 2).
+The prologue of `m0c_x25519`.
 
 `prologue_w`: from an entry state satisfying `X25519.Pre c s`, the segment
 `X25519EntryCode.prologue` (register save, scalar words, point words, initial ladder state)

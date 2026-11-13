@@ -17,7 +17,7 @@ end M0Crypto.Release.X25519.Ctx
 namespace M0Crypto.Release.TraceSpec
 
 /-!
-# X25519 trace, read and stack specifications (claims X4-X6)
+# X25519 trace, read and stack specifications
 
 Statement file: definitions only. Each assumes a valid call (`X25519.Pre`), the hypothesis of
 `X25519.x25519_correct`. The read model and stack window are in `TraceSpec`.
