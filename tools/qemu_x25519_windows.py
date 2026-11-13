@@ -46,8 +46,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 LIB = Path(os.environ.get("M0C_LIB", ROOT.parent)).resolve()
-LLVM = Path(os.environ.get("LLVM_BIN", "/opt/homebrew/opt/llvm/bin"))
-LLD = Path(os.environ.get("LLD_BIN", "/opt/homebrew/opt/lld/bin"))
 RAM = (0x20000000, 0x4000)   # QEMU "microbit": 16 KiB of RAM
 
 # Reuse the gdb client of tools/qemu_steps.py (loaded by path: `python3 -I` does not put the
@@ -97,7 +95,7 @@ def cbytes(h):
 def text_of(obj):
     """The .text bytes of the release object (what build/lib/x25519/text.bin holds)."""
     with tempfile.NamedTemporaryFile(suffix=".bin") as f:
-        run([LLVM / "llvm-objcopy", "-O", "binary", "-j", ".text", obj, f.name])
+        run(["llvm-objcopy", "-O", "binary", "-j", ".text", obj, f.name])
         return Path(f.name).read_bytes()
 
 
@@ -109,15 +107,15 @@ def build_image(obj, work):
              "-ffreestanding", "-fno-builtin", "-fno-unwind-tables",
              "-fno-asynchronous-unwind-tables", "-nostdlib", "-Wall", "-Werror"]
     for src in (LIB / "tests" / "startup.S", drv):
-        run([LLVM / "clang"] + flags + ["-c", src, "-o", work / (src.name + ".o")])
+        run(["clang"] + flags + ["-c", src, "-o", work / (src.name + ".o")])
     elf = work / "x25519_windows.elf"
-    run([LLD / "ld.lld", "-T", LIB / "tests" / "microbit.ld", "--build-id=none", "-o", elf,
+    run(["ld.lld", "-T", LIB / "tests" / "microbit.ld", "--build-id=none", "-o", elf,
          work / "startup.S.o", obj, work / "x25519_driver.c.o"])
     return elf
 
 
 def sized_symbols(elf):
-    out = run([LLVM / "llvm-nm", "-S", "--defined-only", elf])
+    out = run(["llvm-nm", "-S", "--defined-only", elf])
     syms = {}
     for line in out.splitlines():
         f = line.split()
@@ -132,7 +130,7 @@ LINE = re.compile(r"^\s*([0-9a-f]+):\s+((?:[0-9a-f]{4,8} )+)\s*\t(\S+)(?:\t(.*))
 
 
 def disasm(elf, start, size):
-    out = run([LLVM / "llvm-objdump", "-d", "--triple=thumbv6m-none-eabi",
+    out = run(["llvm-objdump", "-d", "--triple=thumbv6m-none-eabi",
                f"--start-address={start:#x}", f"--stop-address={start + size:#x}", elf])
     ins = []
     for line in out.splitlines():

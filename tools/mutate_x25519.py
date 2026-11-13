@@ -53,7 +53,6 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))   # python3 -I leaves the script directory out
 from native_check import native_check
 LIB = os.path.abspath(os.environ.get("M0C_LIB", os.path.join(ROOT, "..")))
-LLVM = os.environ.get("M0C_LLVM_BIN", "/opt/homebrew/opt/llvm/bin")
 CASES = os.path.join(ROOT, "lean", "M0Crypto", "Thumb", "ReleaseCheck", "X25519Cases.lean")
 WS = os.path.join("assets", "x25519")
 REL = os.path.join(WS, "artifact", "M0Crypto", "Artifacts", "Release.lean")
@@ -150,8 +149,7 @@ MUTANTS = [
 
 
 def tool(name):
-    p = os.path.join(LLVM, name)
-    return p if os.path.exists(p) else shutil.which(name) or sys.exit(f"{name} not found")
+    return shutil.which(name) or sys.exit(f"{name} not found")
 
 
 def run(cmd, cwd=None, env=None, timeout=None):

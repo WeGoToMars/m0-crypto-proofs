@@ -2,14 +2,12 @@
 # Assemble and link the proof kernels with pinned LLVM tools.
 #
 # Usage: tools/build.sh            (writes build/<stem>.elf for each kernel)
-# Override tool locations with LLVM_BIN=/path/to/llvm/bin and LLD_BIN=/path/to/lld/bin.
+# clang and ld.lld come from PATH.
 set -eu
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-LLVM_BIN=${LLVM_BIN:-/opt/homebrew/opt/llvm/bin}
-LLD_BIN=${LLD_BIN:-/opt/homebrew/opt/lld/bin}
-CLANG="$LLVM_BIN/clang"
-LLD="$LLD_BIN/ld.lld"
+CLANG=clang
+LLD=ld.lld
 
 # Pinned versions (see tools/versions.txt). Refuse to build with anything else.
 EXPECT_CLANG=$(sed -n 's/^clang=//p' "$ROOT/tools/versions.txt")

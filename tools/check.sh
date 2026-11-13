@@ -24,7 +24,6 @@ for a in $ASSETS; do
     case " $ALL_ASSETS " in *" $a "*) ;; *) echo "usage: tools/check.sh [$ALL_ASSETS]" >&2; exit 2 ;; esac
 done
 has() { case " $ASSETS " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
-LLVM_BIN=${LLVM_BIN:-/opt/homebrew/opt/llvm/bin}
 PATH="$HOME/.elan/bin:$PATH"
 KERNELS=$(grep -v '^#' tools/kernels.txt | grep .)
 artifact_path() { echo "lean/$(echo "$1" | tr . /).lean"; }
@@ -61,7 +60,7 @@ TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 for insn in "ror r0, r0, #3" "add.w r0, r0, r1" "eor r0, r1, r2" "cbz r0, ."; do
     printf '.syntax unified\n.thumb\n%s\n' "$insn" > "$TMP/bad.S"
-    if "$LLVM_BIN/clang" --target=thumbv6m-none-eabi -mcpu=cortex-m0plus -mthumb \
+    if clang --target=thumbv6m-none-eabi -mcpu=cortex-m0plus -mthumb \
         -c "$TMP/bad.S" -o "$TMP/bad.o" 2>/dev/null; then
         echo "FAIL: assembler accepted '$insn'" >&2
         exit 1
@@ -85,7 +84,7 @@ done
 
 echo "== 4b. model decoder agrees with llvm-objdump on every release instruction"
 for a in $ASSETS; do
-    python3 -I tools/check_listing.py "$LLVM_BIN/llvm-objdump" "$LIB/build/lib/$a/m0crypto_$a.o" "$a"
+    python3 -I tools/check_listing.py llvm-objdump "$LIB/build/lib/$a/m0crypto_$a.o" "$a"
 done
 
 if has chacha20poly1305; then
@@ -141,26 +140,26 @@ grep -E 'peak stack|RESULT' "$TMP/qemu.txt"
 echo "== 7b. machine model agrees with QEMU after every instruction of sampled calls"
 FIRST=${ASSETS%% *}
 if has chacha20poly1305; then
-    python3 -I tools/qemu_steps.py chacha20poly1305 "${QEMU:-qemu-system-arm}" "$LLVM_BIN/llvm-nm" \
+    python3 -I tools/qemu_steps.py chacha20poly1305 "${QEMU:-qemu-system-arm}" llvm-nm \
         "$LIB/build/lib/chacha20poly1305/text.bin" \
         "$LIB/build/test/test_chacha20.elf" m0c_chacha20_xor \
         "$LIB/build/test/test_aead.elf" m0c_chacha20poly1305_encrypt,m0c_chacha20poly1305_decrypt
 fi
 if has blake2s; then
-    python3 -I tools/qemu_steps.py blake2s "${QEMU:-qemu-system-arm}" "$LLVM_BIN/llvm-nm" \
+    python3 -I tools/qemu_steps.py blake2s "${QEMU:-qemu-system-arm}" llvm-nm \
         "$LIB/build/lib/blake2s/text.bin" \
         "$LIB/build/test/test_blake2s.elf" m0c_blake2s_init,m0c_blake2s_update,m0c_blake2s_final
 fi
 # SBCS has no traced release call short enough to single-step, so a fixture covers it:
 # carry in and out 0 and 1, signed overflow, zero, Rdn = Rm.
 for src in fixtures/sbcs_steps.S "$LIB/tests/startup.S"; do
-    "$LLVM_BIN/clang" --target=thumbv6m-none-eabi -mcpu=cortex-m0plus -mthumb \
+    clang --target=thumbv6m-none-eabi -mcpu=cortex-m0plus -mthumb \
         -c "$src" -o "$TMP/$(basename "$src").o"
 done
-"${LLD_BIN:-/opt/homebrew/opt/lld/bin}/ld.lld" -T "$LIB/tests/microbit.ld" --build-id=none \
+ld.lld -T "$LIB/tests/microbit.ld" --build-id=none \
     -o "$TMP/sbcs.elf" "$TMP/startup.S.o" "$TMP/sbcs_steps.S.o"
-"$LLVM_BIN/llvm-objcopy" -O binary -j .text.sbcs_fixture "$TMP/sbcs_steps.S.o" "$TMP/sbcs.bin"
-python3 -I tools/qemu_steps.py "$FIRST" "${QEMU:-qemu-system-arm}" "$LLVM_BIN/llvm-nm" "$TMP/sbcs.bin" \
+llvm-objcopy -O binary -j .text.sbcs_fixture "$TMP/sbcs_steps.S.o" "$TMP/sbcs.bin"
+python3 -I tools/qemu_steps.py "$FIRST" "${QEMU:-qemu-system-arm}" llvm-nm "$TMP/sbcs.bin" \
     "$TMP/sbcs.elf" sbcs_fixture
 # A whole m0c_x25519 call is about three million instructions: sampled windows instead
 # (prologue, one ladder step, each loop exit, epilogue).
@@ -172,7 +171,7 @@ fi
 if has chacha20poly1305; then
 echo "== 8. diagnostic disassembly (not part of the trusted chain)"
 echo "$KERNELS" | while read -r stem _symbol _module; do
-    "$LLVM_BIN/llvm-objdump" -d --triple=thumbv6m-none-eabi "build/$stem.elf" | sed -n '/<m0c_/,$p' | head -24
+    llvm-objdump -d --triple=thumbv6m-none-eabi "build/$stem.elf" | sed -n '/<m0c_/,$p' | head -24
     echo "..."
 done
 
