@@ -19,12 +19,13 @@ open M0Crypto.Release.Frame
 open M0Crypto.Release.ConstantTime (PCBetween)
 open M0Crypto.Spec.Aead (pad16 macData chacha20)
 
-theorem encrypt_reach_r {Rd : Word → Prop} (c : ACall) (hv : AValid c) (hb : ABuf c) (s : State)
+theorem encrypt_reach_r {Rd Kn : Word → Prop} (c : ACall) (hv : AValid c) (hb : ABuf c) (s : State)
     (he : AEntry c encOff s) (hlr : (c.regs0 14).getLsbD 0 = true)
-    (hsub : ∀ y, TraceSpec.AeadEncryptReadRegion c y → Rd y) :
-    ReachS c.base (RdP c.base Rd) s (EncryptResult c) := by
+    (hsub : ∀ y, AeadSiteRegion c siteLen y ∨ Region c.out c.len.toNat y → Rd y)
+    (hkn : ∀ y, AeadSiteRegion c copyLen y → Kn y) :
+    ReachS c.base (RdP c.base Rd Kn) s (EncryptResult c) := by
   have hn : ∀ pc, NoSite c.base pc → ¬ SiteRd c.base pc := fun _ h => h
-  have hsubC : ∀ y, AeadCommonReadRegion c y → Rd y := fun y h => hsub y (.common h)
+  have hsubC : ∀ y, AeadSiteRegion c siteLen y → Rd y := fun y h => hsub y (.inl h)
   have hblk := rd_blk c hsubC
   obtain ⟨spro, blx, scopy, bli, scrypt, blc, laad, maat, lout, mcat, slen, bll, sf, blf,
     sca, scl, bcl, sepi, pop⟩ := enc_at
@@ -32,7 +33,7 @@ theorem encrypt_reach_r {Rd : Word → Prop} (c : ACall) (hv : AValid c) (hb : A
   apply ReachS.bind
   apply (aead_setup_r (Rd := Rd) c hv encOff (blImm (encOff + proXorOff) xorOff) (blImm (encOff + initCallOff) initOff)
     spro blx tx scopy bli ti' (by decide) (by decide) s he (region_ns (by decide +kernel) (by decide)) (pt_ns (by decide +kernel) (by decide)) (region_ns (by decide +kernel) (by decide)) (pt_ns (by decide +kernel) (by decide))
-    (not_pcBetween (by decide) (by decide) (Or.inr (by decide))) hsubC).mono (fun _ _ h => h)
+    (not_pcBetween (by decide) (by decide) (Or.inr (by decide))) hsubC hkn).mono (fun _ _ h => h)
   rintro u ⟨ic, hu⟩
   have bu := hu.body hv
   have pi := PInv.init c.A ic u hu.init hu.ictx
@@ -42,7 +43,7 @@ theorem encrypt_reach_r {Rd : Word → Prop} (c : ACall) (hv : AValid c) (hb : A
     (fun j hj => not_siteRd (by have := (by decide : encCryptAt + seqSize crypt < 2 ^ 32); omega)
       (no_readSite (by decide +kernel : firstReadSite encCryptAt (seqSize crypt) = none) j hj))
     (pt_ns (by decide +kernel) (by decide))
-    (not_pcBetween (by decide) (by decide) (Or.inr (by decide))) hsubC).mono (fun _ _ h => h)
+    (not_pcBetween (by decide) (by decide) (Or.inr (by decide))) hsubC hkn).mono (fun _ _ h => h)
   intro v hv'
   have bv := bu.crypt hv hb hv'
   have pv : PInv c.A u.mem [] v.mem := pi.congr (fun j hj => by
@@ -58,7 +59,7 @@ theorem encrypt_reach_r {Rd : Word → Prop} (c : ACall) (hv : AValid c) (hb : A
     v hv'.pc c.aad c.alen hb.aadS bv.high.aad bv.high.alen bv u.mem [] pv
     (fun y h => .inl (macWr_swr _ y h))
     (region_ns (by decide +kernel) (by decide)) (macFree_of_first (by decide +kernel))
-    (fun o ho => hsub _ (.aad ho rfl)) hblk).mono (fun _ _ h => h)
+    (fun o ho => hsubC _ (.aad ho rfl)) hblk).mono (fun _ _ h => h)
   intro w hw
   have pw : PInv c.A u.mem (c.aadB ++ pad16 c.aadB) w.mem := by
     have h := hw.inv; rw [aadV, List.nil_append] at h; exact h
@@ -70,7 +71,7 @@ theorem encrypt_reach_r {Rd : Word → Prop} (c : ACall) (hv : AValid c) (hb : A
     w hw.pc c.out c.len hb.outStack hw.body.high.out hw.body.high.len hw.body
     u.mem _ pw (fun y h => .inl (macWr_swr _ y h))
     (region_ns (by decide +kernel) (by decide)) (macFree_of_first (by decide +kernel))
-    (fun o ho => hsub _ (.out ho rfl)) hblk).mono (fun _ _ h => h)
+    (fun o ho => hsub _ (.inr (Region.mk ho rfl))) hblk).mono (fun _ _ h => h)
   intro x hx
   let ct := chacha20 c.keyB 1 c.nonceB c.ptB
   have px : PInv c.A u.mem ((c.aadB ++ pad16 c.aadB) ++ (ct ++ pad16 ct)) x.mem := by

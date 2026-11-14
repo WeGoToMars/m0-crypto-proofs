@@ -127,7 +127,7 @@ theorem _root_.M0Crypto.Release.ChaCha20Xor.xor_reads : TraceSpec.ChaCha20XorRea
         · have hoff := certPoint_loadSite chacha20_loadFailure hm hp hl
           have hsite : ChaCha20Policy.SitePC c.base u.pc :=
             ⟨off, by simpa [siteB] using hoff, by simpa using hlow.pc⟩
-          exact (hallowed a ha q hq).2 hk hsite
+          exact ((hallowed a ha q hq).2 hk hsite).1
         · have hl' : loadSite st i = false := by simpa using hl
           exact readOk_chaChaRd c (xfer_reads i hlow hx hsize hv.base4 hnowrap hl' a ha hk q hq)
     · exact absurd hpc hne

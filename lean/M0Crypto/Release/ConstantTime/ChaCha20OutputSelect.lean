@@ -18,22 +18,35 @@ theorem post_output_functional_accesses (xc : Frame.Ctx) (hv : Frame.Valid xc)
   apply bout_events xc hv block t h (OutputAccess xc) ?_ ?_ ?_ (ChaCha20Output.Out xc block)
   · intro u hu
     exact ReachEvents.done hu
-  · intro hlen i hi u _ hsp hin hout
+  · intro hlen i hi u hpc hsp hin hout
     intro e he a ha q hq
     cases hk : a.kind with
     | read =>
-      exact aligned_chunk_reads_contract xc block i u hi hsp hin (by omega) e he _
-        ⟨a, ha, hk, q, hq, rfl⟩
+      have hy : Reads e.accesses (a.addr + BitVec.ofNat 32 q) := ⟨a, ha, hk, q, hq, rfl⟩
+      obtain ⟨jp, hjp, hepc⟩ := macro_pc (by simp [ach, Instr.falls]) hpc e he
+      have hjp' : jp < achSize := by simpa [achSize, ach, seqSize, Instr.size] using hjp
+      have hb := ach_offsets hi hjp'
+      have h2 := (ach_offsets (j := 2) hi (by decide)).1
+      have h0 := (ach_offsets (j := 0) hi (by decide)).1
+      refine ⟨aligned_chunk_reads_contract xc block i u hi hsp hin (by omega) e he _ hy,
+        by rw [hepc]; exact not_knPC_of_ge (by omega) hb.1, fun hl => ?_⟩
+      rcases aligned_chunk_read_pcs u i hi e he _ hy with hp | hp | ⟨q', hq', hy'⟩
+      · rw [hp, hpc] at hl
+        exact absurd hl (not_inputLoadPC (by simpa using h0) hb.2.1)
+      · rw [hp, hpc, ofNat_add_assoc] at hl
+        exact absurd hl (not_inputLoadPC h2 hb.2.2)
+      · refine Region.mk (o := 64 * block + 4 * i + q') (by omega) ?_
+        rw [hy', hin, ofNat_add_assoc, ofNat_add_assoc, Nat.add_assoc]
     | write =>
       have hw := chacha20_chunk_writes_output xc hv block i u hi hout (by omega) e he _
         ⟨a, ha, hk, q, hq, rfl⟩
       exact ⟨Or.inr hw, fun _ => hw⟩
   · intro i hi u hpc hsp
     exact byte_prepare_contract_policy xc u i hi hsp hpc
-  · intro N hN hlen p hp u _ _ h0 hin hout hsp
+  · intro N hN hlen p hp u hpcb _ h0 hin hout hsp
     have hpval : (u.regs 0).toNat = p := by
       rw [h0, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
-    apply byte_tail_contract_policy xc hv block u hin hsp hout
+    apply byte_tail_contract_policy xc hv block u hpcb hin hsp hout
     · rw [hpval]; omega
     · rw [hpval]; omega
 

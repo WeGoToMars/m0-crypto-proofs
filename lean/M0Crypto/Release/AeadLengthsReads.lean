@@ -16,7 +16,7 @@ open M0Crypto.Release.Frame
 open M0Crypto.Release.Poly1305Blocks (BCtx BValid BEntry BResult accAt keyAt keyAtOK wordAt)
 open M0Crypto.Spec.Aead (p leBytes)
 
-theorem lengths_reach_r {Rd : Word → Prop} (c : ACall) (hv : AValid c) (off : Nat) (i : BitVec 25)
+theorem lengths_reach_r {Rd Kn : Word → Prop} (c : ACall) (hv : AValid c) (off : Nat) (i : BitVec 25)
     (hseq : seqAt B off lengths = true) (hbl : instrAt B (off + seqSize lengths) = some (.bl i))
     (ht : blTarget (off + seqSize lengths) i = BitVec.ofNat 32 blocksOff)
     (ho : off % 2 = 0) (hox : off + seqSize lengths + blSize ≤ Artifacts.Release.size)
@@ -25,7 +25,7 @@ theorem lengths_reach_r {Rd : Word → Prop} (c : ACall) (hv : AValid c) (off : 
     (hp : PInv c.A ti msg s.mem)
     (hrg : InRegion (NoSite c.base) c.base off (seqSize lengths + blSize))
     (hR : ∀ o < 16, Rd (c.A + 72#32 + BitVec.ofNat 32 o)) :
-    ReachS c.base (RdP c.base Rd) s (LengthPost c off ti msg s) := by
+    ReachS c.base (RdP c.base Rd Kn) s (LengthPost c off ti msg s) := by
   have hb2 : c.base.toNat % 2 = 0 := by have := hv.base4; omega
   have he : MacEnv c.base c.A c.base 0#32 s.mem := hv.macEnv
     (disj_mono (hv.win hv.codeS 0 320 _ (by rw [hv.lo]; omega) (by decide)) (by decide)) hc
@@ -34,7 +34,7 @@ theorem lengths_reach_r {Rd : Word → Prop} (c : ACall) (hv : AValid c) (off : 
   have hB := blSize_eq
   rw [h13, hh.alen, hh.len] at em
   rw [h13] at e0 e1
-  apply ReachS.blockW (Pn := NoSite c.base) (Wr := MacWr c.A) (is := lengths) (noP c.base Rd) (hrg.prefix (by decide)) hb2 hpc ho hseq (by decide)
+  apply ReachS.blockW (Pn := NoSite c.base) (Wr := MacWr c.A) (is := lengths) (noP c.base Rd Kn) (hrg.prefix (by decide)) hb2 hpc ho hseq (by decide)
     (alignedAll_sp _ _ (sp_al (by decide)) (by rw [h13]; have := he.a8; omega))
     (by
       intro e he' y hy
@@ -51,7 +51,7 @@ theorem lengths_reach_r {Rd : Word → Prop} (c : ACall) (hv : AValid c) (off : 
   generalize hu : execAll lengths s = u at em e0 e1 e2 e3 er
   have upc : u.pc = c.base + BitVec.ofNat 32 (off + seqSize lengths) := by
     rw [← hu, execAll_pc _ _ (by decide), hpc, ofNat_add_assoc]
-  apply ReachS.blW (Pn := NoSite c.base) (Wr := MacWr c.A) (noP c.base Rd) (off := off + seqSize lengths) (hrg.at (a := seqSize lengths) (by decide)) hb2 blocksOff i upc (by omega) hbl (by omega) ht
+  apply ReachS.blW (Pn := NoSite c.base) (Wr := MacWr c.A) (noP c.base Rd Kn) (off := off + seqSize lengths) (hrg.at (a := seqSize lengths) (by decide)) hb2 blocksOff i upc (by omega) hbl (by omega) ht
   generalize hx : (u.setReg 14 ((c.base + BitVec.ofNat 32 (off + seqSize lengths + 4)) ||| 1#32)).setReg 15
     (c.base + BitVec.ofNat 32 blocksOff) = x
   have xr : ∀ r : Reg, r.val ≠ 14 → r.val ≠ 15 → x.regs r = u.regs r := fun r a b => by
@@ -82,7 +82,7 @@ theorem lengths_reach_r {Rd : Word → Prop} (c : ACall) (hv : AValid c) (off : 
     by change x.regs 0 = c.A + 8#32; rw [xr 0 (by decide) (by decide), e0], by change x.regs 1 = c.A + 72#32; rw [xr 1 (by decide) (by decide), e1],
     by change x.regs 2 = 1#32; rw [xr 2 (by decide) (by decide), e2], by change x.regs 3 = 1#32; rw [xr 3 (by decide) (by decide), e3]⟩
   have hlr : (bc.regs0 14).getLsbD 0 = true := by show (x.regs 14).getLsbD 0 = true; rw [x14]; exact lr_odd _
-  apply (Poly1305Blocks.blocks_reach_r bc bv Rd x be hlr (by intro o ho; change o < 16 * 1 at ho; exact hR o (by omega))).mono (fun _ _ h => h)
+  apply (Poly1305Blocks.blocks_reach_r bc bv Rd Kn x be hlr (by intro o ho; change o < 16 * 1 at ho; exact hR o (by omega))).mono (fun _ _ h => h)
   intro t ht'
   have tf : ∀ y, ¬ MacWr c.A y → t.mem y = s.mem y := fun y hy => by
     rw [Poly1305Blocks.result_frame bc bv x t be hlr ht' y (fun h => hy (bwr_mac c.A bc rfl rfl y h))]

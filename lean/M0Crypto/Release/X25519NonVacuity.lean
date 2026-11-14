@@ -2,6 +2,7 @@ import M0Crypto.Release.NonVacuityBase
 import M0Crypto.Release.X25519Correct
 import M0Crypto.Spec.X25519Vectors
 import M0Crypto.Release.X25519TraceSpec
+import M0Crypto.Release.X25519Trace
 
 /-!
 # Non-vacuity of the X25519 entry contract
@@ -9,6 +10,9 @@ import M0Crypto.Release.X25519TraceSpec
 `x25519_pre_nonvacuous`: `out` is `point`, at an odd address, and `scalar` is unaligned, on
 RFC 7748 vector 1; passed to `x25519_correct`. `x25519_constant_time_nonvacuous`: that call and
 the same call with the scalar of vector 2, the two calls `x25519_constant_time` assumes.
+`x25519_interrupted_nonvacuous`: the first call with 256 bytes of handler room and a handler
+that zeroes them and increments a byte outside the call's regions; passed to
+`x25519_interrupted`.
 -/
 
 namespace M0Crypto.Release.NonVacuity
@@ -56,5 +60,35 @@ theorem x25519_constant_time_nonvacuous :
       xCtx.pub = xCtx2.pub ∧ xCtx.scalarB ≠ xCtx2.scalarB :=
   ⟨x25519_pre_nonvacuous, by x25519_witness, by simp only [X25519.Ctx.pub, xCtx2],
     by decide +kernel⟩
+
+/-! ## Interrupts: 256 bytes of handler room below the stack window -/
+
+/-- The call of `x25519_pre_nonvacuous` with 256 bytes of handler room, and a handler that
+zeroes the 256 bytes below SP and increments the byte at 0x20002000, as `x25519_interrupted`
+assumes them. -/
+theorem x25519_interrupted_nonvacuous :
+    X25519.Pre xCtx (stOf xMem xCtx.regs0) ∧
+      TraceSpec.HandlerRoom 256 X25519.stackBytes xCtx.sp0
+        (fun y => TraceSpec.X25519ReadRegion xCtx y ∨ X25519.WrOk xCtx y) ∧
+      TraceSpec.Handlers 256 (fun y => TraceSpec.X25519ReadRegion xCtx y ∨ X25519.WrOk xCtx y)
+        (tickBelowSp 256 0x20002000#32) := by
+  refine ⟨x25519_pre_nonvacuous, interruptWitness_of [(xCtx.scalar, 32), (xCtx.point, 32),
+    (xCtx.base, Artifacts.Release.size), (xCtx.fp, X25519.stackBytes), (xCtx.out, 32)] ?_ ?_ ?_⟩
+  · simp only [xCtx, X25519.stackBytes, sp0]
+    decide
+  · intro y hy
+    rcases hy with (h | h | h | h) | (h | h)
+    · exact ⟨_, .head _, h⟩
+    · exact ⟨_, .tail _ (.head _), h⟩
+    · exact ⟨_, .tail _ (.tail _ (.head _)), h⟩
+    · exact ⟨_, .tail _ (.tail _ (.tail _ (.head _))), h⟩
+    · exact ⟨_, .tail _ (.tail _ (.tail _ (.head _))), h⟩
+    · exact ⟨_, .tail _ (.tail _ (.tail _ (.tail _ (.head _)))), h⟩
+  · simp only [List.forall_mem_cons, List.not_mem_nil, false_imp_iff, implies_true, and_true,
+      Disj, X25519.Ctx.fp, xCtx, X25519.stackBytes, sp0, Artifacts.Release.size]
+    decide +kernel
+
+example := X25519.x25519_interrupted 256 _ _ x25519_interrupted_nonvacuous.1
+  x25519_interrupted_nonvacuous.2.1 _ x25519_interrupted_nonvacuous.2.2
 
 end M0Crypto.Release.NonVacuity

@@ -33,9 +33,12 @@ by an output-store instruction lies in the output range of the call. -/
 def StorePolicy (c : Ctx) (pc : Word) (kind : Kind) (y : Word) : Prop :=
   kind = .read ∨ (c.Wr y ∧ (OutputStorePC c.base pc → c.oidx y < c.len.toNat))
 
-/-- The store policy, plus: loads made at caller-memory load instructions read readable bytes. -/
+/-- The store policy, plus: loads made at caller-memory load instructions read readable bytes,
+the key and nonce loads read the key or nonce, and the input loads read the input. -/
 def RdPolicy (c : Ctx) (pc : Word) (kind : Kind) (y : Word) : Prop :=
-  StorePolicy c pc kind y ∧ (kind = .read → ChaCha20Policy.SitePC c.base pc → TraceSpec.ChaCha20XorReadRegion c y)
+  StorePolicy c pc kind y ∧ (kind = .read → ChaCha20Policy.SitePC c.base pc →
+    TraceSpec.ChaCha20XorReadRegion c y ∧ (ChaCha20Policy.KNPC c.base pc → ChaCha20Init.KNRd c y) ∧
+    (InputLoadPC c.base pc → Region c.inp c.len.toNat y))
 
 theorem rdPolicy_of_nonSite (c : Ctx) {pc : Word} {kind : Kind} {y : Word}
     (hs : ¬ ChaCha20Policy.SitePC c.base pc) (hns : ¬ OutputStorePC c.base pc)
@@ -62,7 +65,13 @@ theorem admitsSite_rd (c : Ctx) :
     ChaCha20Policy.AdmitsSite c.base c.Wr (ChaCha20Init.KNRd c) (RdPolicy c) := by
   intro pc kind y hpc hw hr
   cases kind with
-  | read => exact ⟨Or.inl rfl, fun _ _ => knRd_chaChaRd c (hr rfl)⟩
+  | read =>
+    refine ⟨Or.inl rfl, fun _ _ => ⟨knRd_chaChaRd c (hr rfl), fun _ => hr rfl, fun hl => ?_⟩⟩
+    obtain ⟨o, ho, rfl⟩ := hl
+    obtain ⟨o', ho', e⟩ := ChaCha20Policy.knPC_before hpc
+    have hb := inputLoadOff_bounds o ho
+    have := ChaCha20Policy.pc_off_inj hb.2.2 (by have := ChaCha20Policy.site_order; omega) e
+    omega
   | write =>
     exact ⟨Or.inr ⟨hw rfl, fun hs => absurd hs (before_output_not_store c.base pc (ChaCha20Policy.knPC_before hpc))⟩,
       fun h => by cases h⟩
@@ -98,7 +107,8 @@ theorem block_events (c : Ctx) (hv : Valid c) (k : Nat) (t : State) (h : BlockIn
       (before_output_not_store c.base e.pc (ChaCha20Policy.pcBefore_of_between hp)) hw
   · intro e he a ha q hq
     have h := hpolicy e he a ha q hq
-    exact ⟨storePolicy_of_output c h, fun hk _ => by rw [hk] at h; exact h⟩
+    exact ⟨storePolicy_of_output c h, fun hk _ => by
+      rw [hk] at h; exact ⟨h.1, fun hkn => absurd hkn h.2.1, h.2.2⟩⟩
   · intro e he a ha q hq
     obtain ⟨hp, hw⟩ := hafter e he a ha q hq
     exact rdPolicy_of_nonSite c (ChaCha20Policy.not_sitePC_back hp) (after_output_not_store c.base e.pc hp) hw

@@ -4,6 +4,8 @@ import M0Crypto.Release.ConstantTime.EntryReads
 import M0Crypto.Release.ConstantTime.ReachableWindow
 import M0Crypto.Release.ConstantTime.SiteCheck
 import M0Crypto.Release.ConstantTime.RegionStores
+import M0Crypto.Release.ConstantTime.HolesRun
+import M0Crypto.Release.ConstantTime.X25519Holes
 
 set_option linter.unusedSimpArgs false
 
@@ -32,17 +34,6 @@ open M0Crypto.Release
 open M0Crypto.Release.X25519Code (AtSite loadSites storeSites)
 open M0Crypto.Release.X25519Ev (Ev)
 open M0Crypto.Release.X25519Prologue (InpR)
-
-/-- The event of a step is at the PC of its pre-state. -/
-theorem step_ev_pc {s t : State} {e : Event} (h : step s = .ok (t, e)) : e.pc = s.pc := by
-  unfold step at h; simp only at h
-  split at h; · cases h
-  split at h; · cases h
-  split at h
-  · split at h
-    · simp only [Except.ok.injEq, Prod.mk.injEq] at h; rw [← h.2]
-    · cases h
-  · cases h
 
 section
 variable {c : X25519.Ctx} {s : State} (hp : X25519.Pre c s) {fuel : Nat} {states : List State}
@@ -181,5 +172,54 @@ theorem _root_.M0Crypto.Release.X25519.x25519_stack : TraceSpec.X25519Stack := b
       x25519_certAligned x25519_slotsCheck x25519_win_width (x25519_code_stack_disjoint hv)
       x25519_env_size (x25519_base4 hv) (x25519_code_no_wrap hv) (x25519_lr hp)
       (x25519_hlocal hp hrun s) (x25519_entry_reachable hp hp rfl) (runStates_beforeStop hrun u hu) hpc
+
+/-- Every run of a valid call keeps the stack discipline, and each of its states before the
+return is at an instruction of the artifact. -/
+theorem x25519_run_discipline {c : X25519.Ctx} {s : State} (hp : X25519.Pre c s) :
+    ∃ n, ∀ fuel, n ≤ fuel → ∃ states tr, runStates c.ret fuel s = .ok (states, tr) ∧
+      TraceSpec.StackDiscipline c.sp0 X25519.stackBytes states tr ∧
+      ∀ (k : Nat) (u : State), states[k]? = some u → u.pc ≠ c.ret →
+        Interrupt.CodePos c.base Artifacts.Release.bytes u := by
+  have hv := hp.valid
+  obtain ⟨n, hn⟩ := X25519.x25519_correct c s hp
+  refine ⟨n, fun fuel hf => ?_⟩
+  obtain ⟨t, tr, ht, -, -⟩ := hn fuel hf
+  obtain ⟨states, hrun, -, -⟩ := runStates_of_runUntil ht
+  refine ⟨states, tr, hrun, ?_⟩
+  have hsp : s.regs 13 = (x25519Params c).sp0 := by
+    rw [hp.entry.regs]; exact hp.entry.sp
+  exact certificate_run_discipline x25519_certOk x25519_indicesFailure_eq_none x25519_certAligned
+    x25519_slotsCheck x25519_win_width (x25519_code_stack_disjoint hv) x25519_env_size
+    (x25519_base4 hv) (x25519_code_no_wrap hv) (x25519_lr hp) (x25519_hlocal hp hrun s)
+    (x25519_entry_reachable hp hp rfl) hsp x25519_loadFailure (InpR c)
+    (fun u t ev h1 h2 h3 off h4 h5 i h6 h7 y h8 =>
+      Or.inl (x25519_load_site hp hrun u t ev h1 h2 h3 off h4 h5 i h6 h7 y h8))
+    (fun y hy => by
+      rcases hy with hy | hy
+      · exact not_region_of_disj hv.scalarS hy
+      · exact not_region_of_disj hv.pointS hy)
+    x25519_holes hrun
+
+/-- **`m0c_x25519` keeps the stack discipline below its entry SP.** -/
+theorem _root_.M0Crypto.Release.X25519.x25519_stack_discipline :
+    TraceSpec.X25519StackDiscipline := by
+  intro c s hp
+  obtain ⟨n, hn⟩ := x25519_run_discipline hp
+  exact ⟨n, fun fuel hf => by
+    obtain ⟨states, tr, hr, hd, -⟩ := hn fuel hf
+    exact ⟨states, tr, hr, hd⟩⟩
+
+/-- **`m0c_x25519` with interrupts.** -/
+theorem _root_.M0Crypto.Release.X25519.x25519_interrupted : TraceSpec.X25519Interrupted := by
+  intro K c s hp
+  have hv := hp.valid
+  refine Interrupt.interruptedCall_of (fun y hy => ?_) ?_ (X25519.x25519_reads c s hp)
+    (X25519.x25519_stack c s hp) (x25519_run_discipline hp)
+  · rw [Artifacts.Release.bytes_length] at hy
+    exact ⟨Or.inr (Or.inr (Or.inl hy)), not_region_of_disj hv.codeS hy⟩
+  · obtain ⟨n, hn⟩ := X25519.x25519_correct c s hp
+    exact ⟨n, fun fuel hf => by
+      obtain ⟨t, tr, ht, hr, -⟩ := hn fuel hf
+      exact ⟨t, tr, ht, hr⟩⟩
 
 end M0Crypto.Release.ConstantTime

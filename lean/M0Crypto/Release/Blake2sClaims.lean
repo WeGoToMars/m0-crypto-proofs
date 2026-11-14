@@ -3,6 +3,8 @@ import M0Crypto.Release.Blake2sHash
 import M0Crypto.Release.Blake2sInitConstantTime
 import M0Crypto.Release.Blake2sUpdateReads
 import M0Crypto.Release.Blake2sFinalReads
+import M0Crypto.Release.Blake2sDiscipline
+import M0Crypto.Release.Interrupt
 
 /-!
 # The BLAKE2s per-function claims, in the standard form
@@ -187,6 +189,35 @@ theorem init_stack : TraceSpec.Blake2sInitStack := by
   rw [h.regs13] at this
   exact this
 
+/-- `init` stack discipline: stack accesses below the entry SP lie at or above SP, and every
+stack byte read was written since SP last moved to or below it. -/
+theorem init_stack_discipline : TraceSpec.Blake2sInitStackDiscipline := by
+  intro c s h
+  obtain ⟨n, hn⟩ := Blake2sInit.init_discipline_of_entry h.toEntry h.retNe
+  refine ⟨n, fun fuel hf => ?_⟩
+  obtain ⟨states, tr, hru, hs⟩ := hn fuel hf
+  rw [h.ret_eq] at hru
+  rw [h.regs13] at hs
+  exact ⟨states, tr, hru, hs.1⟩
+
+/-- `init` with interrupts. -/
+theorem init_interrupted : TraceSpec.Blake2sInitInterrupted := by
+  intro K c s h
+  refine Interrupt.interruptedCall_of (base := c.base) (bytes := Artifacts.Release.bytes)
+    (fun y hy => ?_) ?_ (init_reads c s h) (init_stack c s h) ?_
+  · rw [Artifacts.Release.bytes_length] at hy
+    exact ⟨Or.inl hy, ConstantTime.not_region_of_disj h.valid.codeS hy⟩
+  · obtain ⟨n, hn⟩ := init_correct c s h
+    exact ⟨n, fun fuel hf => by
+      obtain ⟨t, tr, hru, hr, -⟩ := hn fuel hf
+      exact ⟨t, tr, hru, hr⟩⟩
+  · obtain ⟨n, hn⟩ := Blake2sInit.init_discipline_of_entry h.toEntry h.retNe
+    refine ⟨n, fun fuel hf => ?_⟩
+    obtain ⟨states, tr, hru, hs, hp⟩ := hn fuel hf
+    rw [h.ret_eq] at hru hp
+    rw [h.regs13] at hs
+    exact ⟨states, tr, hru, hs, hp⟩
+
 end M0Crypto.Release.Blake2s.Init
 
 /-! ## `m0c_blake2s_update` -/
@@ -313,6 +344,36 @@ theorem update_stack : TraceSpec.Blake2sUpdateStack := by
   rw [h.regs13] at this
   exact this
 
+/-- `update` stack discipline: stack accesses below the entry SP lie at or above SP, and every
+stack byte read was written since SP last moved to or below it. -/
+theorem update_stack_discipline : TraceSpec.Blake2sUpdateStackDiscipline := by
+  intro c s h
+  obtain ⟨n, hn⟩ := Blake2sUpdate.update_discipline_of_entry h.toEntry h.retNe
+  refine ⟨n, fun fuel hf => ?_⟩
+  obtain ⟨states, tr, hru, hs⟩ := hn fuel hf
+  rw [h.ret_eq] at hru
+  rw [h.regs13] at hs
+  exact ⟨states, tr, hru, hs.1⟩
+
+/-- `update` with interrupts. -/
+theorem update_interrupted : TraceSpec.Blake2sUpdateInterrupted := by
+  intro K c s h
+  refine Interrupt.interruptedCall_of (base := c.base) (bytes := Artifacts.Release.bytes)
+    (fun y hy => ?_) ?_ (update_reads c s h) (update_stack c s h) ?_
+  · rw [Artifacts.Release.bytes_length] at hy
+    exact ⟨Or.inr (Or.inr (Or.inl hy)), ConstantTime.not_region_of_disj h.valid.codeS hy⟩
+  · obtain ⟨_, hc⟩ := update_correct
+    obtain ⟨n, hn⟩ := hc c s h
+    exact ⟨n, fun fuel hf => by
+      obtain ⟨t, tr, hru, hr, -⟩ := hn fuel hf
+      exact ⟨t, tr, hru, hr⟩⟩
+  · obtain ⟨n, hn⟩ := Blake2sUpdate.update_discipline_of_entry h.toEntry h.retNe
+    refine ⟨n, fun fuel hf => ?_⟩
+    obtain ⟨states, tr, hru, hs, hp⟩ := hn fuel hf
+    rw [h.ret_eq] at hru hp
+    rw [h.regs13] at hs
+    exact ⟨states, tr, hru, hs, hp⟩
+
 end M0Crypto.Release.Blake2s.Update
 
 /-! ## `m0c_blake2s_final` -/
@@ -429,5 +490,35 @@ theorem final_stack : TraceSpec.Blake2sFinalStack := by
   have := hs u hu
   rw [h.regs13] at this
   exact this
+
+/-- `final` stack discipline: stack accesses below the entry SP lie at or above SP, and every
+stack byte read was written since SP last moved to or below it. -/
+theorem final_stack_discipline : TraceSpec.Blake2sFinalStackDiscipline := by
+  intro c s h
+  obtain ⟨n, hn⟩ := Blake2sFinal.final_discipline_of_entry h.toEntry h.retNe
+  refine ⟨n, fun fuel hf => ?_⟩
+  obtain ⟨states, tr, hru, hs⟩ := hn fuel hf
+  rw [h.ret_eq] at hru
+  rw [h.regs13] at hs
+  exact ⟨states, tr, hru, hs.1⟩
+
+/-- `final` with interrupts. -/
+theorem final_interrupted : TraceSpec.Blake2sFinalInterrupted := by
+  intro K c s h
+  refine Interrupt.interruptedCall_of (base := c.base) (bytes := Artifacts.Release.bytes)
+    (fun y hy => ?_) ?_ (final_reads c s h) (final_stack c s h) ?_
+  · rw [Artifacts.Release.bytes_length] at hy
+    exact ⟨Or.inr (Or.inl hy), ConstantTime.not_region_of_disj h.valid.codeS hy⟩
+  · obtain ⟨_, hc⟩ := final_correct
+    obtain ⟨n, hn⟩ := hc c s h
+    exact ⟨n, fun fuel hf => by
+      obtain ⟨t, tr, hru, hr, -⟩ := hn fuel hf
+      exact ⟨t, tr, hru, hr⟩⟩
+  · obtain ⟨n, hn⟩ := Blake2sFinal.final_discipline_of_entry h.toEntry h.retNe
+    refine ⟨n, fun fuel hf => ?_⟩
+    obtain ⟨states, tr, hru, hs, hp⟩ := hn fuel hf
+    rw [h.ret_eq] at hru hp
+    rw [h.regs13] at hs
+    exact ⟨states, tr, hru, hs, hp⟩
 
 end M0Crypto.Release.Blake2s.Final

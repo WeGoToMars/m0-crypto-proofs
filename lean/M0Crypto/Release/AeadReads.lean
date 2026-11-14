@@ -52,7 +52,7 @@ to itself. A load through a non-stack address is at a read site (`certLoadFailur
 policy bounds the address; every other read is a stack or code read bounded by the certificate's
 window check. -/
 theorem reads_of_recorded {env : Env} {cert : Cert} {entry : Nat} {init : AbsState}
-    (c : ACall) (hv : AValid c) {Rd : Word → Prop}
+    (c : ACall) (hv : AValid c) {Rd Kn : Word → Prop}
     (hok : certOk env Artifacts.Release.bytes entry init cert = true)
     (hal : certAligned cert = true)
     (hlf : certLoadFailure rdSiteB env cert = none)
@@ -64,7 +64,7 @@ theorem reads_of_recorded {env : Env} {cert : Cert} {entry : Nat} {init : AbsSta
       CertAt env cert ⟨c.base, c.sp0, c.regs0 14, Artifacts.Release.bytes.length⟩
         Artifacts.Release.bytes u u)
     (hrd : ∀ x ∈ states, x.pc ≠ c.regs0 14 &&& ~~~1#32 →
-      ∃ t e, step x = .ok (t, e) ∧ RdP c.base Rd x e) :
+      ∃ t e, step x = .ok (t, e) ∧ RdP c.base Rd Kn x e) :
     ∀ e ∈ events, ∀ y, Reads e.accesses y → Rd y := by
   have hnowrap : c.base.toNat + Artifacts.Release.bytes.length ≤ 2 ^ 32 := by
     simpa [Artifacts.Release.bytes_length] using hv.codeS.1
@@ -91,25 +91,27 @@ theorem reads_of_recorded {env : Env} {cert : Cert} {entry : Nat} {init : AbsSta
       by_cases hl : loadSite st i = true
       · have hoff := certPoint_loadSite hlf hm hp hl
         have hsite : SiteRd c.base u.pc := ⟨off, hoff, by simpa using hlow.pc⟩
-        exact hrd' hsite _ ⟨a, ha, hk, q, hq, rfl⟩
+        exact (hrd' hsite _ ⟨a, ha, hk, q, hq, rfl⟩).1
       · have hl' : loadSite st i = false := by simpa using hl
         exact hbridge _ (xfer_reads i hlow hx hsize hv.base4 hnowrap hl' a ha hk q hq)
 
-theorem encrypt_rd_recorded (c : ACall) (hv : AValid c) (hb : ABuf c) (s : State)
+theorem encrypt_rd_recorded {Rd Kn : Word → Prop} (c : ACall) (hv : AValid c) (hb : ABuf c) (s : State)
     (he : AEntry c encOff s) (hlr : (c.regs0 14).getLsbD 0 = true)
     (hret : ∀ i < M0Crypto.Artifacts.Release.size, c.ret ≠ c.base + BitVec.ofNat 32 i)
+    (hsub : ∀ y, AeadSiteRegion c siteLen y ∨ Region c.out c.len.toNat y → Rd y)
+    (hkn : ∀ y, AeadSiteRegion c copyLen y → Kn y)
     {fuel : Nat} {states : List State} {events : List Event}
     (hrun : runStates (c.regs0 14 &&& ~~~1#32) fuel s = .ok (states, events)) :
     ∀ x ∈ states, x.pc ≠ c.regs0 14 &&& ~~~1#32 →
-      ∃ t e, step x = .ok (t, e) ∧ RdP c.base (TraceSpec.AeadEncryptReadRegion c) x e := by
+      ∃ t e, step x = .ok (t, e) ∧ RdP c.base Rd Kn x e := by
   have hc : CodeAt s.mem c.base B := by rw [he.mem]; exact hv.code
   have h1 : ReachS c.base (PolE c c.tag (EncAllPc c.base) (AWr c)) s
       (fun t => t.pc = c.regs0 14 &&& ~~~1#32 ∧ EncryptResult c t) :=
     (encrypt_reach_p (Pc := EncAllPc c.base) c hv hb s he hlr (fun _ h => h)).mono
       (fun _ _ h => h) (fun t h => ⟨h.toRetPost.pc, h⟩)
-  have h2 : ReachS c.base (RdP c.base (TraceSpec.AeadEncryptReadRegion c)) s
+  have h2 : ReachS c.base (RdP c.base Rd Kn) s
       (fun t => t.pc = c.regs0 14 &&& ~~~1#32 ∧ EncryptResult c t) :=
-    (encrypt_reach_r (Rd := TraceSpec.AeadEncryptReadRegion c) c hv hb s he hlr (fun _ h => h)).mono
+    (encrypt_reach_r c hv hb s he hlr hsub hkn).mono
       (fun _ _ h => h) (fun t h => ⟨h.toRetPost.pc, h⟩)
   have h := ReachS.and (fun i hi => by rw [B_len] at hi; exact hret i hi) h1 h2
   have := ReachS.recorded (stop := c.regs0 14 &&& ~~~1#32) ?_ hc h hrun
@@ -136,23 +138,29 @@ theorem _root_.M0Crypto.Release.Aead.encrypt_reads : TraceSpec.AeadEncryptReads 
   exact reads_of_recorded c hv encrypt_certOk encrypt_certAligned encrypt_loadFailure
     (by simp [encryptEnv, Artifacts.Release.bytes_length]) (fun _ => readOk_encryptRd c) hrun
     (encrypt_certAt_states c hv hb s he hlr hret hrun)
-    (encrypt_rd_recorded c hv hb s he hlr hret hrun)
+    (encrypt_rd_recorded c hv hb s he hlr hret
+      (fun _ h => h.elim (fun h => TraceSpec.AeadEncryptReadRegion.common (h.common (by simp [siteLen])))
+        (fun h => Or.inr (Or.inr (Or.inr (Or.inr (Or.inl h))))))
+      (fun _ h => TraceSpec.AeadEncryptReadRegion.common (h.common (by simp only [copyLen, siteLen]; omega)))
+      hrun)
 
-theorem decrypt_rd_recorded (c : ACall) (hv : AValid c) (hb : ABuf c) (s : State)
+theorem decrypt_rd_recorded {Rd Kn : Word → Prop} (c : ACall) (hv : AValid c) (hb : ABuf c) (s : State)
     (he : AEntry c decOff s) (hlr : (c.regs0 14).getLsbD 0 = true)
     (hret : ∀ i < M0Crypto.Artifacts.Release.size, c.ret ≠ c.base + BitVec.ofNat 32 i)
+    (hsub : ∀ y, AeadSiteRegion c siteLen y ∨ Region c.tag 16 y → Rd y)
+    (hkn : ∀ y, AeadSiteRegion c copyLen y → Kn y)
     {fuel : Nat} {states : List State} {events : List Event}
     (hrun : runStates (c.regs0 14 &&& ~~~1#32) fuel s = .ok (states, events)) :
     ∀ x ∈ states, x.pc ≠ c.regs0 14 &&& ~~~1#32 →
-      ∃ t e, step x = .ok (t, e) ∧ RdP c.base (TraceSpec.AeadDecryptReadRegion c) x e := by
+      ∃ t e, step x = .ok (t, e) ∧ RdP c.base Rd Kn x e := by
   have hc : CodeAt s.mem c.base B := by rw [he.mem]; exact hv.code
   have h1 : ReachS c.base (PolW c (DecAllPc c.base) (DAllowed c)) s
       (fun t => t.pc = c.regs0 14 &&& ~~~1#32 ∧ DecryptResult c t) :=
     (decrypt_reach_p (Pc := DecAllPc c.base) c hv hb s he hlr (fun _ h => h)).mono
       (fun _ _ h => h) (fun t h => ⟨h.abi.pc, h⟩)
-  have h2 : ReachS c.base (RdP c.base (TraceSpec.AeadDecryptReadRegion c)) s
+  have h2 : ReachS c.base (RdP c.base Rd Kn) s
       (fun t => t.pc = c.regs0 14 &&& ~~~1#32 ∧ DecryptResult c t) :=
-    (decrypt_reach_r (Rd := TraceSpec.AeadDecryptReadRegion c) c hv hb s he hlr (fun _ h => h)).mono
+    (decrypt_reach_r c hv hb s he hlr hsub hkn).mono
       (fun _ _ h => h) (fun t h => ⟨h.abi.pc, h⟩)
   have h := ReachS.and (fun i hi => by rw [B_len] at hi; exact hret i hi) h1 h2
   have := ReachS.recorded (stop := c.regs0 14 &&& ~~~1#32) ?_ hc h hrun
@@ -178,6 +186,10 @@ theorem _root_.M0Crypto.Release.Aead.decrypt_reads : TraceSpec.AeadDecryptReads 
   exact reads_of_recorded c hv decrypt_certOk decrypt_certAligned decrypt_loadFailure
     (by simp [decryptEnv, Artifacts.Release.bytes_length]) (fun _ => readOk_decryptRd c) hrun
     (decrypt_certAt_states c hv hb s he hlr hret hrun)
-    (decrypt_rd_recorded c hv hb s he hlr hret hrun)
+    (decrypt_rd_recorded c hv hb s he hlr hret
+      (fun _ h => h.elim (fun h => TraceSpec.AeadDecryptReadRegion.common (h.common (by simp [siteLen])))
+        (fun h => Or.inr (Or.inr (Or.inr (Or.inr (Or.inl h))))))
+      (fun _ h => TraceSpec.AeadDecryptReadRegion.common (h.common (by simp only [copyLen, siteLen]; omega)))
+      hrun)
 
 end M0Crypto.Release.ConstantTime

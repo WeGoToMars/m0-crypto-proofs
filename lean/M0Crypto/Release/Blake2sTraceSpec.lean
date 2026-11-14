@@ -74,6 +74,22 @@ def Blake2sInitStack : Prop :=
       ∃ states tr, runStates c.ret fuel s = .ok (states, tr) ∧
         ∀ st ∈ states, InStackWindow c.sp0 initStackBytes (st.regs 13)
 
+/-- `init` stack discipline: in every step, the bytes accessed among the `4` bytes below the
+entry SP lie at or above SP, and every such byte read was written since SP last moved to or
+below it. -/
+def Blake2sInitStackDiscipline : Prop :=
+  ∀ c s, Blake2s.Init.Pre c s →
+    ∃ n, ∀ fuel, n ≤ fuel →
+      ∃ states tr, runStates c.ret fuel s = .ok (states, tr) ∧
+        StackDiscipline c.sp0 initStackBytes states tr
+
+/-- `init` with interrupts: a valid call that may read its read region and write its allowed
+writes returns as `InterruptedCall` states, for every handler room `K` below its stack window. -/
+def Blake2sInitInterrupted : Prop :=
+  ∀ K c s, Blake2s.Init.Pre c s →
+    InterruptedCall K initStackBytes c.sp0 c.ret s
+      (fun y => Blake2sInitReadRegion c y ∨ Blake2s.Init.WrOk c y) (Blake2s.Init.Result c)
+
 /-! ## `m0c_blake2s_update` -/
 
 /-- Allowed readable regions for `update`: the context, the input, code and the call's stack
@@ -102,6 +118,22 @@ def Blake2sUpdateStack : Prop :=
       ∃ states tr, runStates c.ret fuel s = .ok (states, tr) ∧
         ∀ st ∈ states, InStackWindow c.sp0 streamStackBytes (st.regs 13)
 
+/-- `update` stack discipline: in every step, the bytes accessed among the `160` bytes below the
+entry SP lie at or above SP, and every such byte read was written since SP last moved to or
+below it. -/
+def Blake2sUpdateStackDiscipline : Prop :=
+  ∀ c s, Blake2s.Update.Pre c s →
+    ∃ n, ∀ fuel, n ≤ fuel →
+      ∃ states tr, runStates c.ret fuel s = .ok (states, tr) ∧
+        StackDiscipline c.sp0 streamStackBytes states tr
+
+/-- `update` with interrupts: a valid call that may read its read region and write its allowed
+writes returns as `InterruptedCall` states, for every handler room `K` below its stack window. -/
+def Blake2sUpdateInterrupted : Prop :=
+  ∀ K c s, Blake2s.Update.Pre c s →
+    InterruptedCall K streamStackBytes c.sp0 c.ret s
+      (fun y => Blake2sUpdateReadRegion c y ∨ Blake2s.Update.WrOk c y) (Blake2s.Update.Result c)
+
 /-! ## `m0c_blake2s_final` -/
 
 /-- Allowed readable regions for `final`: the context, code and the call's stack window. -/
@@ -128,5 +160,21 @@ def Blake2sFinalStack : Prop :=
     ∃ n, ∀ fuel, n ≤ fuel →
       ∃ states tr, runStates c.ret fuel s = .ok (states, tr) ∧
         ∀ st ∈ states, InStackWindow c.sp0 streamStackBytes (st.regs 13)
+
+/-- `final` stack discipline: in every step, the bytes accessed among the `160` bytes below the
+entry SP lie at or above SP, and every such byte read was written since SP last moved to or
+below it. -/
+def Blake2sFinalStackDiscipline : Prop :=
+  ∀ c s, Blake2s.Final.Pre c s →
+    ∃ n, ∀ fuel, n ≤ fuel →
+      ∃ states tr, runStates c.ret fuel s = .ok (states, tr) ∧
+        StackDiscipline c.sp0 streamStackBytes states tr
+
+/-- `final` with interrupts: a valid call that may read its read region and write its allowed
+writes returns as `InterruptedCall` states, for every handler room `K` below its stack window. -/
+def Blake2sFinalInterrupted : Prop :=
+  ∀ K c s, Blake2s.Final.Pre c s →
+    InterruptedCall K streamStackBytes c.sp0 c.ret s
+      (fun y => Blake2sFinalReadRegion c y ∨ Blake2s.Final.WrOk c y) (Blake2s.Final.Result c)
 
 end M0Crypto.Release.TraceSpec

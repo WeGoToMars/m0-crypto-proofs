@@ -103,6 +103,22 @@ def ChaCha20XorStack : Prop :=
       ∃ states tr, runStates c.ret fuel s = .ok (states, tr) ∧
         ∀ st ∈ states, InStackWindow c.sp0 ChaCha20Layout.chStackBytes (st.regs 13)
 
+/-- ChaCha20 stack discipline: in every step, the bytes accessed among the `176` bytes below the
+entry SP lie at or above SP, and every such byte read was written since SP last moved to or
+below it. -/
+def ChaCha20XorStackDiscipline : Prop :=
+  ∀ c s, ChaCha20Xor.Pre c s →
+    ∃ n, ∀ fuel, n ≤ fuel →
+      ∃ states tr, runStates c.ret fuel s = .ok (states, tr) ∧
+        StackDiscipline c.sp0 ChaCha20Layout.chStackBytes states tr
+
+/-- ChaCha20 with interrupts: a valid call that may read its read region and write its allowed
+writes returns as `InterruptedCall` states, for every handler room `K` below its stack window. -/
+def ChaCha20XorInterrupted : Prop :=
+  ∀ K c s, ChaCha20Xor.Pre c s →
+    InterruptedCall K ChaCha20Layout.chStackBytes c.sp0 c.ret s
+      (fun y => ChaCha20XorReadRegion c y ∨ ChaCha20Xor.WrOk c y) (ChaCha20Xor.Result c)
+
 /-! ## AEAD encrypt specifications -/
 
 /-- AEAD encrypt constant-time trace theorem: two valid calls with equal public inputs
@@ -125,6 +141,22 @@ def AeadEncryptStack : Prop :=
     ∃ n, ∀ fuel, n ≤ fuel →
       ∃ states tr, runStates c.ret fuel s = .ok (states, tr) ∧
         ∀ st ∈ states, InStackWindow c.sp0 aeadStackBytes (st.regs 13)
+
+/-- AEAD encrypt stack discipline: in every step, the bytes accessed among the `320` bytes below
+the entry SP lie at or above SP, and every such byte read was written since SP last moved to or
+below it. -/
+def AeadEncryptStackDiscipline : Prop :=
+  ∀ c s, APre c encOff s →
+    ∃ n, ∀ fuel, n ≤ fuel →
+      ∃ states tr, runStates c.ret fuel s = .ok (states, tr) ∧
+        StackDiscipline c.sp0 aeadStackBytes states tr
+
+/-- AEAD encrypt with interrupts: a valid call that may read its read region and write its allowed
+writes returns as `InterruptedCall` states, for every handler room `K` below its stack window. -/
+def AeadEncryptInterrupted : Prop :=
+  ∀ K c s, APre c encOff s →
+    InterruptedCall K aeadStackBytes c.sp0 c.ret s
+      (fun y => AeadEncryptReadRegion c y ∨ AWr c y) (EncryptResult c)
 
 /-! ## AEAD decrypt specifications -/
 
@@ -149,5 +181,21 @@ def AeadDecryptStack : Prop :=
     ∃ n, ∀ fuel, n ≤ fuel →
       ∃ states tr, runStates c.ret fuel s = .ok (states, tr) ∧
         ∀ st ∈ states, InStackWindow c.sp0 aeadStackBytes (st.regs 13)
+
+/-- AEAD decrypt stack discipline: in every step, the bytes accessed among the `320` bytes below
+the entry SP lie at or above SP, and every such byte read was written since SP last moved to or
+below it. -/
+def AeadDecryptStackDiscipline : Prop :=
+  ∀ c s, APre c decOff s →
+    ∃ n, ∀ fuel, n ≤ fuel →
+      ∃ states tr, runStates c.ret fuel s = .ok (states, tr) ∧
+        StackDiscipline c.sp0 aeadStackBytes states tr
+
+/-- AEAD decrypt with interrupts: a valid call that may read its read region and write its allowed
+writes returns as `InterruptedCall` states, for every handler room `K` below its stack window. -/
+def AeadDecryptInterrupted : Prop :=
+  ∀ K c s, APre c decOff s →
+    InterruptedCall K aeadStackBytes c.sp0 c.ret s
+      (fun y => AeadDecryptReadRegion c y ∨ DAllowed c y) (DecryptResult c)
 
 end M0Crypto.Release.TraceSpec

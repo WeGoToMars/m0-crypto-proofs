@@ -18,7 +18,8 @@ namespace M0Crypto.Release.Poly1305Blocks
 open M0Crypto.Armv6M (Word Reg LowReg State Mem read32 write32 slot)
 open M0Crypto.Thumb
 open M0Crypto.Release.Frame
-open M0Crypto.Release.Aead (RdP SiteRd NoSite rdSiteB firstReadSite no_readSite polySiteB rdP_of_free inRegion_noSite pc_noSite)
+open M0Crypto.Release.Aead (RdP SiteRd NoSite rdSiteB firstReadSite no_readSite polySiteB rdP_of_free inRegion_noSite pc_noSite
+  blockOk_rdP)
 
 /-- Instructions whose reads are single bytes at `r6 + k`, `k < 16`, or that read nothing. -/
 def okR6 (i : Instr) : Bool :=
@@ -57,11 +58,10 @@ theorem trace_r6 : ∀ (is : List Instr) (u : State), is.all okR6 = true →
 
 theorem loadU_eq : loadU = loadU.dropLast ++ [.addImm8 6 16] := by decide +kernel
 
-theorem loadU_ok (base : Word) (Rd : Word → Prop) (u : State)
-    (h : ∀ o < 16, Rd (u.regs 6 + BitVec.ofNat 32 o)) : BlockOk (RdP base Rd) loadU u := by
-  have := (blockOk_events_iff (p := fun e => Aead.SiteRd base e.pc → ∀ y, Reads e.accesses y → Rd y)
-    loadU u).mpr ?_
-  · exact this
+theorem loadU_ok (base : Word) (Rd Kn : Word → Prop) (u : State)
+    (hp : u.pc = base + BitVec.ofNat 32 loadUAt)
+    (h : ∀ o < 16, Rd (u.regs 6 + BitVec.ofNat 32 o)) : BlockOk (RdP base Rd Kn) loadU u := by
+  refine blockOk_rdP (by decide) hp (by decide +kernel) (by decide +kernel) ?_
   intro e he _ y hy
   rw [loadU_eq, traceAll_append] at he
   rcases List.mem_append.mp he with he | he
@@ -71,11 +71,10 @@ theorem loadU_ok (base : Word) (Rd : Word → Prop) (u : State)
     subst he
     simp [Instr.accesses, Reads] at hy
 
-theorem loadA_ok (base : Word) (Rd : Word → Prop) (u : State)
-    (h : ∀ o < 16, Rd (u.regs 6 + BitVec.ofNat 32 o)) : BlockOk (RdP base Rd) loadA u := by
-  have := (blockOk_events_iff (p := fun e => Aead.SiteRd base e.pc → ∀ y, Reads e.accesses y → Rd y)
-    loadA u).mpr ?_
-  · exact this
+theorem loadA_ok (base : Word) (Rd Kn : Word → Prop) (u : State)
+    (hp : u.pc = base + BitVec.ofNat 32 loadAAt)
+    (h : ∀ o < 16, Rd (u.regs 6 + BitVec.ofNat 32 o)) : BlockOk (RdP base Rd Kn) loadA u := by
+  refine blockOk_rdP (by decide) hp (by decide +kernel) (by decide +kernel) ?_
   intro e he _ y hy
   simp [loadA, traceAll] at he
   subst he
@@ -94,8 +93,8 @@ theorem loadA_ok (base : Word) (Rd : Word → Prop) (u : State)
 /-- Program counters of the function that are not read sites. -/
 abbrev FreePc (base : Word) : Word → Prop := fun pc => BlkPc base pc ∧ Aead.NoSite base pc
 
-theorem freeP (base : Word) (Rd : Word → Prop) :
-    ∀ x e, RegionWrites (FreePc base) (fun _ => True) x e → RdP base Rd x e :=
+theorem freeP (base : Word) (Rd Kn : Word → Prop) :
+    ∀ x e, RegionWrites (FreePc base) (fun _ => True) x e → RdP base Rd Kn x e :=
   fun x e h => rdP_of_free (fun _ h => h.2) x e h
 
 theorem free_region {base : Word} {off n : Nat} (h1 : entryAt ≤ off) (h2 : off + n ≤ popAt + 2)
@@ -106,13 +105,13 @@ theorem free_pc {base : Word} (off : Nat) (h1 : entryAt ≤ off) (h2 : off < pop
     (hs : rdSiteB off = false) : FreePc base (base + BitVec.ofNat 32 off) :=
   pc_noSite (Pc := BlkPc base) (fun _ h => h) h1 h2 (by decide +kernel) hs
 
-theorem load_run_r {base : Word} (hb : base.toNat % 4 = 0) (Rd : Word → Prop) (s : State)
+theorem load_run_r {base : Word} (hb : base.toNat % 4 = 0) (Rd Kn : Word → Prop) (s : State)
     (hp : s.pc = base + BitVec.ofNat 32 testAt)
     (hs : (s.regs 13).toNat % 4 = 0) (hc : (s.regs 7).toNat % 4 = 0)
     (hR : ∀ o < 16, Rd (read32 s.mem (slot (s.regs 13) slotMsg) + BitVec.ofNat 32 o)) :
-    ReachS base (RdP base Rd) s (fun t => t = loadState s) := by
+    ReachS base (RdP base Rd Kn) s (fun t => t = loadState s) := by
   have hb2 : base.toNat % 2 = 0 := by omega
-  refine ReachS.blockW (Pn := FreePc base) (Wr := fun _ => True) (freeP base Rd)
+  refine ReachS.blockW (Pn := FreePc base) (Wr := fun _ => True) (freeP base Rd Kn)
     (free_region (by decide +kernel) (by decide +kernel) (by decide +kernel)) hb2 hp (by decide)
     segments_at.1 (by decide) (stable_aligned _ _ (by decide) hs hc) (fun _ _ _ _ => trivial) ?_
   let t := execAll testAlign s
@@ -124,7 +123,7 @@ theorem load_run_r {base : Word} (hb : base.toNat % 4 = 0) (Rd : Word → Prop) 
   have tz : t.z = ((t.regs 6).toNat % 4 == 0) := by
     rw [(test_regs s).2, and3_zero, (test_regs s).1]
   have t6 : t.regs 6 = read32 s.mem (slot (s.regs 13) slotMsg) := (test_regs s).1
-  refine ReachS.bcondW (Pn := FreePc base) (Wr := fun _ => True) (freeP base Rd)
+  refine ReachS.bcondW (Pn := FreePc base) (Wr := fun _ => True) (freeP base Rd Kn)
     (free_pc alignBrAt (by decide +kernel) (by decide +kernel) (by decide +kernel)) hb2 loadUAt 1
     (brImm8 alignBrAt loadUAt) pt (by decide) (by decide) (by decide) (by decide) ?_ ?_
   · intro hT
@@ -138,7 +137,7 @@ theorem load_run_r {base : Word} (hb : base.toNat % 4 = 0) (Rd : Word → Prop) 
       (stable_aligned _ _ (by decide)
         (by simpa [u, M0Crypto.Armv6M.State.setReg, tr 13 (by decide) (by decide) (by decide)] using hs)
         (by simpa [u, M0Crypto.Armv6M.State.setReg, tr 7 (by decide) (by decide) (by decide)] using hc))
-      (loadU_ok base Rd u (by rw [u6, t6]; exact hR)) ?_
+      (loadU_ok base Rd Kn u rfl (by rw [u6, t6]; exact hR)) ?_
     apply ReachS.done
     simp only [loadState, show execAll testAlign s = t from rfl, hna, ite_false]
     congr 2
@@ -151,7 +150,7 @@ theorem load_run_r {base : Word} (hb : base.toNat % 4 = 0) (Rd : Word → Prop) 
     let u := t.setReg 15 (base + BitVec.ofNat 32 loadAAt)
     have u6 : u.regs 6 = t.regs 6 := setReg_regs_ne _ 15 6 _ (by decide)
     refine ReachS.block hb2 loadA loadAAt u (by rfl) (by decide) segments_at.2.1 (by decide) ?_
-      (loadA_ok base Rd u (by rw [u6, t6]; exact hR)) ?_
+      (loadA_ok base Rd Kn u rfl (by rw [u6, t6]; exact hR)) ?_
     · have ha' : (t.regs (LowReg.toReg 6)).toNat % 4 = 0 := ha
       simp (config := { decide := true }) [bitCount, listRegs, List.range_succ, alignedAll, loadA, Instr.accesses, wordAccesses, List.range_succ, bitCount,
         Access.aligned, M0Crypto.Armv6M.State.reg, M0Crypto.Armv6M.State.setReg, u, BitVec.toNat_add]
@@ -160,7 +159,7 @@ theorem load_run_r {base : Word} (hb : base.toNat % 4 = 0) (Rd : Word → Prop) 
     have pv : v.pc = base + BitVec.ofNat 32 skipBrAt := by
       dsimp [v]; rw [execAll_pc _ _ (by decide)]; change base + _ + _ = _
       rw [ofNat_add_assoc]; exact pc_congr (by decide +kernel)
-    refine ReachS.bW (Pn := FreePc base) (Wr := fun _ => True) (freeP base Rd)
+    refine ReachS.bW (Pn := FreePc base) (Wr := fun _ => True) (freeP base Rd Kn)
       (free_pc skipBrAt (by decide +kernel) (by decide +kernel) (by decide +kernel)) hb2 bodyAt
       (brImm11 skipBrAt bodyAt) pv (by decide) (by decide) (by decide) (by decide) ?_
     apply ReachS.done
@@ -168,31 +167,31 @@ theorem load_run_r {base : Word} (hb : base.toNat % 4 = 0) (Rd : Word → Prop) 
     dsimp [v, u]
     rw [hp, BitVec.add_assoc, BitVec.add_assoc]; rfl
 
-theorem body_run_r {base : Word} (hb : base.toNat % 4 = 0) (Rd : Word → Prop) (s : State)
+theorem body_run_r {base : Word} (hb : base.toNat % 4 = 0) (Rd Kn : Word → Prop) (s : State)
     (hp : s.pc = base + BitVec.ofNat 32 bodyAt)
     (hs : (s.regs 13).toNat % 4 = 0) (hc : (s.regs 7).toNat % 4 = 0) :
-    ReachS base (RdP base Rd) s (fun t => t = execAll body s) :=
-  ReachS.blockW (Pn := FreePc base) (Wr := fun _ => True) (freeP base Rd)
+    ReachS base (RdP base Rd Kn) s (fun t => t = execAll body s) :=
+  ReachS.blockW (Pn := FreePc base) (Wr := fun _ => True) (freeP base Rd Kn)
     (free_region (by decide +kernel) (by decide +kernel) (by decide +kernel)) (by omega) hp
     (by decide +kernel) segments_at.2.2.2.1 body_falls (stable_aligned body s body_stable hs hc)
     (fun _ _ _ _ => trivial) (ReachS.done rfl)
 
-theorem one_run_r {base : Word} (hb : base.toNat % 4 = 0) (Rd : Word → Prop) (s : State)
+theorem one_run_r {base : Word} (hb : base.toNat % 4 = 0) (Rd Kn : Word → Prop) (s : State)
     (hp : s.pc = base + BitVec.ofNat 32 testAt)
     (hs : (s.regs 13).toNat % 4 = 0) (hc : (s.regs 7).toNat % 4 = 0)
     (hR : ∀ o < 16, Rd (mp s + BitVec.ofNat 32 o)) :
-    ReachS base (RdP base Rd) s (fun t => t = oneBlock s) := by
+    ReachS base (RdP base Rd Kn) s (fun t => t = oneBlock s) := by
   apply ReachS.bind
-  apply (load_run_r hb Rd s hp hs hc hR).mono (fun _ _ h => h)
+  apply (load_run_r hb Rd Kn s hp hs hc hR).mono (fun _ _ h => h)
   intro t ht; subst t
   obtain ⟨l7, _, l13, _⟩ := load_props s
   have lp : (loadState s).pc = base + BitVec.ofNat 32 bodyAt := by
     rw [load_pc, hp, ofNat_add_assoc]; rfl
   apply ReachS.bind
-  apply (body_run_r hb Rd _ lp (by rw [l13]; exact hs) (by rw [l7]; exact hc)).mono (fun _ _ h => h)
+  apply (body_run_r hb Rd Kn _ lp (by rw [l13]; exact hs) (by rw [l7]; exact hc)).mono (fun _ _ h => h)
   intro t ht; subst t
   have bsp := (body_regs (loadState s)).2.2.trans l13
-  refine ReachS.blockW (Pn := FreePc base) (Wr := fun _ => True) (freeP base Rd)
+  refine ReachS.blockW (Pn := FreePc base) (Wr := fun _ => True) (freeP base Rd Kn)
     (free_region (by decide +kernel) (by decide +kernel) (by decide +kernel)) (by omega) ?_
     (by decide +kernel) segments_at.2.2.2.2.1 (by decide)
     (stable_aligned _ _ (by decide) (by rw [bsp]; exact hs)
@@ -200,13 +199,13 @@ theorem one_run_r {base : Word} (hb : base.toNat % 4 = 0) (Rd : Word → Prop) (
     (fun _ _ _ _ => trivial) (ReachS.done rfl)
   rw [execAll_pc _ _ body_falls, lp, ofNat_add_assoc]; exact pc_congr (by decide +kernel)
 
-theorem loop_run_r {base : Word} (hb : base.toNat % 4 = 0) (Rd : Word → Prop) :
+theorem loop_run_r {base : Word} (hb : base.toNat % 4 = 0) (Rd Kn : Word → Prop) :
     ∀ (n : Nat), 0 < n → n < 2^32 → ∀ s : State,
     s.pc = base + BitVec.ofNat 32 testAt →
     (s.regs 13).toNat % 4 = 0 → (s.regs 7).toNat % 4 = 0 →
     read32 s.mem (slot (s.regs 13) slotCount) = BitVec.ofNat 32 n →
     (∀ o < 16 * n, Rd (mp s + BitVec.ofNat 32 o)) →
-    ReachS base (RdP base Rd) s (fun t => t = loopState base n s ∧
+    ReachS base (RdP base Rd Kn) s (fun t => t = loopState base n s ∧
       t.pc = base + BitVec.ofNat 32 publishAt ∧ t.regs 7 = s.regs 7 ∧
       t.regs 12 = s.regs 12 ∧ t.regs 13 = s.regs 13 ∧
       read32 t.mem (slot (s.regs 13) slotCount) = 0#32)
@@ -214,7 +213,7 @@ theorem loop_run_r {base : Word} (hb : base.toNat % 4 = 0) (Rd : Word → Prop) 
   | n+1, _, hn, s, hp, hs, hc, hcount, hR => by
     have hb2 : base.toNat % 2 = 0 := by omega
     apply ReachS.bind
-    apply (one_run_r hb Rd s hp hs hc (fun o ho => hR o (by omega))).mono (fun _ _ h => h)
+    apply (one_run_r hb Rd Kn s hp hs hc (fun o ho => hR o (by omega))).mono (fun _ _ h => h)
     intro t ht; subst t
     obtain ⟨r7, r12, r13, pc, count, z⟩ := one_props s
     have pc' : (oneBlock s).pc = base + BitVec.ofNat 32 countBrAt := by
@@ -225,7 +224,7 @@ theorem loop_run_r {base : Word} (hb : base.toNat % 4 = 0) (Rd : Word → Prop) 
       rw [count, hcount, sub]
     have z' : (oneBlock s).z = (BitVec.ofNat 32 n == 0#32) := by
       rw [z, hcount, sub]
-    refine ReachS.bcondW (Pn := FreePc base) (Wr := fun _ => True) (freeP base Rd)
+    refine ReachS.bcondW (Pn := FreePc base) (Wr := fun _ => True) (freeP base Rd Kn)
       (free_pc countBrAt (by decide +kernel) (by decide +kernel) (by decide +kernel)) hb2 publishAt 0
       (brImm8 countBrAt publishAt) pc' (by decide +kernel) (by decide +kernel) (by decide +kernel)
       (by decide +kernel) ?_ ?_
@@ -243,7 +242,7 @@ theorem loop_run_r {base : Word} (hb : base.toNat % 4 = 0) (Rd : Word → Prop) 
       have nn : n ≠ 0 := by
         intro hz; simp [condPassed, z', hz] at hF
       let u := (oneBlock s).setReg 15 (base + BitVec.ofNat 32 (countBrAt + 2))
-      refine ReachS.bW (Pn := FreePc base) (Wr := fun _ => True) (freeP base Rd)
+      refine ReachS.bW (Pn := FreePc base) (Wr := fun _ => True) (freeP base Rd Kn)
         (free_pc backBrAt (by decide +kernel) (by decide +kernel) (by decide +kernel)) hb2 testAt
         (brImm11 backBrAt testAt) (by rfl) (by decide +kernel) (by decide +kernel)
         (by decide +kernel) (by decide +kernel) ?_
@@ -262,7 +261,7 @@ theorem loop_run_r {base : Word} (hb : base.toNat % 4 = 0) (Rd : Word → Prop) 
         have e : mp s + 16#32 + BitVec.ofNat 32 o = mp s + BitVec.ofNat 32 (16 + o) := by
           rw [BitVec.add_assoc, BitVec.ofNat_add]
         rw [vmp, e]; exact h
-      apply (loop_run_r hb Rd n (by omega) (by omega) v rfl (by rw [v13]; exact hs)
+      apply (loop_run_r hb Rd Kn n (by omega) (by omega) v rfl (by rw [v13]; exact hs)
         (by rw [v7]; exact hc) vc hR2).mono (fun _ _ h => h)
       intro t ht
       obtain ⟨eq, pt, t7, t12, t13, tc⟩ := ht
@@ -274,10 +273,10 @@ theorem loop_run_r {base : Word} (hb : base.toNat % 4 = 0) (Rd : Word → Prop) 
 
 attribute [local irreducible] body loadState oneBlock loopState
 
-theorem blocks_reach_r (c : BCtx) (hv : BValid c) (Rd : Word → Prop) (s : State) (he : BEntry c s)
+theorem blocks_reach_r (c : BCtx) (hv : BValid c) (Rd Kn : Word → Prop) (s : State) (he : BEntry c s)
     (hlr : (c.regs0 14).getLsbD 0 = true)
     (hR : ∀ o < 16 * c.count.toNat, Rd (c.msg + BitVec.ofNat 32 o)) :
-    ReachS c.base (RdP c.base Rd) s (BResult c s) := by
+    ReachS c.base (RdP c.base Rd Kn) s (BResult c s) := by
   have hb2 : c.base.toNat % 2 = 0 := by have := hv.base4; omega
   have hn : ∀ pc, FreePc c.base pc → ¬ Aead.SiteRd c.base pc := fun _ h => h.2
   have rg : ∀ {off n : Nat}, entryAt ≤ off → off + n ≤ popAt + 2 →
@@ -297,7 +296,7 @@ theorem blocks_reach_r (c : BCtx) (hv : BValid c) (Rd : Word → Prop) (s : Stat
     rw [entrypc, ofNat_add_assoc]; rfl
   change p.z = (c.count == 0#32) at pz
   have pmS : Saved c p.mem := by rw [pm]; exact mP_saved c hv
-  refine ReachS.bcondW (Pn := FreePc c.base) (Wr := fun _ => True) (freeP c.base Rd)
+  refine ReachS.bcondW (Pn := FreePc c.base) (Wr := fun _ => True) (freeP c.base Rd Kn)
     (free_pc enterBrAt (by decide +kernel) (by decide +kernel) (by decide +kernel)) hb2 setupAt 1
     (brImm8 enterBrAt setupAt) pp (by decide) (by decide) (by decide) (by decide) ?_ ?_
   · intro hn'
@@ -329,7 +328,7 @@ theorem blocks_reach_r (c : BCtx) (hv : BValid c) (Rd : Word → Prop) (s : Stat
         ite_eq_right (by decide), M0Crypto.Armv6M.read32_write32_same, q1]
     have uS : Saved c u.mem := setup_saved c q qs pmS
     apply ReachS.bind
-    apply (loop_run_r hv.base4 Rd c.count.toNat (by have := c.count.isLt; have hz := cn; bv_omega)
+    apply (loop_run_r hv.base4 Rd Kn c.count.toNat (by have := c.count.isLt; have hz := cn; bv_omega)
       c.count.isLt u up (by rw [us']; exact fp4 hv) (by rw [u7']; exact hv.ctx4) uc
       (by rw [umsg]; exact hR)).mono (fun _ _ h => h)
     intro v hv'
@@ -365,7 +364,7 @@ theorem blocks_reach_r (c : BCtx) (hv : BValid c) (Rd : Word → Prop) (s : Stat
       have h := hz; simp [condPassed] at h; exact h
     have cz : c.count = 0#32 := by rw [pz] at hzt; simpa using hzt
     let q := p.setReg 15 (c.base + BitVec.ofNat 32 retBrAt)
-    refine ReachS.bW (Pn := FreePc c.base) (Wr := fun _ => True) (freeP c.base Rd)
+    refine ReachS.bW (Pn := FreePc c.base) (Wr := fun _ => True) (freeP c.base Rd Kn)
       (free_pc retBrAt (by decide +kernel) (by decide +kernel) (by decide +kernel)) hb2 epilogueAt
       (brImm11 retBrAt epilogueAt) (by rfl) (by decide +kernel) (by decide +kernel)
       (by decide +kernel) (by decide +kernel) ?_

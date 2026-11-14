@@ -53,16 +53,120 @@ theorem aligned_chunk_read_addresses (t : State) (i : Nat) (hi : i < 16)
   · right; left; simpa [Nat.mul_comm] using hy
   · right; right; simpa [Nat.mul_comm] using hy
 
+/-- The aligned word macro reads the stack at its first two instructions and the input word
+otherwise. -/
+theorem aligned_chunk_read_pcs (t : State) (i : Nat) (hi : i < 16)
+    (e : Event) (he : e ∈ traceAll (ach i) t) (y : Word) (hy : Reads e.accesses y) :
+    e.pc = t.pc ∨ e.pc = t.pc + 2#32 ∨
+      ∃ q < 4, y = t.regs 2 + BitVec.ofNat 32 (4 * i) + BitVec.ofNat 32 q := by
+  have hreg : (execAll [.ldrSp 0 (BitVec.ofNat 8 (slotX + i)),
+      .ldrSp 1 (BitVec.ofNat 8 (slotJ + i)), .addReg 0 0 1] t).regs 2 = t.regs 2 :=
+    execAll_regs_other _ _ _ (by decide) (by simp [Instr.dsts])
+  have hreg' : ((Instr.addReg 0 0 1).next ((Instr.ldrSp 1 (BitVec.ofNat 8 (slotJ + i))).next
+      ((Instr.ldrSp 0 (BitVec.ofNat 8 (slotX + i))).next t))).regs 2 = t.regs 2 := by
+    simpa [execAll] using hreg
+  rcases hy with ⟨a, ha, hk, q, hq, hy⟩
+  simp only [traceAll, ach, List.mem_cons, List.not_mem_nil, or_false] at he
+  rcases he with rfl | rfl | rfl | rfl | rfl | rfl
+  · left; rfl
+  · right; left
+    have h := execAll_pc [Instr.ldrSp 0 (BitVec.ofNat 8 (slotX + i))] t (by simp [Instr.falls])
+    simpa [execAll, seqSize, Instr.size] using h
+  all_goals simp [Instr.accesses, MemOp.isLoad] at ha
+  all_goals try (subst ha; cases hk)
+  all_goals try subst ha
+  right; right
+  refine ⟨q, by simpa [MemOp.width] using hq, ?_⟩
+  simp only [M0Crypto.Armv6M.State.reg, M0Crypto.Proofs.toReg_2, hreg', BitVec.toNat_ofNat,
+    Nat.mod_eq_of_lt (by omega : i < 32), MemOp.width, Nat.mul_comm] at hy
+  simpa [Nat.mul_comm] using hy
+
 /-- Instruction addresses of ChaCha's caller-buffer output stores. -/
 def OutputStorePC (base pc : Word) : Prop :=
   (∃ i < 16, pc = base + BitVec.ofNat 32
     (achOff + achSize * i + seqSize (ach i).dropLast)) ∨
   pc = base + BitVec.ofNat 32 (blOff + seqSize (bl.take 3))
 
-/-- Read bounds and instruction-specific output-store bounds. -/
+/-- Offsets of ChaCha's input loads: the input word of each aligned output macro and the input
+byte of the byte tail. -/
+def inputLoadOff (o : Nat) : Bool :=
+  ((List.range 16).map fun i => achOff + achSize * i + seqSize ((ach i).take 3)).contains o ||
+    o == blOff
+
+/-- Instruction addresses of ChaCha's input loads. -/
+def InputLoadPC (base pc : Word) : Prop := ∃ o, inputLoadOff o = true ∧ pc = base + BitVec.ofNat 32 o
+
+theorem inputLoadOff_bounds : ∀ o, inputLoadOff o = true → achOff ≤ o ∧ o < n1Off ∧ o < 2 ^ 32 := by
+  have h : ∀ o ∈ (List.range 16).map (fun i => achOff + achSize * i + seqSize ((ach i).take 3)) ++
+      [blOff], achOff ≤ o ∧ o < n1Off ∧ o < 2 ^ 32 := by decide +kernel
+  intro o ho
+  simp only [inputLoadOff, Bool.or_eq_true, List.contains_iff_mem, beq_iff_eq] at ho
+  exact h o (List.mem_append.mpr (ho.imp id (fun e => by simp [e])))
+
+theorem not_inputLoadPC {base : Word} {o : Nat} (ho : o < 2 ^ 32) (h : inputLoadOff o = false) :
+    ¬ InputLoadPC base (base + BitVec.ofNat 32 o) := by
+  rintro ⟨o', h', e⟩
+  have := ChaCha20Policy.pc_off_inj ho (inputLoadOff_bounds o' h').2.2 e
+  subst this
+  rw [h] at h'
+  cases h'
+
+theorem not_knPC_of_ge {base : Word} {o : Nat} (h : achOff ≤ o) (ho : o < 2 ^ 32) :
+    ¬ ChaCha20Policy.KNPC base (base + BitVec.ofNat 32 o) := by
+  rintro ⟨o', h', e⟩
+  have := ChaCha20Policy.site_order
+  have := ChaCha20Policy.pc_off_inj ho (by unfold ChaCha20Policy.KNOff at h'; omega) e
+  unfold ChaCha20Policy.KNOff at h'
+  omega
+
+/-- The events of a macro placed at offset `x` lie at offsets `x + j` inside it. -/
+theorem macro_pc {is : List Instr} {t : State} {base : Word} {x : Nat}
+    (hf : is.all Instr.falls = true) (hpc : t.pc = base + BitVec.ofNat 32 x) (e : Event)
+    (he : e ∈ traceAll is t) : ∃ j < seqSize is, e.pc = base + BitVec.ofNat 32 (x + j) := by
+  obtain ⟨j, hj, h⟩ := traceAll_pc_offset is t hf e he
+  exact ⟨j, hj, by rw [h, hpc, ofNat_add_assoc]⟩
+
+/-- Offsets inside the aligned macros: in range, and the first two are not input loads. -/
+theorem ach_offsets {i j : Nat} (hi : i < 16) (hj : j < achSize) :
+    achOff + achSize * i + j < 2 ^ 32 ∧ inputLoadOff (achOff + achSize * i) = false ∧
+      inputLoadOff (achOff + achSize * i + 2) = false := by
+  have h : (List.range 16).all (fun i => (List.range achSize).all fun j =>
+      decide (achOff + achSize * i + j < 2 ^ 32) && !inputLoadOff (achOff + achSize * i) &&
+        !inputLoadOff (achOff + achSize * i + 2)) = true := by decide +kernel
+  have h' := List.all_eq_true.mp (List.all_eq_true.mp h i (List.mem_range.mpr hi)) j
+    (List.mem_range.mpr hj)
+  simp only [Bool.and_eq_true, decide_eq_true_eq] at h'
+  exact ⟨h'.1.1, by simpa using h'.1.2, by simpa using h'.2⟩
+
+/-- Offsets inside the byte-preparation macros: in range, and none an input load. -/
+theorem bch_offsets {i j : Nat} (hi : i < 16) (hj : j < seqSize (bch i)) :
+    bchOff + bchSize * i + j < 2 ^ 32 ∧ achOff ≤ bchOff + bchSize * i + j ∧
+      inputLoadOff (bchOff + bchSize * i + j) = false := by
+  have h : (List.range 16).all (fun i => (List.range (seqSize (bch i))).all fun j =>
+      decide (bchOff + bchSize * i + j < 2 ^ 32) && decide (achOff ≤ bchOff + bchSize * i + j) &&
+        !inputLoadOff (bchOff + bchSize * i + j)) = true := by decide +kernel
+  have h' := List.all_eq_true.mp (List.all_eq_true.mp h i (List.mem_range.mpr hi)) j
+    (List.mem_range.mpr hj)
+  simp only [Bool.and_eq_true, decide_eq_true_eq] at h'
+  exact ⟨h'.1.1, h'.1.2, by simpa using h'.2⟩
+
+/-- Offsets inside the byte tail: in range, after the key and nonce loads, and the keystream
+load is not an input load. -/
+theorem bl_offsets {j : Nat} (hj : j < seqSize bl) :
+    blOff + j < 2 ^ 32 ∧ achOff ≤ blOff + j ∧ inputLoadOff (blOff + 2) = false := by
+  have h : (List.range (seqSize bl)).all (fun j =>
+      decide (blOff + j < 2 ^ 32) && decide (achOff ≤ blOff + j) && !inputLoadOff (blOff + 2)) = true := by
+    decide +kernel
+  have h' := List.all_eq_true.mp h j (List.mem_range.mpr hj)
+  simp only [Bool.and_eq_true, decide_eq_true_eq] at h'
+  exact ⟨h'.1.1, h'.1.2, by simpa using h'.2⟩
+
+/-- Read bounds, with input loads reading the input and no key or nonce load, and
+instruction-specific output-store bounds. -/
 def OutputAccess (c : Ctx) (pc : Word) (kind : Kind) (y : Word) : Prop :=
   match kind with
-  | .read => TraceSpec.ChaCha20XorReadRegion c y
+  | .read => TraceSpec.ChaCha20XorReadRegion c y ∧ ¬ ChaCha20Policy.KNPC c.base pc ∧
+      (InputLoadPC c.base pc → Region c.inp c.len.toNat y)
   | .write => c.Wr y ∧ (OutputStorePC c.base pc → c.oidx y < c.len.toNat)
 
 /-- A preparation macro's store is its final instruction. -/
@@ -127,6 +231,10 @@ theorem byte_prepare_contract_policy (c : Ctx) (t : State) (i : Nat) (hi : i < 1
   intro e he a ha q hq
   cases hk : a.kind with
   | read =>
+    obtain ⟨jp, hjp, hepc⟩ := macro_pc (by simp [bch, Instr.falls]) hpc e he
+    have hb := bch_offsets hi hjp
+    rw [hepc]
+    refine ⟨?_, not_knPC_of_ge hb.2.1 hb.1, fun hl => absurd hl (not_inputLoadPC hb.1 hb.2.2)⟩
     obtain ⟨j, hj, haddr | haddr⟩ := byte_prepare_read_addresses t i hi e he _ ⟨a, ha, hk, q, hq, rfl⟩
     · right; right; right; right
       refine Region.mk (o := 4 * (slotX + i) + j) ?_ ?_
@@ -168,6 +276,26 @@ theorem byte_tail_read_addresses (t : State) (e : Event)
   · right; simpa [M0Crypto.Armv6M.State.reg, M0Crypto.Proofs.toReg_5,
       M0Crypto.Proofs.toReg_0, h5, h0] using hy
 
+/-- The byte tail's second load, at its third byte, reads the keystream; its first reads the input
+byte. -/
+theorem byte_tail_read_pcs (t : State) (e : Event)
+    (he : e ∈ traceAll bl t) (y : Word) (hy : Reads e.accesses y) :
+    e.pc = t.pc + 2#32 ∨ y = t.regs 2 + t.regs 0 := by
+  rcases hy with ⟨a, ha, hk, q, hq, hy⟩
+  simp only [traceAll, bl, List.mem_cons, List.not_mem_nil, or_false] at he
+  rcases he with rfl | rfl | rfl | rfl | rfl | rfl
+  · right
+    simp [Instr.accesses, MemOp.isLoad] at ha
+    subst ha
+    have hq0 : q = 0 := by simpa [MemOp.width] using hq
+    subst q
+    simpa [M0Crypto.Armv6M.State.reg, M0Crypto.Proofs.toReg_2, M0Crypto.Proofs.toReg_0] using hy
+  · left
+    have h := execAll_pc [Instr.memReg .ldrb 1 2 0] t (by decide)
+    simpa [execAll, seqSize, Instr.size] using h
+  all_goals simp [Instr.accesses, MemOp.isLoad] at ha
+  all_goals (subst ha; cases hk)
+
 /-- A byte-tail iteration reads only the permitted input and stack windows. -/
 theorem byte_tail_reads_contract (c : Ctx) (k : Nat) (t : State)
     (hin : t.regs 2 = c.inp + BitVec.ofNat 32 (64 * k))
@@ -191,6 +319,7 @@ theorem byte_tail_reads_contract (c : Ctx) (k : Nat) (t : State)
 
 /-- A byte-tail iteration obeys the ChaCha read and write bounds. -/
 theorem byte_tail_contract_policy (c : Ctx) (hv : Valid c) (block : Nat) (t : State)
+    (hpc : t.pc = c.base + BitVec.ofNat 32 blOff)
     (hin : t.regs 2 = c.inp + BitVec.ofNat 32 (64 * block)) (hstack : t.regs 5 = c.fp)
     (hout : t.regs 3 = c.out + BitVec.ofNat 32 (64 * block))
     (hindex : (t.regs 0).toNat < 64)
@@ -199,8 +328,17 @@ theorem byte_tail_contract_policy (c : Ctx) (hv : Valid c) (block : Nat) (t : St
   intro e he a ha q hq
   cases hk : a.kind with
   | read =>
-    exact byte_tail_reads_contract c block t hin hstack hindex hbound e he _
-      ⟨a, ha, hk, q, hq, rfl⟩
+    have hy : Reads e.accesses (a.addr + BitVec.ofNat 32 q) := ⟨a, ha, hk, q, hq, rfl⟩
+    have hword : BitVec.ofNat 32 (t.regs 0).toNat = t.regs 0 := by simp
+    obtain ⟨jp, hjp, hepc⟩ := macro_pc (by decide) hpc e he
+    have hb := bl_offsets hjp
+    refine ⟨byte_tail_reads_contract c block t hin hstack hindex hbound e he _ hy,
+      by rw [hepc]; exact not_knPC_of_ge hb.2.1 hb.1, fun hl => ?_⟩
+    rcases byte_tail_read_pcs t e he _ hy with hp2 | ha'
+    · rw [hp2, hpc, ofNat_add_assoc] at hl
+      exact absurd hl (not_inputLoadPC (bl_offsets (j := 2) (by decide)).1 hb.2.2)
+    · refine Region.mk (o := 64 * block + (t.regs 0).toNat) hbound ?_
+      rw [ha', hin, ← ofNat_add_assoc, hword]
   | write =>
     have hw := chacha20_tail_writes_output c hv block t hout hbound e he _
       ⟨a, ha, hk, q, hq, rfl⟩

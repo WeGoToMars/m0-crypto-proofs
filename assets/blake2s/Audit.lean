@@ -9,8 +9,10 @@ The same policy for every asset: for each exported function, a correctness, a co
 a read-bound and a stack-bound theorem, a non-vacuity witness (`*_nonvacuous`) for the
 correctness precondition, passed to its correctness theorem, and one for the constant-time
 hypothesis (two valid calls with equal public inputs and different secrets); then the asset's
-composition claims. Supporting lemmas are not
-listed: `#print axioms` on a claim already covers everything its proof uses. The internal
+composition claims. Each
+function also has a stack-discipline theorem and an interrupted-call theorem, with a witness
+(`*_interrupted_nonvacuous`) for the latter's hypotheses. Supporting lemmas are not listed:
+`#print axioms` on a claim already covers everything its proof uses. The internal
 routines `m0c_blake2s_compress` and `m0c_blake2s_copy` (local symbols) are not claims: their
 contracts are proved and used inside the claims of `update` and `final`. -/
 
@@ -19,24 +21,33 @@ contracts are proved and used inside the claims of `update` and `final`. -/
 #print axioms M0Crypto.Release.Blake2s.Init.init_constant_time
 #print axioms M0Crypto.Release.Blake2s.Init.init_reads
 #print axioms M0Crypto.Release.Blake2s.Init.init_stack
+#print axioms M0Crypto.Release.Blake2s.Init.init_stack_discipline
+#print axioms M0Crypto.Release.Blake2s.Init.init_interrupted
 #print axioms M0Crypto.Release.NonVacuity.init_pre_nonvacuous
 #print axioms M0Crypto.Release.NonVacuity.init_constant_time_nonvacuous
+#print axioms M0Crypto.Release.NonVacuity.init_interrupted_nonvacuous
 
 -- m0c_blake2s_update
 #print axioms M0Crypto.Release.Blake2s.Update.update_correct
 #print axioms M0Crypto.Release.Blake2s.Update.update_constant_time
 #print axioms M0Crypto.Release.Blake2s.Update.update_reads
 #print axioms M0Crypto.Release.Blake2s.Update.update_stack
+#print axioms M0Crypto.Release.Blake2s.Update.update_stack_discipline
+#print axioms M0Crypto.Release.Blake2s.Update.update_interrupted
 #print axioms M0Crypto.Release.NonVacuity.update_pre_nonvacuous
 #print axioms M0Crypto.Release.NonVacuity.update_constant_time_nonvacuous
+#print axioms M0Crypto.Release.NonVacuity.update_interrupted_nonvacuous
 
 -- m0c_blake2s_final
 #print axioms M0Crypto.Release.Blake2s.Final.final_correct
 #print axioms M0Crypto.Release.Blake2s.Final.final_constant_time
 #print axioms M0Crypto.Release.Blake2s.Final.final_reads
 #print axioms M0Crypto.Release.Blake2s.Final.final_stack
+#print axioms M0Crypto.Release.Blake2s.Final.final_stack_discipline
+#print axioms M0Crypto.Release.Blake2s.Final.final_interrupted
 #print axioms M0Crypto.Release.NonVacuity.final_pre_nonvacuous
 #print axioms M0Crypto.Release.NonVacuity.final_constant_time_nonvacuous
+#print axioms M0Crypto.Release.NonVacuity.final_interrupted_nonvacuous
 
 -- Composition: a whole init/update.../final sequence (statements in Blake2sStatements.lean:
 -- HashCorrect, total correctness; HashConstantTime, constant time over the sequence). The

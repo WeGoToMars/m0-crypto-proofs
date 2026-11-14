@@ -1,4 +1,6 @@
 import M0Crypto.Release.Reach
+import M0Crypto.Release.TraceSpec
+import M0Crypto.Release.FrameBase
 
 /-!
 # Non-vacuity witnesses: shared helpers
@@ -72,5 +74,35 @@ theorem ret_out :
   simp at this
   unfold Artifacts.Release.size at hi
   omega
+
+/-! ## Interrupts -/
+
+/-- A handler that zeroes the `K` bytes below SP and increments the byte at `a`, a counter of its
+own. -/
+def tickBelowSp (K : Nat) (a : Word) (_ : Nat) (s : State) : State :=
+  { s with mem := fun y =>
+      if Region (s.sp - BitVec.ofNat 32 K) K y then 0 else if y = a then s.mem y + 1 else s.mem y }
+
+/-- `HandlerRoom` and `Handlers` of `tickBelowSp K a`, from regions that cover `P`, each separated
+from the `K` bytes below the window and from `a`. -/
+theorem interruptWitness_of {K n : Nat} {sp0 a : Word} {P : Word → Prop} (rs : List (Word × Nat))
+    (hlo : n + K ≤ sp0.toNat) (hP : ∀ y, P y → ∃ r ∈ rs, Region r.1 r.2 y)
+    (hd : ∀ r ∈ rs,
+      Frame.Disj r.1 r.2 (sp0 - BitVec.ofNat 32 (n + K)) K ∧ Frame.Disj r.1 r.2 a 1) :
+    TraceSpec.HandlerRoom K n sp0 P ∧ TraceSpec.Handlers K P (tickBelowSp K a) := by
+  have hne : ∀ (r : Word × Nat) b m, Frame.Disj r.1 r.2 b m → ∀ y, Region r.1 r.2 y →
+      ¬ Region b m y := by
+    intro r b m hd y hry hy
+    obtain ⟨o, ho, rfl⟩ := Region.exists hry
+    obtain ⟨q, hq, e⟩ := Region.exists hy
+    obtain ⟨h1, h2, h3⟩ := hd
+    exact Frame.ne_of_disj h1 h2 h3 ho hq e
+  refine ⟨⟨hlo, fun y hy hp => ?_⟩, fun _ s => ⟨rfl, rfl, rfl, rfl, rfl, fun y ⟨hp, hk⟩ => ?_⟩⟩
+  · obtain ⟨r, hr, hry⟩ := hP y hp
+    exact hne r _ _ (hd r hr).1 y hry hy
+  · obtain ⟨r, hr, hry⟩ := hP y hp
+    have hya : y ≠ a := fun h => hne r _ _ (hd r hr).2 y hry (by rw [h]; simp)
+    show (if _ then _ else _) = _
+    rw [if_neg hk, if_neg hya]
 
 end M0Crypto.Release.NonVacuity

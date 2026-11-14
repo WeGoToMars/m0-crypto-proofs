@@ -20,9 +20,9 @@ open M0Crypto.Release.Frame
 open M0Crypto.Release.ConstantTime (PCBetween)
 open M0Crypto.Spec.Aead (pad16 macData chacha20 decrypt poly1305 polyKey)
 
-theorem decrypt_return_r {Rd : Word → Prop} (c : ACall) (hv : AValid c) (hb : ABuf c) (s : State)
+theorem decrypt_return_r {Rd Kn : Word → Prop} (c : ACall) (hv : AValid c) (hb : ABuf c) (s : State)
     (hp : s.pc=c.base+BitVec.ofNat 32 decClrAAt) (h : DecryptReady c s) (hlr : (c.regs0 14).getLsbD 0=true) :
-    ReachS c.base (RdP c.base Rd) s (DecryptResult c) := by
+    ReachS c.base (RdP c.base Rd Kn) s (DecryptResult c) := by
   apply ((clear_return_w c hv true decClrAAt (by decide) (by decide) (by decide) (by decide) (by decide)
     (by decide) (by decide) s hp h.sp h.high h.hi hlr
     (region_ns (by decide +kernel) (by decide)) (region_ns (by decide +kernel) (by decide)) (pt_ns (by decide +kernel) (by decide)) (region_ns (by decide +kernel) (by decide)) (pt_ns (by decide +kernel) (by decide))).toRd (fun _ h => h)).mono (fun _ _ h => h)
@@ -49,19 +49,20 @@ theorem decrypt_return_r {Rd : Word → Prop} (c : ACall) (hv : AValid c) (hb : 
   · intro y hy
     rw [hf y (fun hw => hy (.inl (clearWr_swr _ _ hw))), h.frame y hy]
 
-theorem decrypt_tail_r {Rd : Word → Prop} (c : ACall) (hv : AValid c) (hb : ABuf c) (s : State)
+theorem decrypt_tail_r {Rd Kn : Word → Prop} (c : ACall) (hv : AValid c) (hb : ABuf c) (s : State)
     (hp : s.pc=c.base+BitVec.ofNat 32 decVerdictAt) (h : Body c (SWr c.A) s)
     (hz : s.regs 3=0#32 ↔ c.expected=c.tagB) (hlr : (c.regs0 14).getLsbD 0=true)
-    (hsub : ∀ y, TraceSpec.AeadDecryptReadRegion c y → Rd y) :
-    ReachS c.base (RdP c.base Rd) s (DecryptResult c) := by
+    (hsub : ∀ y, AeadSiteRegion c siteLen y ∨ Region c.tag 16 y → Rd y)
+    (hkn : ∀ y, AeadSiteRegion c copyLen y → Kn y) :
+    ReachS c.base (RdP c.base Rd Kn) s (DecryptResult c) := by
   obtain ⟨ez, em, er⟩ := verdict_effect s
-  apply ReachS.blockW (Pn := NoSite c.base) (Wr := DAllowed c) (noP c.base Rd) (is := verdict) (region_ns (by decide +kernel) (by decide)) (by have := hv.base4; omega) hp (by decide) (by decide) (by decide)
+  apply ReachS.blockW (Pn := NoSite c.base) (Wr := DAllowed c) (noP c.base Rd Kn) (is := verdict) (region_ns (by decide +kernel) (by decide)) (by have := hv.base4; omega) hp (by decide) (by decide) (by decide)
     (by simp [alignedAll, verdict, Instr.accesses]) (WritesTo.of_noWritesMem _ _ (by decide) _)
   generalize hu : execAll verdict s=u at ez em er
   have up : u.pc=c.base+BitVec.ofNat 32 decRejectBrAt := by rw [←hu, execAll_pc _ _ (by decide), hp, ofNat_add_assoc]; rfl
   have ub : Body c (SWr c.A) u := h.same em (er 13 (by decide) (by decide))
     (fun r a b => er r (by omega) (by omega))
-  apply ReachS.bcondW (Pn := NoSite c.base) (Wr := DAllowed c) (noP c.base Rd) (pt_ns (by decide +kernel) (by decide)) (by have := hv.base4; omega) decRejectAt 1 (brImm8 decRejectBrAt decRejectAt) up (by decide) (by decide +kernel)
+  apply ReachS.bcondW (Pn := NoSite c.base) (Wr := DAllowed c) (noP c.base Rd Kn) (pt_ns (by decide +kernel) (by decide)) (by have := hv.base4; omega) decRejectAt 1 (brImm8 decRejectBrAt decRejectAt) up (by decide) (by decide +kernel)
     (by decide) (by decide +kernel)
   · intro hn
     have hbad : c.expected≠c.tagB := by
@@ -97,7 +98,7 @@ theorem decrypt_tail_r {Rd : Word → Prop} (c : ACall) (hv : AValid c) (hb : AB
       (fun j hj => not_siteRd (by have := (by decide : decCryptAt + seqSize crypt < 2 ^ 32); omega)
         (no_readSite (by decide +kernel : firstReadSite decCryptAt (seqSize crypt) = none) j hj))
       (pt_ns (by decide +kernel) (by decide))
-      (not_pcBetween (by decide) (by decide) (Or.inr (by decide))) (fun y h => hsub y (.common h))
+      (not_pcBetween (by decide) (by decide) (Or.inr (by decide))) (fun y h => hsub y (.inl h)) hkn
     apply ReachS.bind
     apply reach.mono (fun _ _ h => h)
     intro w hw
@@ -111,7 +112,7 @@ theorem decrypt_tail_r {Rd : Word → Prop} (c : ACall) (hv : AValid c) (hb : AB
     apply ((status_reach_w c hv (DAllowed c) false decAcceptAt (by decide) (by decide) w hw.pc (region_ns (by decide +kernel) (by decide))).toRd (fun _ h => h)).mono
       (fun _ _ h => h)
     rintro x ⟨xp, x4, xm, xr⟩
-    apply ReachS.bW (Pn := NoSite c.base) (Wr := DAllowed c) (noP c.base Rd) (pt_ns (by decide +kernel) (by decide)) (by have := hv.base4; omega) decClrAAt (brImm11 decSkipAt decClrAAt) xp (by decide) (by decide) (by decide) (by decide)
+    apply ReachS.bW (Pn := NoSite c.base) (Wr := DAllowed c) (noP c.base Rd Kn) (pt_ns (by decide +kernel) (by decide)) (by have := hv.base4; omega) decClrAAt (brImm11 decSkipAt decClrAAt) xp (by decide) (by decide) (by decide) (by decide)
     generalize hy : x.setReg 15 (c.base+BitVec.ofNat 32 decClrAAt)=y
     apply decrypt_return_r c hv hb y (by rw [←hy, M0Crypto.Armv6M.State.pc, setReg_eq]) _ hlr
     have ym : y.mem=w.mem := by rw [←hy, setReg_mem, xm]
@@ -125,13 +126,14 @@ theorem decrypt_tail_r {Rd : Word → Prop} (c : ACall) (hv : AValid c) (hb : AB
       rw [ym]; exact hw.out
     · intro a ha; rw [ym]; exact wf a ha
 
-theorem decrypt_compare_entry_r {Rd : Word → Prop} (c : ACall) (hv : AValid c) (hb : ABuf c) (s : State)
-    (he : AEntry c decOff s) (hsub : ∀ y, TraceSpec.AeadDecryptReadRegion c y → Rd y) :
-    ReachS c.base (RdP c.base Rd) s (fun y =>
+theorem decrypt_compare_entry_r {Rd Kn : Word → Prop} (c : ACall) (hv : AValid c) (hb : ABuf c) (s : State)
+    (he : AEntry c decOff s) (hsub : ∀ y, AeadSiteRegion c siteLen y ∨ Region c.tag 16 y → Rd y)
+    (hkn : ∀ y, AeadSiteRegion c copyLen y → Kn y) :
+    ReachS c.base (RdP c.base Rd Kn) s (fun y =>
       y.pc = c.base + BitVec.ofNat 32 decCmpAAt ∧ Body c (SWr c.A) y ∧
       Ctx.bytesAt y.mem c.tag 16 = c.tagB ∧
       Ctx.bytesAt y.mem (c.A + 72#32) 16 = c.expected) := by
-  have hsubE : ∀ y, AeadCommonReadRegion c y → Rd y := fun y h => hsub y (.common h)
+  have hsubE : ∀ y, AeadSiteRegion c siteLen y → Rd y := fun y h => hsub y (.inl h)
   have hblk := rd_blk c hsubE
   obtain ⟨tx, ti', tl, tf, tc⟩ := dec_calls
   obtain ⟨_, _, _, _, _, mad, _, mct, _⟩ := dec_at
@@ -139,7 +141,7 @@ theorem decrypt_compare_entry_r {Rd : Word → Prop} (c : ACall) (hv : AValid c)
   apply (aead_setup_r (Rd := Rd) c hv decOff (blImm (decOff + proXorOff) xorOff) (blImm (decOff + initCallOff) initOff)
     (by decide) (by decide) tx
     (by decide) (by decide) ti' (by decide) (by decide) s he (region_ns (by decide +kernel) (by decide)) (pt_ns (by decide +kernel) (by decide)) (region_ns (by decide +kernel) (by decide)) (pt_ns (by decide +kernel) (by decide))
-    (not_pcBetween (by decide) (by decide) (Or.inr (by decide))) hsubE).mono (fun _ _ h => h)
+    (not_pcBetween (by decide) (by decide) (Or.inr (by decide))) hsubE hkn).mono (fun _ _ h => h)
   rintro u ⟨ic, hu⟩
   have bu := hu.body hv
   have pi := PInv.init c.A ic u hu.init hu.ictx
@@ -191,20 +193,21 @@ theorem decrypt_compare_entry_r {Rd : Word → Prop} (c : ACall) (hv : AValid c)
   refine ⟨hy.pc, yb, tagY, ?_⟩
   exact hy.tagBytes
 
-theorem decrypt_reach_r {Rd : Word → Prop} (c : ACall) (hv : AValid c) (hb : ABuf c) (s : State)
+theorem decrypt_reach_r {Rd Kn : Word → Prop} (c : ACall) (hv : AValid c) (hb : ABuf c) (s : State)
     (he : AEntry c decOff s) (hlr : (c.regs0 14).getLsbD 0=true)
-    (hsub : ∀ y, TraceSpec.AeadDecryptReadRegion c y → Rd y) :
-    ReachS c.base (RdP c.base Rd) s (DecryptResult c) := by
+    (hsub : ∀ y, AeadSiteRegion c siteLen y ∨ Region c.tag 16 y → Rd y)
+    (hkn : ∀ y, AeadSiteRegion c copyLen y → Kn y) :
+    ReachS c.base (RdP c.base Rd Kn) s (DecryptResult c) := by
   apply ReachS.bind
-  apply (decrypt_compare_entry_r (Rd := Rd) c hv hb s he hsub).mono (fun _ _ h => h)
+  apply (decrypt_compare_entry_r (Rd := Rd) c hv hb s he hsub hkn).mono (fun _ _ h => h)
   rintro y ⟨ypc, yb, tagY, tag⟩
   apply ReachS.bind
   apply (compare_reach_r (Rd := Rd) c hv y ypc yb.sp yb.high (region_ns (by decide +kernel) (by decide)) (pt_ns (by decide +kernel) (by decide))
-    (fun j hj => hsub _ (.tag hj rfl)) (rd_blk c (fun y h => hsub y (.common h)))).mono
+    (fun j hj => hsub _ (.inr (Region.mk hj rfl))) (rd_blk c (fun y h => hsub y (.inl h)))).mono
     (fun _ _ h => h)
   rintro z ⟨zp, zm, zr, zeq⟩
   have zb := yb.same zm (zr 13 (by decide) (by decide)) (fun r a b => zr r (by omega) (by omega))
-  apply decrypt_tail_r c hv hb z zp zb _ hlr hsub
+  apply decrypt_tail_r c hv hb z zp zb _ hlr hsub hkn
   rw [zeq, tagY, tag]
   exact eq_comm
 

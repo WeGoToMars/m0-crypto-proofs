@@ -51,13 +51,13 @@ Needs Lean v4.35.0 (via `elan`), LLVM/LLD 23.1.4 and QEMU 11.1.3. Set `M0C_LIB` 
 
 ## Claims
 
-Each asset's `Audit.lean` lists its claims: for each exported function a correctness, a constant-time, a read-bound and a stack-bound theorem, and two non-vacuity witnesses: a concrete call that satisfies the correctness precondition and is passed to the correctness theorem, and two concrete calls that satisfy the hypothesis of the constant-time theorem and differ in a secret input; then the asset's composition claims. Every claim of a function assumes the same hypothesis, a valid call (`Pre`), which includes the entry state, the buffer placement rules and a return address outside the code. Internal routines (Poly1305 `init`/`blocks`/`finish`, BLAKE2s `compress`/`copy`, X25519 `fe_mul`/`fe_sqr`/`fe_mulc_add`) are local symbols, not claims: their proved contracts are used inside the claims of the functions that call them.
+Each asset's `Audit.lean` lists its claims: for each exported function a correctness, a constant-time, a read-bound, a stack-bound, a stack-discipline and an interrupted-call theorem, and three non-vacuity witnesses: a concrete call that satisfies the correctness precondition and is passed to the correctness theorem, two concrete calls that satisfy the hypothesis of the constant-time theorem and differ in a secret input, and a call with 256 bytes of handler room and a handler that writes them; then the asset's composition claims. Every claim of a function assumes the same hypothesis, a valid call (`Pre`), which includes the entry state, the buffer placement rules and a return address outside the code; the interrupted-call theorem also assumes the handler room. Internal routines (Poly1305 `init`/`blocks`/`finish`, BLAKE2s `compress`/`copy`, X25519 `fe_mul`/`fe_sqr`/`fe_mulc_add`) are local symbols, not claims: their proved contracts are used inside the claims of the functions that call them.
 
 | Asset | Functions | Claims |
 |---|---|---:|
-| ChaCha20-Poly1305 | `m0c_chacha20_xor`, `m0c_chacha20poly1305_encrypt`, `m0c_chacha20poly1305_decrypt`; composition `Aead.rejected_writes` | 19 |
-| X25519 | `m0c_x25519` | 6 |
-| BLAKE2s-256 | `m0c_blake2s_init`, `m0c_blake2s_update`, `m0c_blake2s_final`; composition `Blake2s.hash_correct`, `Blake2s.hash_constant_time` and their witnesses | 22 |
+| ChaCha20-Poly1305 | `m0c_chacha20_xor`, `m0c_chacha20poly1305_encrypt`, `m0c_chacha20poly1305_decrypt`; composition `Aead.rejected_writes` | 28 |
+| X25519 | `m0c_x25519` | 9 |
+| BLAKE2s-256 | `m0c_blake2s_init`, `m0c_blake2s_update`, `m0c_blake2s_final`; composition `Blake2s.hash_correct`, `Blake2s.hash_constant_time` and their witnesses | 31 |
 
 ## Functional correctness
 
@@ -70,7 +70,7 @@ The functional theorems connect the release bytes to the specifications in `lean
 
 Clearing of working state is proved as each contract states it, as listed above: every asset fixes every byte of its stack window at return. The BLAKE2s context (chain value and up to 64 pending message bytes) is left to the caller to wipe. [docs/REVIEW.md](docs/REVIEW.md) lists the exact limits per asset.
 
-The ARMv6-M model describes sequential, byte-addressed, ordinary memory without interrupts. Its decoder is compared with LLVM on every instruction of each object, and its execution with QEMU instruction by instruction on every instruction a call can execute.
+The ARMv6-M model describes sequential, byte-addressed, ordinary memory. An interrupt handler is modelled by its effect alone: it restores every register and flag and preserves every byte the call may read or write outside a given number of bytes below SP (`TraceSpec.Handlers`). Its decoder is compared with LLVM on every instruction of each object, and its execution with QEMU instruction by instruction on every instruction a call can execute.
 
 ## Constant-time traces, read bounds and stack bounds
 
@@ -91,6 +91,8 @@ All names are in `M0Crypto.Release`; the stack theorems are the `*_stack` of the
 - **Equal traces.** Two valid calls that agree on the public inputs produce identical trace events (PC, instruction, data access addresses and widths). Public inputs: addresses, SP, return address and lengths; for ChaCha20 the counter; for decryption the verdict bit; for BLAKE2s `update` and `final` the number of bytes pending in the context, which is a function of the lengths absorbed. Keys, nonces, messages, scalars, points and the hash state are secret. `Blake2s.hash_constant_time` extends this to a whole `init; update*; final` sequence.
 - **Read bounds.** Every data read lies in the caller's inputs, the code or the function's stack window. Encryption also reads `out`, where its MAC reads the ciphertext. Decryption reads `out` only in place, as `in`.
 - **Stack bounds.** At every step SP lies in `[sp0 - N, sp0]`, with N in bytes as in the table, including internal callees.
+- **Stack discipline** (`*_stack_discipline`). In every step, each byte the call accesses among the N bytes below `sp0` lies at or above SP before or after the step, and each such byte it reads was written since SP last moved to or below it.
+- **Interrupted calls** (`*_interrupted`). Take a valid call whose `K` bytes below the stack window hold none of its inputs, outputs or code, and handlers that may run before any of its instructions, each restoring every register and flag and preserving every byte the call may read or write outside the `K` bytes below SP. The call returns with the events of the uninterrupted call, its registers and flags, and its memory on every byte the call may read or write outside the window, and SP stays in the window. Clearing covers uninterrupted calls.
 
 Equal traces are a statement about the model. That equal traces take equal time on the chip is an assumption (the Cortex-M0+ has no cache or branch prediction), tested by cycle measurements on one MSPM0L2228, not proved. Proofs use kernel-checked abstract interpretation certificates in `Release/ConstantTime/`. For the trusted base and how to review these theorems, see [docs/REVIEW.md](docs/REVIEW.md).
 

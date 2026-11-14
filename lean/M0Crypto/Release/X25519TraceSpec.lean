@@ -49,4 +49,20 @@ def X25519Stack : Prop :=
       ∃ states tr, runStates c.ret fuel s = .ok (states, tr) ∧
         ∀ st ∈ states, InStackWindow c.sp0 X25519.stackBytes (st.regs 13)
 
+/-- X25519 stack discipline: in every step, the bytes accessed among the `516` bytes below the
+entry SP lie at or above SP, and every such byte read was written since SP last moved to or
+below it. -/
+def X25519StackDiscipline : Prop :=
+  ∀ c s, X25519.Pre c s →
+    ∃ n, ∀ fuel, n ≤ fuel →
+      ∃ states tr, runStates c.ret fuel s = .ok (states, tr) ∧
+        StackDiscipline c.sp0 X25519.stackBytes states tr
+
+/-- X25519 with interrupts: a valid call that may read its read region and write its allowed
+writes returns as `InterruptedCall` states, for every handler room `K` below its stack window. -/
+def X25519Interrupted : Prop :=
+  ∀ K c s, X25519.Pre c s →
+    InterruptedCall K X25519.stackBytes c.sp0 c.ret s
+      (fun y => X25519ReadRegion c y ∨ X25519.WrOk c y) (X25519.Result c)
+
 end M0Crypto.Release.TraceSpec

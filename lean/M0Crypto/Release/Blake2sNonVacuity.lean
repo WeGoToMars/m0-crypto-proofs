@@ -18,6 +18,9 @@ correctness theorem (`example`s below):
 
 The `*_constant_time_nonvacuous` witnesses pair each call with a second valid call with equal
 public inputs and different secret memory (section "Constant time" below).
+The `*_interrupted_nonvacuous` witnesses give each call 256 bytes of handler room and a
+handler that zeroes them and increments a byte outside the call's regions, and are passed to
+the function's interrupted-call theorem.
 
 The composed claims have `hash_correct_nonvacuous` (`HashCorrectHyp` at a concrete call) and
 `hash_constant_time_nonvacuous` (`HashConstantTimeHyp` for two executions that differ in their message bytes).
@@ -119,6 +122,96 @@ theorem final_pre_nonvacuous : Blake2s.Final.Pre fCtx (stOf bufMem fCtx.regs0) :
 example := Blake2s.Init.init_correct _ _ init_pre_nonvacuous
 example := Blake2s.Update.update_correct.choose_spec _ _ update_pre_nonvacuous
 example := Blake2s.Final.final_correct.choose_spec _ _ final_pre_nonvacuous
+
+/-- The call of `init_pre_nonvacuous` with 256 bytes of handler room, and a handler that zeroes
+the 256 bytes below SP and increments the byte at 0x20002000, as `init_interrupted` assumes
+them. -/
+theorem init_interrupted_nonvacuous :
+    Blake2s.Init.Pre iCtx (stOf bufMem iCtx.regs0) ∧
+      TraceSpec.HandlerRoom 256 Blake2s.initStackBytes iCtx.sp0
+        (fun y => TraceSpec.Blake2sInitReadRegion iCtx y ∨ Blake2s.Init.WrOk iCtx y) ∧
+      TraceSpec.Handlers 256 (fun y => TraceSpec.Blake2sInitReadRegion iCtx y ∨ Blake2s.Init.WrOk iCtx y)
+        (tickBelowSp 256 0x20002000#32) := by
+  refine ⟨init_pre_nonvacuous, interruptWitness_of [(iCtx.base, Artifacts.Release.size),
+    (iCtx.fp, Blake2s.initStackBytes), (iCtx.context, Blake2s.contextBytes)] ?_ ?_ ?_⟩
+  · simp only [iCtx, Blake2s.initStackBytes, Blake2s.contextBytes, sp0]
+    decide
+  · intro y hy
+    rcases hy with (h | h) | (h | h)
+    · exact ⟨_, .head _, h⟩
+    · exact ⟨_, .tail _ (.head _), h⟩
+    · exact ⟨_, .tail _ (.head _), h⟩
+    · exact ⟨_, .tail _ (.tail _ (.head _)), h⟩
+  · simp only [List.forall_mem_cons, List.not_mem_nil, false_imp_iff, implies_true, and_true,
+      Disj, Blake2s.Init.Ctx.fp, iCtx, Blake2s.initStackBytes, Blake2s.contextBytes, sp0, Artifacts.Release.size]
+    decide +kernel
+
+/-- The call of `update_pre_nonvacuous` with 256 bytes of handler room, and a handler that zeroes
+the 256 bytes below SP and increments the byte at 0x20002000, as `update_interrupted` assumes
+them. -/
+theorem update_interrupted_nonvacuous :
+    Blake2s.Update.Pre uCtx (stOf bufMem uCtx.regs0) ∧
+      TraceSpec.HandlerRoom 256 Blake2s.streamStackBytes uCtx.sp0
+        (fun y => TraceSpec.Blake2sUpdateReadRegion uCtx y ∨ Blake2s.Update.WrOk uCtx y) ∧
+      TraceSpec.Handlers 256 (fun y => TraceSpec.Blake2sUpdateReadRegion uCtx y ∨ Blake2s.Update.WrOk uCtx y)
+        (tickBelowSp 256 0x20002000#32) := by
+  refine ⟨update_pre_nonvacuous, interruptWitness_of [(uCtx.context, Blake2s.contextBytes),
+    (uCtx.input, uCtx.len.toNat), (uCtx.base, Artifacts.Release.size),
+    (uCtx.fp, Blake2s.streamStackBytes)] ?_ ?_ ?_⟩
+  · simp only [uCtx, Blake2s.streamStackBytes, Blake2s.streamSavedBytes, Blake2s.streamPadBytes,
+      Blake2s.compressFrameBytes, Blake2s.compressLocalsBytes, Blake2s.compressSavedBytes,
+      Blake2s.contextBytes, sp0]
+    decide
+  · intro y hy
+    rcases hy with (h | h | h | h) | (h | h)
+    · exact ⟨_, .head _, h⟩
+    · exact ⟨_, .tail _ (.head _), h⟩
+    · exact ⟨_, .tail _ (.tail _ (.head _)), h⟩
+    · exact ⟨_, .tail _ (.tail _ (.tail _ (.head _))), h⟩
+    · exact ⟨_, .tail _ (.tail _ (.tail _ (.head _))), h⟩
+    · exact ⟨_, .head _, h⟩
+  · simp only [List.forall_mem_cons, List.not_mem_nil, false_imp_iff, implies_true, and_true,
+      Disj, Blake2s.Update.Ctx.fp, uCtx, Blake2s.streamStackBytes, Blake2s.streamSavedBytes, Blake2s.streamPadBytes,
+      Blake2s.compressFrameBytes, Blake2s.compressLocalsBytes, Blake2s.compressSavedBytes,
+      Blake2s.contextBytes, sp0, Artifacts.Release.size]
+    decide +kernel
+
+/-- The call of `final_pre_nonvacuous` with 256 bytes of handler room, and a handler that zeroes
+the 256 bytes below SP and increments the byte at 0x20002000, as `final_interrupted` assumes
+them. -/
+theorem final_interrupted_nonvacuous :
+    Blake2s.Final.Pre fCtx (stOf bufMem fCtx.regs0) ∧
+      TraceSpec.HandlerRoom 256 Blake2s.streamStackBytes fCtx.sp0
+        (fun y => TraceSpec.Blake2sFinalReadRegion fCtx y ∨ Blake2s.Final.WrOk fCtx y) ∧
+      TraceSpec.Handlers 256 (fun y => TraceSpec.Blake2sFinalReadRegion fCtx y ∨ Blake2s.Final.WrOk fCtx y)
+        (tickBelowSp 256 0x20002000#32) := by
+  refine ⟨final_pre_nonvacuous, interruptWitness_of [(fCtx.context, Blake2s.contextBytes),
+    (fCtx.base, Artifacts.Release.size), (fCtx.fp, Blake2s.streamStackBytes),
+    (fCtx.out, Blake2s.digestBytes)] ?_ ?_ ?_⟩
+  · simp only [fCtx, Blake2s.streamStackBytes, Blake2s.streamSavedBytes, Blake2s.streamPadBytes,
+      Blake2s.compressFrameBytes, Blake2s.compressLocalsBytes, Blake2s.compressSavedBytes,
+      Blake2s.contextBytes, Blake2s.digestBytes, sp0]
+    decide
+  · intro y hy
+    rcases hy with (h | h | h) | (h | h | h)
+    · exact ⟨_, .head _, h⟩
+    · exact ⟨_, .tail _ (.head _), h⟩
+    · exact ⟨_, .tail _ (.tail _ (.head _)), h⟩
+    · exact ⟨_, .tail _ (.tail _ (.head _)), h⟩
+    · exact ⟨_, .head _, h⟩
+    · exact ⟨_, .tail _ (.tail _ (.tail _ (.head _))), h⟩
+  · simp only [List.forall_mem_cons, List.not_mem_nil, false_imp_iff, implies_true, and_true,
+      Disj, Blake2s.Final.Ctx.fp, fCtx, Blake2s.streamStackBytes, Blake2s.streamSavedBytes, Blake2s.streamPadBytes,
+      Blake2s.compressFrameBytes, Blake2s.compressLocalsBytes, Blake2s.compressSavedBytes,
+      Blake2s.contextBytes, Blake2s.digestBytes, sp0, Artifacts.Release.size]
+    decide +kernel
+
+example := Blake2s.Init.init_interrupted 256 _ _ init_interrupted_nonvacuous.1
+  init_interrupted_nonvacuous.2.1 _ init_interrupted_nonvacuous.2.2
+example := Blake2s.Update.update_interrupted 256 _ _ update_interrupted_nonvacuous.1
+  update_interrupted_nonvacuous.2.1 _ update_interrupted_nonvacuous.2.2
+example := Blake2s.Final.final_interrupted 256 _ _ final_interrupted_nonvacuous.1
+  final_interrupted_nonvacuous.2.1 _ final_interrupted_nonvacuous.2.2
 
 /-! ## Constant time: two valid calls with equal public inputs and different secrets
 

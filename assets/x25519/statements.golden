@@ -2,6 +2,8 @@ M0Crypto.Release.X25519.x25519_correct : M0Crypto.Release.X25519.Correct
 M0Crypto.Release.X25519.x25519_constant_time : M0Crypto.Release.TraceSpec.X25519ConstantTime
 M0Crypto.Release.X25519.x25519_reads : M0Crypto.Release.TraceSpec.X25519Reads
 M0Crypto.Release.X25519.x25519_stack : M0Crypto.Release.TraceSpec.X25519Stack
+M0Crypto.Release.X25519.x25519_stack_discipline : M0Crypto.Release.TraceSpec.X25519StackDiscipline
+M0Crypto.Release.X25519.x25519_interrupted : M0Crypto.Release.TraceSpec.X25519Interrupted
 M0Crypto.Release.NonVacuity.x25519_pre_nonvacuous : M0Crypto.Release.X25519.Pre M0Crypto.Release.NonVacuity.xCtx
   (M0Crypto.Release.NonVacuity.stOf M0Crypto.Release.NonVacuity.xMem M0Crypto.Release.NonVacuity.xCtx.regs0)
 M0Crypto.Release.NonVacuity.x25519_constant_time_nonvacuous : M0Crypto.Release.X25519.Pre
@@ -11,6 +13,17 @@ M0Crypto.Release.NonVacuity.x25519_constant_time_nonvacuous : M0Crypto.Release.X
       (M0Crypto.Release.NonVacuity.stOf M0Crypto.Release.NonVacuity.xMem2 M0Crypto.Release.NonVacuity.xCtx2.regs0) ∧
     M0Crypto.Release.NonVacuity.xCtx.pub = M0Crypto.Release.NonVacuity.xCtx2.pub ∧
       M0Crypto.Release.NonVacuity.xCtx.scalarB ≠ M0Crypto.Release.NonVacuity.xCtx2.scalarB
+M0Crypto.Release.NonVacuity.x25519_interrupted_nonvacuous : M0Crypto.Release.X25519.Pre M0Crypto.Release.NonVacuity.xCtx
+    (M0Crypto.Release.NonVacuity.stOf M0Crypto.Release.NonVacuity.xMem M0Crypto.Release.NonVacuity.xCtx.regs0) ∧
+  (M0Crypto.Release.TraceSpec.HandlerRoom 256 M0Crypto.Release.X25519.stackBytes M0Crypto.Release.NonVacuity.xCtx.sp0
+      fun y =>
+      M0Crypto.Release.TraceSpec.X25519ReadRegion M0Crypto.Release.NonVacuity.xCtx y ∨
+        M0Crypto.Release.X25519.WrOk M0Crypto.Release.NonVacuity.xCtx y) ∧
+    M0Crypto.Release.TraceSpec.Handlers 256
+      (fun y =>
+        M0Crypto.Release.TraceSpec.X25519ReadRegion M0Crypto.Release.NonVacuity.xCtx y ∨
+          M0Crypto.Release.X25519.WrOk M0Crypto.Release.NonVacuity.xCtx y)
+      (M0Crypto.Release.NonVacuity.tickBelowSp 256 536879104#32)
 def M0Crypto.Armv6M.Mem : Type :=
   M0Crypto.Armv6M.Word → BitVec 8
 def M0Crypto.Armv6M.read32 : M0Crypto.Armv6M.Mem → M0Crypto.Armv6M.Word → M0Crypto.Armv6M.Word :=
@@ -98,6 +111,96 @@ def M0Crypto.Release.TraceSpec.ReadsFrom : (M0Crypto.Armv6M.Word → Prop) → L
   ∀ (e : M0Crypto.Thumb.Event), e ∈ tr → ∀ (y : M0Crypto.Armv6M.Word), M0Crypto.Thumb.Reads e.accesses y → Rd y
 def M0Crypto.Release.TraceSpec.InStackWindow : M0Crypto.Armv6M.Word → Nat → M0Crypto.Armv6M.Word → Prop :=
   fun sp0 stackBytes sp => ∃ o, o ≤ stackBytes ∧ sp = sp0 - BitVec.ofNat 32 o
+def M0Crypto.Release.TraceSpec.BelowEntry : M0Crypto.Armv6M.Word → Nat → M0Crypto.Armv6M.Word → Prop :=
+  fun sp0 n y => M0Crypto.Release.Region (sp0 - BitVec.ofNat 32 n) n y
+def M0Crypto.Release.TraceSpec.AtOrAboveSp : M0Crypto.Armv6M.Word → M0Crypto.Armv6M.Word → M0Crypto.Armv6M.Word → Prop :=
+  fun sp0 sp y => M0Crypto.Release.Region sp (BitVec.toNat (sp0 - sp)) y
+def M0Crypto.Release.TraceSpec.StackAccessesAboveSp : M0Crypto.Armv6M.Word → Nat → List M0Crypto.Armv6M.State → List M0Crypto.Thumb.Event → Prop :=
+  fun sp0 n states tr =>
+  ∀ (k : Nat) (e : M0Crypto.Thumb.Event) (u u' : M0Crypto.Armv6M.State),
+    tr[k]? = Option.some e →
+      states[k]? = Option.some u →
+        states[k + 1]? = Option.some u' →
+          ∀ (y : M0Crypto.Armv6M.Word),
+            M0Crypto.Thumb.Reads e.accesses y ∨ M0Crypto.Thumb.Writes e.accesses y →
+              M0Crypto.Release.TraceSpec.BelowEntry sp0 n y →
+                M0Crypto.Release.TraceSpec.AtOrAboveSp sp0 u.sp y ∨ M0Crypto.Release.TraceSpec.AtOrAboveSp sp0 u'.sp y
+def M0Crypto.Release.TraceSpec.WrittenSinceAllocated : M0Crypto.Armv6M.Word → List M0Crypto.Armv6M.State → List M0Crypto.Thumb.Event → Nat → M0Crypto.Armv6M.Word → Prop :=
+  fun sp0 states tr k y =>
+  ∃ j,
+    j < k ∧
+      (∃ e, tr[j]? = Option.some e ∧ M0Crypto.Thumb.Writes e.accesses y) ∧
+        ∀ (i : Nat) (u : M0Crypto.Armv6M.State),
+          j < i → i ≤ k → states[i]? = Option.some u → M0Crypto.Release.TraceSpec.AtOrAboveSp sp0 u.sp y
+def M0Crypto.Release.TraceSpec.StackReadsWritten : M0Crypto.Armv6M.Word → Nat → List M0Crypto.Armv6M.State → List M0Crypto.Thumb.Event → Prop :=
+  fun sp0 n states tr =>
+  ∀ (k : Nat) (e : M0Crypto.Thumb.Event),
+    tr[k]? = Option.some e →
+      ∀ (y : M0Crypto.Armv6M.Word),
+        M0Crypto.Thumb.Reads e.accesses y →
+          M0Crypto.Release.TraceSpec.BelowEntry sp0 n y →
+            M0Crypto.Release.TraceSpec.WrittenSinceAllocated sp0 states tr k y
+def M0Crypto.Release.TraceSpec.StackDiscipline : M0Crypto.Armv6M.Word → Nat → List M0Crypto.Armv6M.State → List M0Crypto.Thumb.Event → Prop :=
+  fun sp0 n states tr =>
+  M0Crypto.Release.TraceSpec.StackAccessesAboveSp sp0 n states tr ∧
+    M0Crypto.Release.TraceSpec.StackReadsWritten sp0 n states tr
+def M0Crypto.Release.TraceSpec.SameOn : (M0Crypto.Armv6M.Word → Prop) → M0Crypto.Armv6M.State → M0Crypto.Armv6M.State → Prop :=
+  fun Q t t' =>
+  t'.regs = t.regs ∧
+    t'.n = t.n ∧ t'.z = t.z ∧ t'.c = t.c ∧ t'.v = t.v ∧ ∀ (y : M0Crypto.Armv6M.Word), Q y → t'.mem y = t.mem y
+def M0Crypto.Release.TraceSpec.Handlers : Nat → (M0Crypto.Armv6M.Word → Prop) → (Nat → M0Crypto.Armv6M.State → M0Crypto.Armv6M.State) → Prop :=
+  fun K P H =>
+  ∀ (k : Nat) (s : M0Crypto.Armv6M.State),
+    M0Crypto.Release.TraceSpec.SameOn (fun y => P y ∧ ¬M0Crypto.Release.Region (s.sp - BitVec.ofNat 32 K) K y) s (H k s)
+def M0Crypto.Release.TraceSpec.irunStates : (Nat → M0Crypto.Armv6M.State → M0Crypto.Armv6M.State) →
+  M0Crypto.Armv6M.Word →
+    Nat →
+      Nat → M0Crypto.Armv6M.State → Except M0Crypto.Thumb.Fault (List M0Crypto.Armv6M.State × List M0Crypto.Thumb.Event) :=
+  fun H stop x x_1 x_2 =>
+  Nat.brecOn (motive := fun x =>
+    Nat → M0Crypto.Armv6M.State → Except M0Crypto.Thumb.Fault (List M0Crypto.Armv6M.State × List M0Crypto.Thumb.Event))
+    x (M0Crypto.Release.TraceSpec.irunStates._f H stop) x_1 x_2
+unfold M0Crypto.Release.TraceSpec.irunStates.eq_def : ∀ (H : Nat → M0Crypto.Armv6M.State → M0Crypto.Armv6M.State) (stop : M0Crypto.Armv6M.Word) (x x_1 : Nat)
+  (x_2 : M0Crypto.Armv6M.State),
+  M0Crypto.Release.TraceSpec.irunStates H stop x x_1 x_2 =
+    match x, x_1, x_2 with
+    | fuel, k, s =>
+      if s.pc = stop then Except.ok ([s], [])
+      else
+        match fuel with
+        | 0 => Except.error M0Crypto.Thumb.Fault.fuel
+        | n.succ =>
+          match M0Crypto.Thumb.step (H k s) with
+          | Except.error e => Except.error e
+          | Except.ok (s', e) =>
+            match M0Crypto.Release.TraceSpec.irunStates H stop n (k + 1) s' with
+            | Except.error e' => Except.error e'
+            | Except.ok (states, es) => Except.ok (s :: states, e :: es)
+def M0Crypto.Release.TraceSpec.HandlerRoom : Nat → Nat → M0Crypto.Armv6M.Word → (M0Crypto.Armv6M.Word → Prop) → Prop :=
+  fun K n sp0 P =>
+  n + K ≤ BitVec.toNat sp0 ∧
+    ∀ (y : M0Crypto.Armv6M.Word), M0Crypto.Release.Region (sp0 - BitVec.ofNat 32 (n + K)) K y → ¬P y
+def M0Crypto.Release.TraceSpec.InterruptedCall : Nat →
+  Nat →
+    M0Crypto.Armv6M.Word →
+      M0Crypto.Armv6M.Word →
+        M0Crypto.Armv6M.State → (M0Crypto.Armv6M.Word → Prop) → (M0Crypto.Armv6M.State → Prop) → Prop :=
+  fun K n sp0 stop s P Result =>
+  M0Crypto.Release.TraceSpec.HandlerRoom K n sp0 P →
+    ∀ (H : Nat → M0Crypto.Armv6M.State → M0Crypto.Armv6M.State),
+      M0Crypto.Release.TraceSpec.Handlers K P H →
+        ∃ m,
+          ∀ (fuel : Nat),
+            m ≤ fuel →
+              ∃ t₀ tr states t,
+                M0Crypto.Thumb.runUntil stop fuel s = Except.ok (t₀, tr) ∧
+                  Result t₀ ∧
+                    M0Crypto.Release.TraceSpec.irunStates H stop fuel 0 s = Except.ok (states, tr) ∧
+                      states.getLast? = Option.some t ∧
+                        M0Crypto.Release.TraceSpec.SameOn
+                            (fun y => P y ∧ ¬M0Crypto.Release.TraceSpec.BelowEntry sp0 n y) t₀ t ∧
+                          ∀ (u : M0Crypto.Armv6M.State),
+                            u ∈ states → M0Crypto.Release.TraceSpec.InStackWindow sp0 n u.sp
 def M0Crypto.Release.X25519.stackBytes : Nat :=
   516
 def M0Crypto.Release.X25519.wipeBytes : Nat :=
@@ -217,6 +320,21 @@ def M0Crypto.Release.TraceSpec.X25519Stack : Prop :=
               ∀ (st : M0Crypto.Armv6M.State),
                 st ∈ states →
                   M0Crypto.Release.TraceSpec.InStackWindow c.sp0 M0Crypto.Release.X25519.stackBytes (st.regs 13)
+def M0Crypto.Release.TraceSpec.X25519StackDiscipline : Prop :=
+  ∀ (c : M0Crypto.Release.X25519.Ctx) (s : M0Crypto.Armv6M.State),
+  M0Crypto.Release.X25519.Pre c s →
+    ∃ n,
+      ∀ (fuel : Nat),
+        n ≤ fuel →
+          ∃ states tr,
+            M0Crypto.Release.runStates c.ret fuel s = Except.ok (states, tr) ∧
+              M0Crypto.Release.TraceSpec.StackDiscipline c.sp0 M0Crypto.Release.X25519.stackBytes states tr
+def M0Crypto.Release.TraceSpec.X25519Interrupted : Prop :=
+  ∀ (K : Nat) (c : M0Crypto.Release.X25519.Ctx) (s : M0Crypto.Armv6M.State),
+  M0Crypto.Release.X25519.Pre c s →
+    M0Crypto.Release.TraceSpec.InterruptedCall K M0Crypto.Release.X25519.stackBytes c.sp0 c.ret s
+      (fun y => M0Crypto.Release.TraceSpec.X25519ReadRegion c y ∨ M0Crypto.Release.X25519.WrOk c y)
+      (M0Crypto.Release.X25519.Result c)
 def M0Crypto.Spec.X25519.Byte : Type :=
   BitVec 8
 def M0Crypto.Spec.X25519.p : Int :=

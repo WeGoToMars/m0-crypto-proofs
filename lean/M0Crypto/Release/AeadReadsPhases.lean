@@ -45,14 +45,15 @@ theorem finPc_ns (base : Word) : ∀ pc, Poly1305Finish.FinPc base pc → NoSite
   exact not_siteRd (by have : Poly1305Finish.popAt + 2 < 2 ^ 32 := by decide
                        omega) this
 
-/-- The 16-byte Poly1305 block at `A + 72` lies in the readable stack window. -/
-theorem rd_blk {Rd : Word → Prop} (c : ACall) (hsub : ∀ y, AeadCommonReadRegion c y → Rd y) :
+/-- The 16-byte Poly1305 block at `A + 72` lies in the stack range that read sites read. -/
+theorem rd_blk {Rd : Word → Prop} (c : ACall) (hsub : ∀ y, AeadSiteRegion c siteLen y → Rd y) :
     ∀ o < 16, Rd (c.A + 72#32 + BitVec.ofNat 32 o) := fun o ho =>
-  hsub _ (.stack (o := blkStackOff + o) (by simp only [blkStackOff, aeadFrame, TraceSpec.aeadStackBytes]; omega) (by
-    simp only [ACall.A, blkStackOff, aeadFrame, TraceSpec.aeadStackBytes]; bv_omega))
+  hsub _ (.stack (o := blkStackOff - inpStackOff + o)
+    (by simp only [siteLen, blkStackOff, inpStackOff, aeadFrame, TraceSpec.aeadStackBytes]; omega) (by
+    simp only [ACall.A, blkStackOff, inpStackOff, aeadFrame, TraceSpec.aeadStackBytes]; bv_omega))
 
 /-- Loads and one complete padded-message MAC, under the read policy. -/
-theorem mac_phase_r {Rd : Word → Prop} (c : ACall) (hv : AValid c) (Wr : Word → Prop) (off : Nat) (is : List Instr)
+theorem mac_phase_r {Rd Kn : Word → Prop} (c : ACall) (hv : AValid c) (Wr : Word → Prop) (off : Nat) (is : List Instr)
     (u v : BitVec 8) (his : is = [.ldrSp 4 u, .ldrSp 5 v])
     (hseq : seqAt B off is = true) (i1 i2 : BitVec 25) (hat : MacAt (off + seqSize is) i1 i2)
     (ho : off % 2 = 0) (hx : off + seqSize is + macSize ≤ Artifacts.Release.size) (s : State) (hp : s.pc = c.base + BitVec.ofNat 32 off)
@@ -64,7 +65,7 @@ theorem mac_phase_r {Rd : Word → Prop} (c : ACall) (hv : AValid c) (Wr : Word 
     (hrl : InRegion (NoSite c.base) c.base off (seqSize is)) (hfree : MacFree (off + seqSize is))
     (hR : ∀ o < n.toNat, Rd (d + BitVec.ofNat 32 o))
     (hRblk : ∀ o < 16, Rd (c.A + 72#32 + BitVec.ofNat 32 o)) :
-    ReachS c.base (RdP c.base Rd) s (PhasePost c Wr (off + seqSize is + macSize) ti
+    ReachS c.base (RdP c.base Rd Kn) s (PhasePost c Wr (off + seqSize is + macSize) ti
       (msg ++ (Ctx.bytesAt s.mem d n.toNat ++ pad16 (Ctx.bytesAt s.mem d n.toNat))) s) := by
   have hsz : seqSize is = 4 := by subst his; exact loadPair_size u v
   apply ReachS.bind
@@ -87,7 +88,7 @@ theorem mac_phase_r {Rd : Word → Prop} (c : ACall) (hv : AValid c) (Wr : Word 
   exact pz
 
 /-- `AEAD_SETUP` under the read policy. -/
-theorem aead_setup_r {Rd : Word → Prop} (c : ACall) (hv : AValid c) (e : Nat) (i0 i1 : BitVec 25)
+theorem aead_setup_r {Rd Kn : Word → Prop} (c : ACall) (hv : AValid c) (e : Nat) (i0 i1 : BitVec 25)
     (hpro : seqAt B e pro = true) (hb0 : instrAt B (e + proXorOff) = some (.bl i0))
     (ht0 : blTarget (e + proXorOff) i0 = BitVec.ofNat 32 xorOff) (hcp : seqAt B (e + copyOff) copy = true)
     (hb1 : instrAt B (e + initCallOff) = some (.bl i1))
@@ -98,15 +99,15 @@ theorem aead_setup_r {Rd : Word → Prop} (c : ACall) (hv : AValid c) (e : Nat) 
     (hrc : InRegion (NoSite c.base) c.base (e + copyOff) (seqSize copy))
     (hrb : NoSite c.base (c.base + BitVec.ofNat 32 (e + initCallOff)))
     (hstop : ¬ ChaCha20Policy.ChaPc c.base (c.base + BitVec.ofNat 32 (e + copyOff)))
-    (hsub : ∀ y, AeadCommonReadRegion c y → Rd y) :
-    ReachS c.base (RdP c.base Rd) s (fun t => ∃ ic, SetupPost c e ic t) := by
+    (hsub : ∀ y, AeadSiteRegion c siteLen y → Rd y) (hkn : ∀ y, AeadSiteRegion c copyLen y → Kn y) :
+    ReachS c.base (RdP c.base Rd Kn) s (fun t => ∃ ic, SetupPost c e ic t) := by
   apply ReachS.bind
   apply ((pro_reach_w (Pc := NoSite c.base) (Q := ProPost c e) c hv e hpro he s h hrp
       (fun p hp => ReachS.done hp)).toRd (fun _ h => h)).mono (fun _ _ h => h)
   intro p hp
   apply ReachS.bind
   apply (key_reach_r (Rd := Rd) c hv e i0 hb0 ht0 he
-      (by have := copyOff_end; have := initCallOff_ret; omega) p hp hrx hstop hsub).mono (fun _ _ h => h)
+      (by have := copyOff_end; have := initCallOff_ret; omega) p hp hrx hstop hsub hkn).mono (fun _ _ h => h)
   intro u hu
   exact (setup_reach_w (Pc := NoSite c.base) c hv e i1 hcp hb1 ht1 he hex u hu hrc hrb (initPc_ns c.base)).toRd
     (fun _ h => h)

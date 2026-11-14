@@ -2,6 +2,8 @@ import M0Crypto.Release.NonVacuityBase
 import M0Crypto.Release.AeadEncrypt
 import M0Crypto.Release.AeadDecrypt
 import M0Crypto.Release.ChaCha20TraceSpec
+import M0Crypto.Release.ChaCha20XorDiscipline
+import M0Crypto.Release.AeadDiscipline
 
 /-!
 # Non-vacuity of the ChaCha20 and ChaCha20-Poly1305 entry contracts
@@ -12,6 +14,9 @@ theorem (`example`s). The calls exercise the cases where an over-strong
 precondition would hide: in-place operation, unaligned buffers and a non-empty message.
 For each function, `*_constant_time_nonvacuous` gives two valid calls with equal public inputs
 and different keys, the hypothesis of its constant-time theorem.
+The `*_interrupted_nonvacuous` witnesses give the first call 256 bytes of handler room and a
+handler that also writes one byte outside the call's regions, the hypotheses of the function's
+interrupted-call theorem.
 -/
 
 namespace M0Crypto.Release.NonVacuity
@@ -164,5 +169,109 @@ theorem decrypt_constant_time_nonvacuous :
     (by decide +kernel)
   exact ⟨by aead_witness dMem_code _, by aead_witness dMem_code _, dCall_pub _ _,
     propext ⟨fun _ => v2, fun _ => v1⟩, by decide +kernel⟩
+
+/-! ## Interrupts: 256 bytes of handler room below the stack window -/
+
+/-- The call of `xor_correct_nonvacuous` with 256 bytes of handler room, and a handler that
+zeroes the 256 bytes below SP and increments the byte at 0x20002000, as `xor_interrupted`
+assumes them. -/
+theorem xor_interrupted_nonvacuous :
+    ChaCha20Xor.Pre chCtx (stOf chMem chCtx.regs0) ∧
+      TraceSpec.HandlerRoom 256 ChaCha20Layout.chStackBytes chCtx.sp0
+        (fun y => TraceSpec.ChaCha20XorReadRegion chCtx y ∨ ChaCha20Xor.WrOk chCtx y) ∧
+      TraceSpec.Handlers 256
+        (fun y => TraceSpec.ChaCha20XorReadRegion chCtx y ∨ ChaCha20Xor.WrOk chCtx y)
+        (tickBelowSp 256 0x20002000#32) := by
+  refine ⟨xor_correct_nonvacuous, interruptWitness_of [(chCtx.inp, 100), (chCtx.key, 32),
+    (chCtx.nonce, 12), (chCtx.base, Artifacts.Release.size),
+    (chCtx.fp, ChaCha20Layout.chStackBytes + 8)] ?_ ?_ ?_⟩
+  · simp only [chCtx, ChaCha20Layout.chStackBytes, ChaCha20Layout.chStackWords, sp0]
+    decide
+  · intro y hy
+    rcases hy with (h | h | h | h | h) | (h | ⟨-, h⟩)
+    · exact ⟨_, .head _, h⟩
+    · exact ⟨_, .tail _ (.head _), h⟩
+    · exact ⟨_, .tail _ (.tail _ (.head _)), h⟩
+    · exact ⟨_, .tail _ (.tail _ (.tail _ (.head _))), h⟩
+    · exact ⟨_, .tail _ (.tail _ (.tail _ (.tail _ (.head _)))), h⟩
+    · exact ⟨_, .tail _ (.tail _ (.tail _ (.tail _ (.head _)))),
+        show (y - chCtx.fp).toNat < ChaCha20Layout.chStackBytes + 8 by unfold Region at h; omega⟩
+    · exact ⟨_, .head _, h⟩
+  · simp only [List.forall_mem_cons, List.not_mem_nil, false_imp_iff, implies_true, and_true,
+      Disj, Frame.Ctx.fp, chCtx, ChaCha20Layout.chStackBytes, ChaCha20Layout.chStackWords, sp0,
+      Artifacts.Release.size]
+    decide +kernel
+
+example := ChaCha20Xor.xor_interrupted 256 _ _ xor_interrupted_nonvacuous.1
+  xor_interrupted_nonvacuous.2.1 _ xor_interrupted_nonvacuous.2.2
+
+/-- The call of `encrypt_correct_nonvacuous` with 256 bytes of handler room, and a handler that
+zeroes the 256 bytes below SP and increments the byte at 0x20002000, as `encrypt_interrupted`
+assumes them. -/
+theorem encrypt_interrupted_nonvacuous :
+    Aead.APre (aCall Aead.encOff) Aead.encOff (stOf aMem (aCall Aead.encOff).regs0) ∧
+      TraceSpec.HandlerRoom 256 TraceSpec.aeadStackBytes (aCall Aead.encOff).sp0
+        (fun y => TraceSpec.AeadEncryptReadRegion (aCall Aead.encOff) y ∨ Aead.AWr (aCall Aead.encOff) y) ∧
+      TraceSpec.Handlers 256
+        (fun y => TraceSpec.AeadEncryptReadRegion (aCall Aead.encOff) y ∨ Aead.AWr (aCall Aead.encOff) y)
+        (tickBelowSp 256 0x20002000#32) := by
+  have e : (aCall Aead.encOff).A - 176#32 =
+      (aCall Aead.encOff).sp0 - BitVec.ofNat 32 TraceSpec.aeadStackBytes := by decide
+  refine ⟨encrypt_correct_nonvacuous, interruptWitness_of [((aCall Aead.encOff).inp, 100), ((aCall Aead.encOff).aad, 13), ((aCall Aead.encOff).key, 32), ((aCall Aead.encOff).nonce, 12), ((aCall Aead.encOff).out, 100), ((aCall Aead.encOff).base, Artifacts.Release.size), ((aCall Aead.encOff).sp0 - BitVec.ofNat 32 TraceSpec.aeadStackBytes, TraceSpec.aeadStackBytes + 16), ((aCall Aead.encOff).tag, 16)] ?_ ?_ ?_⟩
+  · simp only [aCall, TraceSpec.aeadStackBytes, sp0]
+    decide
+  · intro y hy
+    rcases hy with (h | h | h | h | h | h | h) | (h | h | h)
+    · exact ⟨_, .head _, h⟩
+    · exact ⟨_, .tail _ (.head _), h⟩
+    · exact ⟨_, .tail _ (.tail _ (.head _)), h⟩
+    · exact ⟨_, .tail _ (.tail _ (.tail _ (.head _))), h⟩
+    · exact ⟨_, .tail _ (.tail _ (.tail _ (.tail _ (.head _)))), h⟩
+    · exact ⟨_, .tail _ (.tail _ (.tail _ (.tail _ (.tail _ (.head _))))), h⟩
+    · exact ⟨_, .tail _ (.tail _ (.tail _ (.tail _ (.tail _ (.tail _ (.head _)))))), h⟩
+    · exact ⟨_, .tail _ (.tail _ (.tail _ (.tail _ (.tail _ (.tail _ (.head _)))))), show Region ((aCall Aead.encOff).sp0 - BitVec.ofNat 32 TraceSpec.aeadStackBytes) (TraceSpec.aeadStackBytes + 16) y by
+        unfold Aead.SWr at h; rw [e] at h; unfold Region at h ⊢; rw [TraceSpec.aeadStackBytes_eq] at h ⊢; omega⟩
+    · exact ⟨_, .tail _ (.tail _ (.tail _ (.tail _ (.head _)))), h⟩
+    · exact ⟨_, .tail _ (.tail _ (.tail _ (.tail _ (.tail _ (.tail _ (.tail _ (.head _))))))), h⟩
+  · simp only [List.forall_mem_cons, List.not_mem_nil, false_imp_iff, implies_true, and_true,
+      Disj, aCall, TraceSpec.aeadStackBytes, sp0, Artifacts.Release.size]
+    decide +kernel
+
+example := Aead.encrypt_interrupted 256 _ _ encrypt_interrupted_nonvacuous.1
+  encrypt_interrupted_nonvacuous.2.1 _ encrypt_interrupted_nonvacuous.2.2
+
+/-- The call of `decrypt_correct_nonvacuous` with 256 bytes of handler room, and a handler that
+zeroes the 256 bytes below SP and increments the byte at 0x20002000, as `decrypt_interrupted`
+assumes them. -/
+theorem decrypt_interrupted_nonvacuous :
+    Aead.APre (aCall Aead.decOff) Aead.decOff (stOf aMem (aCall Aead.decOff).regs0) ∧
+      TraceSpec.HandlerRoom 256 TraceSpec.aeadStackBytes (aCall Aead.decOff).sp0
+        (fun y => TraceSpec.AeadDecryptReadRegion (aCall Aead.decOff) y ∨ Aead.DAllowed (aCall Aead.decOff) y) ∧
+      TraceSpec.Handlers 256
+        (fun y => TraceSpec.AeadDecryptReadRegion (aCall Aead.decOff) y ∨ Aead.DAllowed (aCall Aead.decOff) y)
+        (tickBelowSp 256 0x20002000#32) := by
+  have e : (aCall Aead.decOff).A - 176#32 =
+      (aCall Aead.decOff).sp0 - BitVec.ofNat 32 TraceSpec.aeadStackBytes := by decide
+  refine ⟨decrypt_correct_nonvacuous, interruptWitness_of [((aCall Aead.decOff).inp, 100), ((aCall Aead.decOff).aad, 13), ((aCall Aead.decOff).key, 32), ((aCall Aead.decOff).nonce, 12), ((aCall Aead.decOff).tag, 16), ((aCall Aead.decOff).base, Artifacts.Release.size), ((aCall Aead.decOff).sp0 - BitVec.ofNat 32 TraceSpec.aeadStackBytes, TraceSpec.aeadStackBytes + 16), ((aCall Aead.decOff).out, 100)] ?_ ?_ ?_⟩
+  · simp only [aCall, TraceSpec.aeadStackBytes, sp0]
+    decide
+  · intro y hy
+    rcases hy with (h | h | h | h | h | h | h) | (h | ⟨-, h⟩)
+    · exact ⟨_, .head _, h⟩
+    · exact ⟨_, .tail _ (.head _), h⟩
+    · exact ⟨_, .tail _ (.tail _ (.head _)), h⟩
+    · exact ⟨_, .tail _ (.tail _ (.tail _ (.head _))), h⟩
+    · exact ⟨_, .tail _ (.tail _ (.tail _ (.tail _ (.head _)))), h⟩
+    · exact ⟨_, .tail _ (.tail _ (.tail _ (.tail _ (.tail _ (.head _))))), h⟩
+    · exact ⟨_, .tail _ (.tail _ (.tail _ (.tail _ (.tail _ (.tail _ (.head _)))))), h⟩
+    · exact ⟨_, .tail _ (.tail _ (.tail _ (.tail _ (.tail _ (.tail _ (.head _)))))), show Region ((aCall Aead.decOff).sp0 - BitVec.ofNat 32 TraceSpec.aeadStackBytes) (TraceSpec.aeadStackBytes + 16) y by
+        unfold Aead.SWr at h; rw [e] at h; unfold Region at h ⊢; rw [TraceSpec.aeadStackBytes_eq] at h ⊢; omega⟩
+    · exact ⟨_, .tail _ (.tail _ (.tail _ (.tail _ (.tail _ (.tail _ (.tail _ (.head _))))))), h⟩
+  · simp only [List.forall_mem_cons, List.not_mem_nil, false_imp_iff, implies_true, and_true,
+      Disj, aCall, TraceSpec.aeadStackBytes, sp0, Artifacts.Release.size]
+    decide +kernel
+
+example := Aead.decrypt_interrupted 256 _ _ decrypt_interrupted_nonvacuous.1
+  decrypt_interrupted_nonvacuous.2.1 _ decrypt_interrupted_nonvacuous.2.2
 
 end M0Crypto.Release.NonVacuity

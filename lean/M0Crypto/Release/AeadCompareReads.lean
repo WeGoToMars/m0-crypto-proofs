@@ -20,12 +20,11 @@ open M0Crypto.Release.Frame
 attribute [local simp] M0Crypto.Proofs.toReg_0 M0Crypto.Proofs.toReg_1 M0Crypto.Proofs.toReg_2
   M0Crypto.Proofs.toReg_3 M0Crypto.Proofs.toReg_4 M0Crypto.Proofs.toReg_5
 
-theorem cmpL_ok (base : Word) (Rd : Word → Prop) (u : State)
+theorem cmpL_ok (base : Word) (Rd Kn : Word → Prop) (u : State)
+    (hp : u.pc = base + BitVec.ofNat 32 decCmpLAt)
     (h1 : Rd (u.regs 1 + u.regs 4)) (h2 : Rd (u.regs 2 + u.regs 4)) :
-    BlockOk (RdP base Rd) cmpL u := by
-  have := (blockOk_events_iff (p := fun e => SiteRd base e.pc → ∀ y, Reads e.accesses y → Rd y)
-    cmpL u).mpr ?_
-  · exact this
+    BlockOk (RdP base Rd Kn) cmpL u := by
+  refine blockOk_rdP (by decide) hp (by decide +kernel) (by decide +kernel) ?_
   intro e he _ y hy
   simp only [cmpL, traceAll, List.mem_cons, List.not_mem_nil, or_false] at he
   rcases he with rfl | rfl | rfl | rfl | rfl | rfl <;>
@@ -38,7 +37,7 @@ theorem cmpL_ok (base : Word) (Rd : Word → Prop) (u : State)
     simp [MemOp.width] at hk; subst hk
     simpa [Instr.next, Instr.exec, Instr.exec.memOp, M0Crypto.Armv6M.State.setReg, M0Crypto.Armv6M.State.reg] using h2
 
-theorem compare_loop_r {Rd : Word → Prop} (base tag expected : Word) (M : Mem) (R : Reg → Word)
+theorem compare_loop_r {Rd Kn : Word → Prop} (base tag expected : Word) (M : Mem) (R : Reg → Word)
     (hb : base.toNat % 4 = 0)
     (hrb : NoSite base (base + BitVec.ofNat 32 decCmpBrAt))
     (hRt : ∀ j < 16, Rd (tag + BitVec.ofNat 32 j)) (hRe : ∀ j < 16, Rd (expected + BitVec.ofNat 32 j)) :
@@ -46,7 +45,7 @@ theorem compare_loop_r {Rd : Word → Prop} (base tag expected : Word) (M : Mem)
       s.pc = base+BitVec.ofNat 32 decCmpLAt → s.regs 1=tag → s.regs 2=expected → s.regs 4=BitVec.ofNat 32 k →
       s.mem=M → (∀ r : Reg, 6 ≤ r.val → r.val ≠ 15 → s.regs r = R r) →
       (s.regs 3=0#32 ↔ ∀ j<k, M (tag+BitVec.ofNat 32 j)=M (expected+BitVec.ofNat 32 j)) →
-      ReachS base (RdP base Rd) s (fun t => t.pc=base+BitVec.ofNat 32 decVerdictAt ∧ t.mem=M ∧
+      ReachS base (RdP base Rd Kn) s (fun t => t.pc=base+BitVec.ofNat 32 decVerdictAt ∧ t.mem=M ∧
         (∀ r : Reg, 6 ≤ r.val → r.val ≠ 15 → t.regs r = R r) ∧
         (t.regs 3=0#32 ↔ Ctx.bytesAt M tag 16 = Ctx.bytesAt M expected 16))
   | 0, k, h, hk, _, _, _, _, _, _, _, _ => absurd hk (by omega)
@@ -54,7 +53,7 @@ theorem compare_loop_r {Rd : Word → Prop} (base tag expected : Word) (M : Mem)
     obtain ⟨e3, e4, ez, em, er⟩ := cmpL_effect s
     refine ReachS.block (by omega) cmpL decCmpLAt s hp (by decide) (by decide) (by decide)
       (by simp [alignedAll, cmpL, Instr.accesses, Access.aligned, MemOp.isLoad, MemOp.width, Nat.mod_one])
-      (cmpL_ok base Rd s (by rw [h1, h4]; exact hRt k hk) (by rw [h2, h4]; exact hRe k hk)) ?_
+      (cmpL_ok base Rd Kn s hp (by rw [h1, h4]; exact hRt k hk) (by rw [h2, h4]; exact hRe k hk)) ?_
     generalize ht : execAll cmpL s = t at e3 e4 ez em er
     have tp : t.pc = base+BitVec.ofNat 32 decCmpBrAt := by rw [← ht, execAll_pc _ _ (by decide), hp, ofNat_add_assoc]; rfl
     have teq : t.regs 3=0#32 ↔ ∀ j<k+1, M (tag+BitVec.ofNat 32 j)=M (expected+BitVec.ofNat 32 j) := by
@@ -75,7 +74,7 @@ theorem compare_loop_r {Rd : Word → Prop} (base tag expected : Word) (M : Mem)
         simp [BitVec.toNat_add, BitVec.toNat_sub] at this; omega
       · intro e
         rw [show BitVec.ofNat 32 k+1#32 = 16#32 by bv_omega, BitVec.sub_self]
-    apply ReachS.bcondW (Pn := NoSite base) (Wr := fun _ => False) (noP base Rd) hrb (by omega) decCmpLAt 1 (brImm8 decCmpBrAt decCmpLAt) tp (by decide) (by decide +kernel)
+    apply ReachS.bcondW (Pn := NoSite base) (Wr := fun _ => False) (noP base Rd Kn) hrb (by omega) decCmpLAt 1 (brImm8 decCmpBrAt decCmpLAt) tp (by decide) (by decide +kernel)
       (by decide) (by rw [se_f8]; exact back_target decCmpLAt (seqSize cmpL))
     · intro hn
       have hne : k+1≠16 := by simpa [condPassed, tz] using hn
@@ -104,18 +103,18 @@ theorem compare_loop_r {Rd : Word → Prop} (base tag expected : Word) (M : Mem)
       · intro eq j hj
         have := congrArg (fun bs => bs[j]?) eq
         simpa only [Frame.bytesAt_get _ _ _ _ hj, Option.some.injEq] using this
-theorem compare_reach_r {Rd : Word → Prop} (c : ACall) (hv : AValid c) (s : State)
+theorem compare_reach_r {Rd Kn : Word → Prop} (c : ACall) (hv : AValid c) (s : State)
     (hp : s.pc=c.base+BitVec.ofNat 32 decCmpAAt) (hs : s.regs 13=c.A) (hh : Hi c s.mem)
     (hrA : InRegion (NoSite c.base) c.base decCmpAAt (seqSize cmpA))
     (hrb : NoSite c.base (c.base + BitVec.ofNat 32 decCmpBrAt))
     (hRt : ∀ j < 16, Rd (c.tag + BitVec.ofNat 32 j)) (hRe : ∀ j < 16, Rd (c.A + 72#32 + BitVec.ofNat 32 j)) :
-    ReachS c.base (RdP c.base Rd) s (fun t => t.pc=c.base+BitVec.ofNat 32 decVerdictAt ∧ t.mem=s.mem ∧
+    ReachS c.base (RdP c.base Rd Kn) s (fun t => t.pc=c.base+BitVec.ofNat 32 decVerdictAt ∧ t.mem=s.mem ∧
       (∀ r : Reg, 6 ≤ r.val → r.val ≠ 15 → t.regs r=s.regs r) ∧
       (t.regs 3=0#32 ↔ Ctx.bytesAt s.mem c.tag 16=Ctx.bytesAt s.mem (c.A+72#32) 16)) := by
   obtain ⟨e1, e2, e3, e4, em, er⟩ := cmpA_effect s
   rw [hs, hh.tag] at e1
   rw [hs] at e2
-  apply ReachS.blockW (Pn := NoSite c.base) (Wr := fun _ => False) (noP c.base Rd) hrA (by have := hv.base4; omega) hp (by decide) (by decide) (by decide)
+  apply ReachS.blockW (Pn := NoSite c.base) (Wr := fun _ => False) (noP c.base Rd Kn) hrA (by have := hv.base4; omega) hp (by decide) (by decide) (by decide)
     (alignedAll_sp _ _ (sp_al (by decide)) (by rw [hs, hv.A_toNat]; have := hv.sp8; have := hv.spLo; omega))
     (WritesTo.of_noWritesMem _ _ (by decide) _)
   generalize hu : execAll cmpA s=u at e1 e2 e3 e4 em er
