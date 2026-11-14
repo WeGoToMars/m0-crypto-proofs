@@ -31,7 +31,7 @@ theorem _root_.M0Crypto.Release.Aead.encrypt_constant_time : TraceSpec.AeadEncry
   replace hret₁ := Region.ne hret₁
   replace hret₂ := Region.ne hret₂
   have hlr := pub_lr hpub
-  obtain ⟨n, hn⟩ := encrypt_correct c₁ s₁ ⟨hv₁, hb₁, he₁, hlr₁, Region.not hret₁⟩
+  obtain ⟨n, hn⟩ := encrypt_returns c₁ s₁ ⟨hv₁, hb₁, he₁, hlr₁, Region.not hret₁⟩
   obtain ⟨t, tr, ht, -, -⟩ := hn n (Nat.le_refl n)
   obtain ⟨states, hrun, -, -⟩ := runStates_of_runUntil ht
   obtain ⟨hdisj, hnowrap⟩ := encrypt_frame c₁ hv₁

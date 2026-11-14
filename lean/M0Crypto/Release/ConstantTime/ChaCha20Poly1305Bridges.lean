@@ -56,7 +56,7 @@ theorem decrypt_final_stack_window (c : Aead.ACall) (hv : Aead.AValid c)
     (hrun : runStates (c.regs0 14 &&& ~~~1#32) fuel s = .ok (states, events)) :
     ∃ last, states.getLast? = some last ∧
       TraceSpec.InStackWindow c.sp0 decryptEnv.win.below (last.regs 13) := by
-  obtain ⟨n, hc⟩ := Aead.decrypt_correct c s ⟨hv, hb, he, hlr, Region.not hret⟩
+  obtain ⟨n, hc⟩ := Aead.decrypt_returns c s ⟨hv, hb, he, hlr, Region.not hret⟩
   obtain ⟨t, tr, ht, hresult, _⟩ := hc n (Nat.le_refl n)
   obtain ⟨last, hlast, hrun'⟩ := runStates_final hrun
   have ht' := (runUntil_success_unique ht hrun').1
@@ -90,7 +90,7 @@ theorem encrypt_final_stack_window (c : Aead.ACall) (hv : Aead.AValid c)
     (hrun : runStates (c.regs0 14 &&& ~~~1#32) fuel s = .ok (states, events)) :
     ∃ last, states.getLast? = some last ∧
       TraceSpec.InStackWindow c.sp0 encryptEnv.win.below (last.regs 13) := by
-  obtain ⟨n, hc⟩ := Aead.encrypt_correct c s ⟨hv, hb, he, hlr, Region.not hret⟩
+  obtain ⟨n, hc⟩ := Aead.encrypt_returns c s ⟨hv, hb, he, hlr, Region.not hret⟩
   obtain ⟨t, tr, ht, hresult, _⟩ := hc n (Nat.le_refl n)
   obtain ⟨last, hlast, hrun'⟩ := runStates_final hrun
   have ht' := (runUntil_success_unique ht hrun').1

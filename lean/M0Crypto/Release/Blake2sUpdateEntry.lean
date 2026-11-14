@@ -49,7 +49,7 @@ theorem upro_eff {base : Word} {s : State} {st0 : SState} (e : UpdateEntry base 
     (execAll uPro s).regs 13 = s.regs 13 - 24#32 ∧ (execAll uPro s).regs 4 = s.regs 0 ∧
     (execAll uPro s).regs 5 = s.regs 1 ∧ (execAll uPro s).regs 6 = s.regs 2 ∧
     (execAll uPro s).regs 7 = BitVec.ofNat 32 st0.pending.length ∧
-    (∀ r : Reg, 8 ≤ r.val → r.val ≤ 11 → (execAll uPro s).regs r = s.regs r) ∧
+    (∀ r : Reg, 8 ≤ r.val → r.val ≤ 12 → (execAll uPro s).regs r = s.regs r) ∧
     (execAll uPro s).mem = pm s := by
   obtain ⟨s1, hs1⟩ : ∃ x, x = (Instr.push 0xF0 true).next s := ⟨_, rfl⟩
   obtain ⟨s2, hs2⟩ : ∃ x, x = (Instr.subSp 1).next s1 := ⟨_, rfl⟩

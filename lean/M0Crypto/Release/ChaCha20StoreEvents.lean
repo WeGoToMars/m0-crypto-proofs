@@ -148,10 +148,10 @@ theorem xor_reach_events_rd (c : Ctx) (hv : Valid c) (s : State) (h : ChaCha20Se
   have sFB := ChaCha20Layout.chFrameBytes_eq
   apply ChaCha20Setup.checks_events c hv c.Wr (fun o ho => .inl ⟨o, ho, rfl⟩) (RdPolicy c) (admitsRd_front c) s h
   · -- empty input
-    intro t pc sp mem hz
+    intro t pc sp mem hz _
     exact fin0_events c hv hlr t pc sp (by rw [mem]; exact ChaCha20Xor.mP_saved' c hv)
   · -- counter range exceeded
-    intro t pc sp mem _ hok
+    intro t pc sp mem _ hok _
     refine ChaCha20Policy.backBlock (admitsRd_back c) hb2 [.movImm 0 0, .dp .mvns 0 0] errOff pc (by decide) err_at
       (by decide) (by simp [alignedAll, Instr.accesses]) (WritesTo.of_noWritesMem _ _ (by decide) _)
       (by decide) (by decide) ?_

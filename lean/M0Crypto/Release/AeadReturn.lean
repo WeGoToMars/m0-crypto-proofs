@@ -122,7 +122,7 @@ theorem epi_effect (dec : Bool) (s : State) :
   all_goals have hr : v = 1 ∨ v = 2 ∨ v = 3 := by omega
   all_goals rcases hr with rfl | rfl | rfl <;> rfl
 
-theorem epilogue_reach_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (Wr : Word → Prop) (dec : Bool) (off : Nat)
+theorem epilogue_win_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (Wr : Word → Prop) (dec : Bool) (off : Nat)
     (hseq : seqAt B off (epilogue dec) = true)
     (hpop : instrAt B (off + seqSize (epilogue dec)) = some (.pop 0xf0 true))
     (ho : off % 2 = 0)
@@ -132,14 +132,17 @@ theorem epilogue_reach_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (Wr : 
     (hlr : (c.regs0 14).getLsbD 0 = true)
     (hrE : InRegion Pc c.base off (seqSize (epilogue dec)))
     (hrp : Pc (c.base + BitVec.ofNat 32 (off + seqSize (epilogue dec)))) :
-    ReachW c.base Pc Wr s (fun t => RetPost c (if dec then s.regs 4 else 0#32) t ∧ t.mem = s.mem) := by
+    ReachW c.base Pc Wr s (fun t => RetPost c (if dec then s.regs 4 else 0#32) t ∧ t.mem = s.mem ∧
+      t.regs 12 = s.regs 12) := by
   have hf : (epilogue dec).all Instr.falls = true := by cases dec <;> decide
   have he := epilogue_size dec
   obtain ⟨em, es, e0, ec, er⟩ := epi_effect dec s
   apply ReachW.blockR hrE (by have := hv.base4; omega) hp ho hseq hf
     (by cases dec <;> simp [epilogue, epiE, epiD, alignedAll, Instr.accesses])
     (WritesTo.of_noWritesMem _ _ (by cases dec <;> decide) _)
-  generalize hu : execAll (epilogue dec) s = u at em es e0 ec er
+  have e12 : (execAll (epilogue dec) s).regs 12 = s.regs 12 :=
+    execAll_regs_other _ _ _ (by decide) (by cases dec <;> decide)
+  generalize hu : execAll (epilogue dec) s = u at em es e0 ec er e12
   have up : u.pc = c.base + BitVec.ofNat 32 (off + seqSize (epilogue dec)) := by
     rw [← hu, execAll_pc _ _ hf, hp, ofNat_add_assoc]
   have us : u.regs 13 = c.sp0 - 20#32 := by rw [es, hs, ACall.A]; bv_omega
@@ -152,7 +155,7 @@ theorem epilogue_reach_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (Wr : 
     rcases (by omega : j = 0 ∨ j = 1 ∨ j = 2 ∨ j = 3 ∨ j = 4) with rfl | rfl | rfl | rfl | rfl <;> exact h
   apply (pop_reach_w c hv Wr (off + seqSize (epilogue dec)) hpop (by omega) hx u up us saved hlr hrp).mono (fun _ _ h => h)
   rintro t ⟨tp, ts, tc, tr, tm⟩
-  refine ⟨⟨tp, ts, ?_, ?_, ?_⟩, tm.trans em⟩
+  refine ⟨⟨tp, ts, ?_, ?_, ?_⟩, tm.trans em, ?_⟩
   · intro r a b
     by_cases hr8 : r.val < 8
     · exact tc r a hr8
@@ -160,6 +163,21 @@ theorem epilogue_reach_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (Wr : 
   · rw [tr 0 (.inl (by decide)) (by decide) (by decide), e0]
   · intro r a b
     rw [tr r (.inl b) (by omega) (by omega), ec r a b]
+  · rw [tr 12 (.inr (by decide)) (by decide) (by decide), e12]
+
+theorem epilogue_reach_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (Wr : Word → Prop) (dec : Bool) (off : Nat)
+    (hseq : seqAt B off (epilogue dec) = true)
+    (hpop : instrAt B (off + seqSize (epilogue dec)) = some (.pop 0xf0 true))
+    (ho : off % 2 = 0)
+    (hx : off + seqSize (epilogue dec) + seqSize [.pop 0xf0 true] ≤ Artifacts.Release.size) (s : State)
+    (hp : s.pc = c.base + BitVec.ofNat 32 off) (hs : s.regs 13 = c.A) (hh : Hi c s.mem)
+    (hr : ∀ r : Reg, 8 ≤ r.val → r.val < 12 → s.regs r = c.regs0 r)
+    (hlr : (c.regs0 14).getLsbD 0 = true)
+    (hrE : InRegion Pc c.base off (seqSize (epilogue dec)))
+    (hrp : Pc (c.base + BitVec.ofNat 32 (off + seqSize (epilogue dec)))) :
+    ReachW c.base Pc Wr s (fun t => RetPost c (if dec then s.regs 4 else 0#32) t ∧ t.mem = s.mem) :=
+  (epilogue_win_w c hv Wr dec off hseq hpop ho hx s hp hs hh hr hlr hrE hrp).mono (fun _ _ h => h)
+    (fun _ h => ⟨h.1, h.2.1⟩)
 
 theorem epilogue_reach (c : ACall) (hv : AValid c) (Wr : Word → Prop) (dec : Bool) (off : Nat)
     (hseq : seqAt B off (epilogue dec) = true)

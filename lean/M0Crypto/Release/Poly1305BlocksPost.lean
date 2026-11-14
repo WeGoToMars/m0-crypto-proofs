@@ -31,6 +31,21 @@ theorem finalLoop_ctx (c : BCtx) (s : State) (he : BEntry c s) :
     setReg_regs_ne _ 15 0 _ (by decide)]
   exact (prologue_effect c s he).2.2.1
 
+/-- A non-empty call leaves the saved registers above its frame. -/
+theorem result_saved (c : BCtx) (hv : BValid c) (s t : State) (he : BEntry c s) (ht : BResult c s t)
+    (hn : c.count ≠ 0#32) : Saved c t.mem := by
+  obtain ⟨pm, ps, -⟩ := prologue_effect c s he
+  rw [ht.mem, afterBlocks, ite_eq_right hn]
+  change Saved c (execAll publish (finalLoop c s)).mem
+  apply publish_saved c hv _ (finalLoop_sp c s he) (finalLoop_ctx c s he)
+  have qs : ((execAll prologue s).setReg 15 (c.base + BitVec.ofNat 32 setupAt)).regs 13 = c.fp := by
+    rw [setReg_regs_ne _ 15 13 _ (by decide)]; exact ps
+  unfold finalLoop
+  apply loop_saved c _ _ (by rw [(setup_effect _).2.2.1]; exact qs)
+  apply setup_saved c _ qs
+  show Saved c (execAll prologue s).mem
+  rw [pm]; exact mP_saved c hv
+
 theorem result_cleared (c : BCtx) (s t : State) (he : BEntry c s) (ht : BResult c s t)
     (hn : c.count ≠ 0#32) :
     (∀ r : Reg, r.val < 4 ∨ r.val = 12 ∨ r.val = 14 → t.regs r = 0#32) ∧

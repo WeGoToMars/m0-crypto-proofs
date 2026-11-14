@@ -46,7 +46,7 @@ theorem finPc_ns (base : Word) : ∀ pc, Poly1305Finish.FinPc base pc → NoSite
                        omega) this
 
 /-- The 16-byte Poly1305 block at `A + 72` lies in the readable stack window. -/
-theorem rd_blk {Rd : Word → Prop} (c : ACall) (hsub : ∀ y, TraceSpec.AeadEncryptReadRegion c y → Rd y) :
+theorem rd_blk {Rd : Word → Prop} (c : ACall) (hsub : ∀ y, AeadCommonReadRegion c y → Rd y) :
     ∀ o < 16, Rd (c.A + 72#32 + BitVec.ofNat 32 o) := fun o ho =>
   hsub _ (.stack (o := blkStackOff + o) (by simp only [blkStackOff, aeadFrame, TraceSpec.aeadStackBytes]; omega) (by
     simp only [ACall.A, blkStackOff, aeadFrame, TraceSpec.aeadStackBytes]; bv_omega))
@@ -98,7 +98,7 @@ theorem aead_setup_r {Rd : Word → Prop} (c : ACall) (hv : AValid c) (e : Nat) 
     (hrc : InRegion (NoSite c.base) c.base (e + copyOff) (seqSize copy))
     (hrb : NoSite c.base (c.base + BitVec.ofNat 32 (e + initCallOff)))
     (hstop : ¬ ChaCha20Policy.ChaPc c.base (c.base + BitVec.ofNat 32 (e + copyOff)))
-    (hsub : ∀ y, TraceSpec.AeadEncryptReadRegion c y → Rd y) :
+    (hsub : ∀ y, AeadCommonReadRegion c y → Rd y) :
     ReachS c.base (RdP c.base Rd) s (fun t => ∃ ic, SetupPost c e ic t) := by
   apply ReachS.bind
   apply ((pro_reach_w (Pc := NoSite c.base) (Q := ProPost c e) c hv e hpro he s h hrp

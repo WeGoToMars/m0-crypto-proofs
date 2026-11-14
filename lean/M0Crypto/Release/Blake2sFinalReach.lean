@@ -24,6 +24,37 @@ open M0Crypto.Release.Frame (Disj read32_congr toNat_add_ofNat read32_storeWords
 open M0Crypto.Release.Blake2sCopy (sr_ne sr_pc cp0 cp1 Cp cp_src add_ofNat_inj)
 open M0Crypto.Release.Blake2sCompress (off_eq)
 
+/-- Byte `j` of a word, little-endian. -/
+def byteOf (w : Word) (j : Nat) : BitVec 8 := w.extractLsb' (8 * j) 8
+
+/-- Memory holding the words `f i` from `p` has their little-endian bytes. -/
+theorem bytes_of_words {m : Mem} {p : Word} {n : Nat} {f : Nat → Word}
+    (h : ∀ i < n, read32 m (p + BitVec.ofNat 32 (4 * i)) = f i) :
+    bytesAt m p (4 * n) = (List.range (4 * n)).map fun o => byteOf (f (o / 4)) (o % 4) := by
+  unfold bytesAt
+  apply List.map_congr_left
+  intro o ho
+  simp only [List.mem_range] at ho
+  have hj : o % 4 < 4 := Nat.mod_lt _ (by decide)
+  have ho4 : o = 4 * (o / 4) + o % 4 := by omega
+  rw [← h (o / 4) (by omega), byteOf, M0Crypto.Release.Blake2sCopy.read32_byte _ _ _ hj, BitVec.add_assoc,
+    ← BitVec.ofNat_add, ← ho4]
+
+/-- Word `i` of `final`'s window at return, from the entry registers `R`: the compression's zeroed
+locals, the caller's `r8`-`r11`, the compression's saved `r4`-`r7` (context, output, 64, 0) and
+return address, the stacked `f0`, then `final`'s own saved `r4`-`r7` and `lr`. -/
+def finW (R : Reg → Word) (i : Nat) : Word :=
+  if i < LOCALS_WORDS then 0#32
+  else if i < LOCALS_WORDS + 9 then
+    [R 8, R 9, R 10, R 11, R 0, R 1, BitVec.ofNat 32 64, 0#32,
+      (R 15 - BitVec.ofNat 32 fStart + BitVec.ofNat 32 (oFBl + 4)) ||| 1#32][i - LOCALS_WORDS]!
+  else if i = LOCALS_WORDS + 9 then 0xFFFFFFFF#32
+  else [R 4, R 5, R 6, R 7, R 14][i - (LOCALS_WORDS + 10)]!
+
+/-- The bytes of `final`'s window at return. -/
+def finWin (R : Reg → Word) : List (BitVec 8) :=
+  (List.range STREAM_FRAME).map fun o => byteOf (finW R (o / 4)) (o % 4)
+
 /-- What `final` leaves: returned, `sp` and `r4`-`r11` restored, the digest of the stream written
 to `out`, memory unchanged outside what `final` may write, and `r0`-`r3` zero (no digest word
 stays in a scratch register). -/
@@ -34,6 +65,9 @@ structure FinalPost (s t : State) (st : M0Crypto.Spec.Blake2s.State) : Prop wher
   out : bytesAt t.mem (s.regs 1) 32 = M0Crypto.Spec.Blake2s.finish st
   mem : ∀ y, ¬ WrF s y → t.mem y = s.mem y
   scratch : ∀ r : Reg, r.val < 4 → t.regs r = 0#32
+  /-- The stack window holds `finWin` of the entry registers. -/
+  win : bytesAt t.mem (s.regs 13 - STREAM_FRAME_W) STREAM_FRAME = finWin s.regs
+  r12 : t.regs 12 = 0#32
 
 theorem wr_frame (s : State) (o : Nat) (h : o < STREAM_FRAME) : WrF s (s.regs 13 - STREAM_FRAME_W + BitVec.ofNat 32 o) :=
   Or.inl ⟨o, h, rfl⟩
@@ -121,6 +155,9 @@ structure PadOut (s : State) (st : M0Crypto.Spec.Blake2s.State) (t : State) : Pr
     (∀ o < 20, y ≠ s.regs 13 - 20#32 + BitVec.ofNat 32 o) → t.mem y = s.mem y
   zero : ∀ i, st.pending.length ≤ i → i < 64 → t.mem (s.regs 0 + 40#32 + BitVec.ofNat 32 i) = 0#8
   stk : Stk s t.mem
+  /-- The pad index ends at 64; the last alignment test leaves `r7` zero. -/
+  r6 : t.regs 6 = BitVec.ofNat 32 64
+  r7 : t.regs 7 = 0#32
 
 /-- What the state before the first-pass `ldr` of `final` must show: `r4` is the context pointer
 and memory is as the `push` left it, so the load reads the entry value. -/
@@ -246,8 +283,8 @@ theorem pad_reachS {base : Word} {s : State} {st : M0Crypto.Spec.Blake2s.State} 
     rw [h20, ofNat_add_assoc] at he
     rw [← he]
   have mkout : ∀ t2, PI (execAll fPro s).regs (execAll fPro s).mem (s.regs 0 + 40#32) st.pending.length 64 t2 →
-      PadOut s st t2 := by
-    intro t hpi
+      t2.regs 7 = 0#32 → PadOut s st t2 := by
+    intro t hpi h7
     have hr : ∀ r : Reg, r.val ≠ 6 → r.val ≠ 7 → r.val ≠ 15 → t.regs r = (execAll fPro s).regs r := hpi.1
     have hpz := hpi.2.2.2.2.1
     have hfar : ∀ y, (∀ i, st.pending.length ≤ i → i < 64 → y ≠ s.regs 0 + 40#32 + BitVec.ofNat 32 i) →
@@ -255,7 +292,7 @@ theorem pad_reachS {base : Word} {s : State} {st : M0Crypto.Spec.Blake2s.State} 
       intro y h1 h2
       rw [hpz.2 y h1, rmem]
       exact m1_far s y h2
-    refine ⟨?_, hpi.r0, hpi.r1, ?_, ?_, ?_, ?_, hfar, hpz.1, ?_⟩
+    refine ⟨?_, hpi.r0, hpi.r1, ?_, ?_, ?_, ?_, hfar, hpz.1, ?_, hpi.2.1, h7⟩
     · rw [hr 13 (by decide) (by decide) (by decide), r13]
     · rw [hr 2 (by decide) (by decide) (by decide), hr 3 (by decide) (by decide) (by decide)]; exact r2
     · rw [hr 4 (by decide) (by decide) (by decide), r4]
@@ -267,7 +304,8 @@ theorem pad_reachS {base : Word} {s : State} {st : M0Crypto.Spec.Blake2s.State} 
       intro o ho
       rw [hpz.2 _ (fun i h1 h2 => hdj i h1 h2 o ho)]
   exact padB_loop hb2 hbuf hWB (R := (execAll fPro s).regs) (m1 := (execAll fPro s).mem)
-    (fun k t hpc hpi hk4 => padW_loop hb2 hbuf hbuf4 hWW (fun t2 hpc2 hpi2 => K t2 hpc2 (mkout t2 hpi2)) k t hpc hpi hk4)
+    (fun k t hpc hpi hk4 h7 => padW_loop hb2 hbuf hbuf4 hWW (fun t2 hpc2 hpi2 h72 => K t2 hpc2 (mkout t2 hpi2 h72))
+      k t hpc hpi hk4 h7)
     st.pending.length _ rpc hpi0
 
 theorem stk_eq (s : State) (o : Nat) :
@@ -437,7 +475,61 @@ theorem final_k {base : Word} {s : State} {st : M0Crypto.Spec.Blake2s.State} (e 
     have n15 : r.val ≠ 15 := by omega
     rw [hr.hi r h8 n13 n15, ho.hi r (by omega) n15, hc.keep r (by omega) h11,
       po.hi r h8 n13 n15]
-  refine ⟨?_, ?_, ?_, ?_, ?_, hr.scratch⟩
+  have hbase : s.regs 15 - BitVec.ofNat 32 fStart = base := by
+    rw [show s.regs 15 = s.pc from rfl, e.pc, BitVec.add_sub_cancel]
+  have hF : ∀ n, slot (t.regs 13 - COMPRESS_FRAME_W) n = s.regs 13 - STREAM_FRAME_W + BitVec.ofNat 32 (4 * n) := by
+    intro n; unfold slot; rw [hsp]
+  have hvu : ∀ i < LOCALS_WORDS + 10, read32 v.mem (s.regs 13 - STREAM_FRAME_W + BitVec.ofNat 32 (4 * i)) =
+      read32 u.mem (s.regs 13 - STREAM_FRAME_W + BitVec.ofNat 32 (4 * i)) := by
+    intro i hi
+    apply read32_congr
+    intro k hk
+    rw [ofNat_add_assoc]
+    exact ho.cp.2 _ (fun q hq he => by
+      rw [hu5] at he
+      exact disj_ne e.oF hq (j := 4 * i + k) (by omega) he.symm)
+  have hsv := hc.saved
+  have hlr := hc.savedLr
+  have hwp := hc.wipe
+  simp only [hF] at hsv hlr hwp
+  have hpd : read32 u.mem (s.regs 13 - STREAM_FRAME_W + BitVec.ofNat 32 (4 * (LOCALS_WORDS + 9))) = 0xFFFFFFFF#32 := by
+    rw [← hc.pad, po.sp]; congr 1; bv_omega
+  have hwd : ∀ i < STREAM_FRAME / 4, read32 w.mem (s.regs 13 - STREAM_FRAME_W + BitVec.ofNat 32 (4 * i)) =
+      finW s.regs i := by
+    intro i hi
+    rw [hr.mem]
+    by_cases h35 : i < LOCALS_WORDS + 10
+    · rw [hvu i h35]
+      by_cases h25 : i < LOCALS_WORDS
+      · rw [hwp i h25]; simp [finW, h25]
+      · have : i = 25 ∨ i = 26 ∨ i = 27 ∨ i = 28 ∨ i = 29 ∨ i = 30 ∨ i = 31 ∨ i = 32 ∨ i = 33 ∨ i = 34 := by
+          omega
+        rcases this with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+        · exact (hsv 0 (by decide)).trans (po.hi 8 (by decide) (by decide) (by decide))
+        · exact (hsv 1 (by decide)).trans (po.hi 9 (by decide) (by decide) (by decide))
+        · exact (hsv 2 (by decide)).trans (po.hi 10 (by decide) (by decide) (by decide))
+        · exact (hsv 3 (by decide)).trans (po.hi 11 (by decide) (by decide) (by decide))
+        · exact (hsv 4 (by decide)).trans po.r4
+        · exact (hsv 5 (by decide)).trans po.r5
+        · exact (hsv 6 (by decide)).trans po.r6
+        · exact (hsv 7 (by decide)).trans po.r7
+        · refine hlr.trans ?_
+          show _ = (s.regs 15 - BitVec.ofNat 32 fStart + BitVec.ofNat 32 (oFBl + 4)) ||| 1#32
+          rw [hbase]
+        · exact hpd
+    · have : i = 35 ∨ i = 36 ∨ i = 37 ∨ i = 38 ∨ i = 39 := by omega
+      rcases this with rfl | rfl | rfl | rfl | rfl
+      · rw [show s.regs 13 - STREAM_FRAME_W + BitVec.ofNat 32 (4 * 35) = s.regs 13 - 20#32 by bv_omega]
+        exact hstk.1
+      · rw [show s.regs 13 - STREAM_FRAME_W + BitVec.ofNat 32 (4 * 36) = s.regs 13 - 16#32 by bv_omega]
+        exact hstk.2.1
+      · rw [show s.regs 13 - STREAM_FRAME_W + BitVec.ofNat 32 (4 * 37) = s.regs 13 - 12#32 by bv_omega]
+        exact hstk.2.2.1
+      · rw [show s.regs 13 - STREAM_FRAME_W + BitVec.ofNat 32 (4 * 38) = s.regs 13 - 8#32 by bv_omega]
+        exact hstk.2.2.2.1
+      · rw [show s.regs 13 - STREAM_FRAME_W + BitVec.ofNat 32 (4 * 39) = s.regs 13 - 4#32 by bv_omega]
+        exact hstk.2.2.2.2
+  refine ⟨?_, ?_, ?_, ?_, ?_, hr.scratch, bytes_of_words (n := STREAM_FRAME / 4) hwd, ?_⟩
   · rw [hr.pc, show v.regs 13 + 4#32 + 16#32 = s.regs 13 - 4#32 by rw [hv13]; bv_omega, hstk.2.2.2.2]
   · rw [hr.sp, hv13, hv13']
   · intro r h4 h11
@@ -486,6 +578,7 @@ theorem final_k {base : Word} {s : State} {st : M0Crypto.Spec.Blake2s.State} (e 
     exact this
   · intro y hy
     rw [hr.mem, hmemVU y hy, hmemUT y hy, hmemTS y hy]
+  · rw [hr.hi 12 (by decide) (by decide) (by decide), ho.hi 12 (by decide) (by decide), hc.r12]
 
 /-- `m0c_blake2s_final`: from entry, the function returns having written the digest of the stream. -/
 theorem final_reachSR {base : Word} {s : State} {st : M0Crypto.Spec.Blake2s.State} (e : FinalEntry base s st) :

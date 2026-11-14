@@ -96,6 +96,10 @@ structure SetupPost (c : ACall) (e : Nat) (ic : Poly1305Init.ICtx) (t : State) :
   nonce : read32 t.mem c.A = c.nonce
   high : Hi c t.mem
   out : ∀ y, ¬ SWr c.A y → t.mem y = c.m0 y
+  /-- The callee frame below the saved registers is zero. -/
+  low : ∀ o < 140, t.mem (c.A - 176#32 + BitVec.ofNat 32 o) = 0#8
+  ctr : read32 t.mem (c.A + 4#32) = 0#32
+  r7 : t.regs 7 = c.regs0 7
 
 theorem setup_reach_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (e : Nat) (i : BitVec 25)
     (hseq : seqAt B (e + copyOff) copy = true) (hbl : instrAt B (e + initCallOff) = some (.bl i))
@@ -204,7 +208,7 @@ theorem setup_reach_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (e : Nat)
       rw [ht.frame _ (niw o ho (by omega))]
       show w.mem _ = _
       rw [wm]; exact vo _ (fun o' a b => off_ne _ (by omega) (by omega) (by omega))
-  refine ⟨?_, ht.sp, ?_, rfl, rfl, rfl, rfl, ht, ?_, ?_, hu.high.congr fun o h1 h2 => tw o h2 (.inr h1), ?_⟩
+  refine ⟨?_, ht.sp, ?_, rfl, rfl, rfl, rfl, ht, ?_, ?_, hu.high.congr fun o h1 h2 => tw o h2 (.inr h1), ?_, ?_, ?_, ?_⟩
   · rw [ht.pc]; show w.regs 14 &&& ~~~1#32 = _
     have hset : e + initCallOff + 4 = e + setupEnd := by have := initCallOff_ret; omega
     rw [w14, lr_mask _ (even_off c.base hv.base4 (e + initCallOff + 4)
@@ -231,6 +235,26 @@ theorem setup_reach_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (e : Nat)
     rw [ht.frame y (fun h => hy (iw y h))]
     show w.mem y = _
     rw [wm, vo y (fun o a b e => hy (e ▸ swr_A _ o (by omega))), hu.out y hy]
+  · intro o ho
+    have x0 : (c.A - 176#32).toNat = c.A.toNat - 176 := hv.sub_toNat 176 (by omega)
+    rw [ht.frame _ ?_]
+    · show w.mem _ = _
+      rw [wm, vo _ (fun o' a b => ne_of_disj (n := 140) (m := 160) (by omega) (by omega) (.inl (by omega)) ho
+        (by omega))]
+      exact hu.low o ho
+    · rintro (⟨o', ho', e'⟩ | ⟨o', ho', e'⟩)
+      · exact ne_of_disj (a := c.A - 176#32) (b := c.A - BitVec.ofNat 32 12) (n := 140) (m := 12)
+          (by omega) (by rw [s12]; omega) (.inl (by rw [s12]; omega)) ho ho' e'
+      · exact ne_of_disj (a := c.A - 176#32) (b := c.A + 8#32) (n := 140) (m := 64)
+          (by omega) (by rw [a8]; omega) (.inl (by rw [a8]; omega)) ho ho' e'
+  · rw [← hu.ctr]
+    apply read32_congr
+    intro k hk
+    rw [ofNat_add_assoc]
+    exact tw (4 + k) (by omega) (.inl (by omega))
+  · rw [ht.regs 7 (by decide) (by decide) (by decide) (by decide) (by decide)]
+    show w.regs 7 = _
+    rw [wr 7 (by decide) (by decide), vr 7 (by decide) (by decide), hu.hi 7 (by decide) (by decide)]
 
 /-- **`AEAD_SETUP`** from function entry at `e`, tracking the program-counter region `Pc`. -/
 theorem aead_setup_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (e : Nat) (i0 i1 : BitVec 25)

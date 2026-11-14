@@ -14,7 +14,8 @@ const uint8_t point[32])`, always returning `M0C_OK` (0).
 
 Stack, from the entry SP `sp0` down: 36 bytes of saved registers (`r4`-`r11`, `lr`), the
 entry's 332-byte frame, and 148 bytes used by a callee: 516 bytes in all. Before returning, the
-entry zeroes the 480 bytes below the saved registers.
+entry zeroes the 480 bytes below the saved registers, so at return every byte of the window is
+zero or a byte of the caller's own registers.
 
 The buffers may be unaligned and may overlap each other in any way: the entry reads all of
 `scalar` and `point` before it writes `out`. `out` must not overlap the code; no buffer may
@@ -23,7 +24,7 @@ overlap the stack window.
 
 namespace M0Crypto.Release.X25519
 
-open M0Crypto.Armv6M (Word Reg State Mem)
+open M0Crypto.Armv6M (Word Reg State Mem read32)
 open M0Crypto.Release.Frame (Disj)
 
 /-! ## Sizes -/
@@ -34,6 +35,10 @@ def stackBytes : Nat := 516
 /-- Bytes the entry zeroes before returning: from `sp0 - stackBytes` up to the saved
 registers. -/
 def wipeBytes : Nat := 480
+
+/-- The registers the entry saves above the wiped bytes, one word each, from `sp0 - 36` up:
+`push {r4-r7, lr}` at `sp0 - 20`, then `push {r4-r7}` of copies of `r8`-`r11` at `sp0 - 36`. -/
+def savedRegs : List Reg := [8, 9, 10, 11, 4, 5, 6, 7, 14]
 
 /-! ## The call -/
 
@@ -134,6 +139,9 @@ structure Result (c : Ctx) (t : State) : Prop where
     t.mem y = if Region c.out 32 y then c.outB (c.oidx y) else c.m0 y
   /-- The stack the call used, below the saved registers, is zero. -/
   wipe : ∀ y, Region c.fp wipeBytes y → t.mem y = 0
+  /-- The 36 bytes above them hold the caller's registers as saved at entry: word `i` is
+  `savedRegs[i]`. With `wipe` this fixes every byte of the stack window. -/
+  saved : ∀ i < 9, read32 t.mem (c.fp + BitVec.ofNat 32 (wipeBytes + 4 * i)) = c.regs0 savedRegs[i]!
 
 /-- Writes allowed to a call: its stack window and `out`. -/
 def WrOk (c : Ctx) (y : Word) : Prop :=

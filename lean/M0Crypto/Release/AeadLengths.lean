@@ -130,7 +130,9 @@ structure LengthPost (c : ACall) (off : Nat) (ti : Mem) (msg : List M0Crypto.Spe
   frame : ∀ y, ¬ MacWr c.A y → t.mem y = s.mem y
   inv : PInv c.A ti (msg ++ lengthBlock c) t.mem
 
-theorem lengths_reach_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (off : Nat) (i : BitVec 25)
+/-- `lengths_reach_w` with the stack words the blocks call leaves below `A`: its zeroed frame and
+the caller's r8-r11. -/
+theorem lengths_win_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (off : Nat) (i : BitVec 25)
     (hseq : seqAt B off lengths = true) (hbl : instrAt B (off + seqSize lengths) = some (.bl i))
     (ht : blTarget (off + seqSize lengths) i = BitVec.ofNat 32 blocksOff)
     (ho : off % 2 = 0) (hox : off + seqSize lengths + blSize ≤ Artifacts.Release.size)
@@ -139,7 +141,9 @@ theorem lengths_reach_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (off : 
     (hp : PInv c.A ti msg s.mem)
     (hrg : InRegion Pc c.base off (seqSize lengths + blSize))
     (hblk : ∀ pc, Poly1305Blocks.BlkPc c.base pc → Pc pc) :
-    ReachW c.base Pc (MacWr c.A) s (LengthPost c off ti msg s) := by
+    ReachW c.base Pc (MacWr c.A) s (fun t => LengthPost c off ti msg s t ∧
+      (∀ o < 28, t.mem (c.A - 64#32 + BitVec.ofNat 32 o) = 0#8) ∧
+      (∀ j < 4, read32 t.mem (slot (c.A - 64#32) (7 + j)) = Frame.saved s.regs j)) := by
   have hb2 : c.base.toNat % 2 = 0 := by have := hv.base4; omega
   have he : MacEnv c.base c.A c.base 0#32 s.mem := hv.macEnv
     (disj_mono (hv.win hv.codeS 0 320 _ (by rw [hv.lo]; omega) (by decide)) (by decide)) hc
@@ -202,7 +206,8 @@ theorem lengths_reach_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (off : 
     rw [Poly1305Blocks.result_frame bc bv x t be hlr ht' y (fun h => hy (bwr_mac c.A bc rfl rfl y h))]
     exact xM y hy
   obtain ⟨acc, bound⟩ := Poly1305Blocks.result_blocks_correct bc bv x t be ht' xp.keyOk xp.bound (by change (1#32 : Word).toNat ≤ 1; decide)
-  refine ⟨?_, ht'.sp, ?_, tf, ?_⟩
+  have hn : bc.count ≠ 0#32 := by show (1#32 : Word) ≠ 0#32; decide
+  refine ⟨⟨?_, ht'.sp, ?_, tf, ?_⟩, ?_, ?_⟩
   · rw [ht'.pc]; show x.regs 14 &&& ~~~1#32 = _
     rw [x14, lr_mask _ (even_off c.base hv.base4 _ (by omega)), blSize_eq]
   · intro r a b
@@ -220,6 +225,28 @@ theorem lengths_reach_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (off : 
       exact (Poly1305Spec.polyBlocks_append _ _ _ (msg.length / 16) msg _ (by have := hp.len; omega)).symm
     · have := hp.len
       simp only [List.length_append, lengthBlock, Poly1305Spec.leBytes_length]; omega
+  · intro o ho
+    exact (Poly1305Blocks.result_cleared bc x t be ht' hn).2 o
+      (by have : Poly1305Blocks.frameBytes = 28 := by decide
+          omega)
+  · intro j hj
+    refine (Poly1305Blocks.result_saved bc bv x t be ht' hn j (by omega)).trans ?_
+    show Frame.saved x.regs j = _
+    rcases (by omega : j = 0 ∨ j = 1 ∨ j = 2 ∨ j = 3) with rfl | rfl | rfl | rfl <;>
+      simp only [Frame.saved] <;> rw [xr _ (by decide) (by decide), er _ (by decide) (by decide)]
+
+theorem lengths_reach_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (off : Nat) (i : BitVec 25)
+    (hseq : seqAt B off lengths = true) (hbl : instrAt B (off + seqSize lengths) = some (.bl i))
+    (ht : blTarget (off + seqSize lengths) i = BitVec.ofNat 32 blocksOff)
+    (ho : off % 2 = 0) (hox : off + seqSize lengths + blSize ≤ Artifacts.Release.size)
+    (s : State) (hpc : s.pc = c.base + BitVec.ofNat 32 off) (h13 : s.regs 13 = c.A)
+    (hh : Hi c s.mem) (hc : CodeAt s.mem c.base B) (ti : Mem) (msg : List M0Crypto.Spec.ChaCha20.Byte)
+    (hp : PInv c.A ti msg s.mem)
+    (hrg : InRegion Pc c.base off (seqSize lengths + blSize))
+    (hblk : ∀ pc, Poly1305Blocks.BlkPc c.base pc → Pc pc) :
+    ReachW c.base Pc (MacWr c.A) s (LengthPost c off ti msg s) :=
+  (lengths_win_w c hv off i hseq hbl ht ho hox s hpc h13 hh hc ti msg hp hrg hblk).mono
+    (fun _ _ h => h) (fun _ h => h.1)
 
 theorem lengths_reach (c : ACall) (hv : AValid c) (off : Nat) (i : BitVec 25)
     (hseq : seqAt B off lengths = true) (hbl : instrAt B (off + seqSize lengths) = some (.bl i))

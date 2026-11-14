@@ -194,9 +194,12 @@ theorem flush_reach {base : Word} {s : State} {st0 : SState} (e : UpdateEntry ba
     by_cases h1 : r.val = 1
     · omega
     · exact u_o r h1 (by omega)
+  have hwin := win_nf (base := base) (s := s) r13
+    (fun r h8 h11 => by rw [u_o r (by omega) (by omega)]; exact hI.hi r h8 h11) hv
+  rw [hE] at hwin
   refine ReachS.done ⟨?_, ⟨compress st.h (blockWords st.pending) (st.count + 64) false, st.count + 64, []⟩, ?_, by simp⟩
   · rw [execAll_pc _ _ (by decide), hpv, ofNat_add_assoc]; rfl
-  · refine ⟨?_, ?_, ?_, ?_, ?_, ?_, hI.kn, ?_, ?_, ?_, ?_⟩
+  · refine ⟨?_, ?_, ?_, ?_, ?_, ?_, hI.kn, ?_, ?_, ?_, ?_, ?_⟩
     · rw [wo 4 (by decide) (by decide), hkeep 4 (by decide) (by decide), hI.r4]
     · rw [wo 5 (by decide) (by decide), hkeep 5 (by decide) (by decide), hI.r5]
     · rw [wo 6 (by decide) (by decide), hkeep 6 (by decide) (by decide), hI.r6]
@@ -211,5 +214,15 @@ theorem flush_reach {base : Word} {s : State} {st0 : SState} (e : UpdateEntry ba
       omega
     · rw [← hI.ab]
       exact (M0Crypto.Spec.Blake2s.absorb_flush st hp _ hne).symm
+    · obtain ⟨g, -, -, hf⟩ := hI.gh
+      refine ⟨⟨true, some (rec5 (uargs s) k (nn s - k) 64 oFlushBl)⟩, ?_, ?_, ?_⟩
+      · have hl : [t2.regs 4, t2.regs 5, t2.regs 6, t2.regs 7, retAt base oFlushBl] =
+            rec5 (uargs s) k (nn s - k) 64 oFlushBl := by
+          simp only [rec5, e.uargs_eq, r4, u_o 5 (by decide) (by decide), u_o 6 (by decide) (by decide),
+            u_o 7 (by decide) (by decide), hI.r5, hI.r6, hI.r7, hp]
+        rw [wm, ← hl]; exact hwin
+      · rw [wo 12 (by decide) (by decide), hv.r12]; rfl
+      · rw [hp] at hf
+        exact (fut_flush (a := uargs s) g hk).symm.trans hf
 
 end M0Crypto.Release.Blake2sUpdate

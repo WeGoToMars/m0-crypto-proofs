@@ -1,11 +1,11 @@
 import M0Crypto.Release.AeadCompare
-import M0Crypto.Release.AeadCompose
+import M0Crypto.Release.AeadWindow
 import M0Crypto.Release.AeadCheck
 set_option linter.unusedSimpArgs false
 set_option maxRecDepth 100000
 set_option maxHeartbeats 4000000
 namespace M0Crypto.Release.Aead
-open M0Crypto.Armv6M (Word Reg State Mem read32)
+open M0Crypto.Armv6M (Word Reg State Mem read32 slot)
 open M0Crypto.Thumb
 open M0Crypto.Release.Frame
 open M0Crypto.Spec.Aead (pad16 macData chacha20 decrypt poly1305 polyKey)
@@ -32,6 +32,13 @@ theorem verdict_effect (s : State) : (execAll verdict s).z=(s.regs 3==0#32) ∧
     M0Crypto.Armv6M.State.setNZ, M0Crypto.Armv6M.State.setNZCV, M0Crypto.Armv6M.State.reg,
     M0Crypto.Release.sub_flags]
   rw [show (4294967295#32 : Word)= ~~~0#32 from rfl, M0Crypto.Release.sub_flags, BitVec.sub_zero]
+
+theorem verdict_r45 (s : State) : (execAll verdict s).regs 4 = s.regs 4 ∧ (execAll verdict s).regs 5 = 0#32 := by
+  refine ⟨execAll_regs_other _ _ _ (by decide) (by decide), ?_⟩
+  rw [show verdict = [.movImm 5 0] ++ [.movImm 0 0, .cmpImm 3 0] from rfl, execAll_append,
+    execAll_regs_other _ _ _ (by decide) (by decide)]
+  simp [execAll, Instr.next, Instr.exec, M0Crypto.Armv6M.State.setReg,
+    M0Crypto.Armv6M.State.setNZ, M0Crypto.Armv6M.State.reg]
 
 def statusCode (bad : Bool) : List Instr := if bad then reject else accept
 
@@ -71,20 +78,24 @@ structure DecryptReady (c : ACall) (s : State) : Prop where
   frame : ∀ y, ¬DWr c y → s.mem y=c.m0 y
 
 /-- Both verdict paths join at the same erasure and return sequence. -/
-theorem decrypt_return_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (hb : ABuf c) (s : State)
+theorem decrypt_return_win_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (hb : ABuf c) (s : State)
     (hp : s.pc=c.base+BitVec.ofNat 32 decClrAAt) (h : DecryptReady c s) (hlr : (c.regs0 14).getLsbD 0=true)
     (hE : ∀ pc, M0Crypto.Release.ConstantTime.PCBetween c.base decOff decEnd pc → Pc pc) :
-    ReachW c.base Pc (DAllowed c) s (DecryptResult c) := by
+    ReachW c.base Pc (DAllowed c) s (fun t => DecryptResult c t ∧ t.regs 12 = s.regs 12 ∧
+      ∀ (e : Nat) (s0 : State), AEntry c e s0 → ∀ ctr low9, LowWin c ctr low9 s.mem →
+        Ctx.bytesAt t.mem (c.sp0 - 320#32) 320 =
+          winBytes c.regs0 c.nonce ctr low9 (Ctx.bytesAt c.m0 (c.sp0 - 320#32) 320)) := by
   obtain ⟨spro, blx, scopy, bli, laad, mad, lin, mct, slen, bll, sf, blf, scma, scml, bcml, sv, bcr, scr, blc, sa, bsk, sr, sca, scl, bcl, sepi, pop⟩ := dec_at
-  apply ((clear_return_w c hv true decClrAAt sca scl bcl sepi pop
+  apply ((clear_return_win_w c hv true decClrAAt sca scl bcl sepi pop
     (by decide) (by decide) s hp h.sp h.high h.hi hlr
     (regionOf hE (by decide +kernel) (by decide +kernel)) (regionOf hE (by decide +kernel) (by decide +kernel)) (pcOf hE (by decide +kernel) (by decide +kernel)) (regionOf hE (by decide +kernel) (by decide +kernel)) (pcOf hE (by decide +kernel) (by decide +kernel))).monoW (fun _ h => .inl h)).mono (fun _ _ h => h)
-  rintro t ⟨ht, hz, hf⟩
+  rintro t ⟨ht, hz, hf, h12⟩
   have eout : Ctx.bytesAt t.mem c.out c.len.toNat=Ctx.bytesAt s.mem c.out c.len.toNat :=
     bytesAt_congr (fun j hj => hf _ (fun hw => hv.not_swr hb.outStack hj (clearWr_swr _ _ hw)))
   have ho := eout.trans h.out
   have ha : RetPost c (if c.expected=c.tagB then 0#32 else 0xfffffffe#32) t := by simpa only [ite_true, h.r4] using ht
-  refine ⟨ha, ?_, ?_, ?_, hz⟩
+  refine ⟨⟨ha, ?_, ?_, ?_, hz⟩, h12, fun e s0 he ctr low9 hw =>
+    window_eq hv he ctr low9 hf hz hw.low hw.saved hw.nonce hw.ctr h.high⟩
   · intro pt hs
     have hok : c.expected=c.tagB := by
       by_cases hn : c.expected=c.tagB
@@ -101,6 +112,12 @@ theorem decrypt_return_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (hb : 
     exact ⟨by rw [ha.r0, if_neg hbad], by simpa only [hs] using ho⟩
   · intro y hy
     rw [hf y (fun hw => hy (.inl (clearWr_swr _ _ hw))), h.frame y hy]
+
+theorem decrypt_return_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (hb : ABuf c) (s : State)
+    (hp : s.pc=c.base+BitVec.ofNat 32 decClrAAt) (h : DecryptReady c s) (hlr : (c.regs0 14).getLsbD 0=true)
+    (hE : ∀ pc, M0Crypto.Release.ConstantTime.PCBetween c.base decOff decEnd pc → Pc pc) :
+    ReachW c.base Pc (DAllowed c) s (DecryptResult c) :=
+  (decrypt_return_win_w c hv hb s hp h hlr hE).mono (fun _ _ h => h) (fun _ h => h.1)
 
 theorem Body.same {c : ACall} {Wr : Word → Prop} {s t : State} (h : Body c Wr s)
     (hm : t.mem=s.mem) (hs : t.regs 13=s.regs 13)
@@ -146,19 +163,27 @@ theorem decrypt_verdict_reaches_crypt (c : ACall) (hv : AValid c) (s : State)
       v.pc = c.base + BitVec.ofNat 32 decCryptAt ∧ Body c (SWr c.A) v) :=
   (decrypt_verdict_reaches_crypt_w (Pc := fun _ => True) c hv s hp h hz hok (fun _ _ => trivial)).toReach
 
-/-- Verdict, accepted-only decryption, both status paths, erasure and return. -/
-theorem decrypt_tail_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (hb : ABuf c) (s : State)
+/-- Verdict, accepted-only decryption, both status paths, erasure and return, with r12 and the
+stack window. -/
+theorem decrypt_tail_win_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (hb : ABuf c) {s0 : State}
+    (he : AEntry c decOff s0) (s : State)
     (hp : s.pc=c.base+BitVec.ofNat 32 decVerdictAt) (h : Body c (SWr c.A) s)
     (hz : s.regs 3=0#32 ↔ c.expected=c.tagB) (hlr : (c.regs0 14).getLsbD 0=true)
+    (hlw : LowWin c 0#32 (decLow9 c.regs0 false) s.mem) (h4 : s.regs 4 = 16#32)
+    (h6 : s.regs 6 = BitVec.ofNat 32 (c.len.toNat % 16)) (h7 : s.regs 7 = c.regs0 7)
+    (h12 : s.regs 12 = 0#32)
     (hPc : ∀ pc, DecAllPc c.base pc → Pc pc) :
-    ReachW c.base Pc (DAllowed c) s (DecryptResult c) := by
+    ReachW c.base Pc (DAllowed c) s (fun t => DecryptResult c t ∧ t.regs 12 = 0#32 ∧
+      Ctx.bytesAt t.mem (c.sp0 - 320#32) 320 =
+        decWindow c.regs0 c.nonce (decide (c.expected = c.tagB)) (Ctx.bytesAt c.m0 (c.sp0 - 320#32) 320)) := by
   have hE : ∀ pc, M0Crypto.Release.ConstantTime.PCBetween c.base decOff decEnd pc → Pc pc := fun pc h => hPc pc (.inl h)
   have hCha : ∀ pc, ChaCha20Policy.ChaPc c.base pc → Pc pc := fun pc h => hPc pc (.inr (.inl h))
   obtain ⟨spro, blx, scopy, bli, laad, mad, lin, mct, slen, bll, sf, blf, scma, scml, bcml, sv, bcr, scr, blc, sa, bsk, sr, sca, scl, bcl, sepi, pop⟩ := dec_at
   obtain ⟨ez, em, er⟩ := verdict_effect s
+  obtain ⟨e4, e5⟩ := verdict_r45 s
   apply ReachW.blockR (is := verdict) (regionOf hE (by decide +kernel) (by decide +kernel)) (by have := hv.base4; omega) hp (by decide) sv (by decide)
     (by simp [alignedAll, verdict, Instr.accesses]) (WritesTo.of_noWritesMem _ _ (by decide) _)
-  generalize hu : execAll verdict s=u at ez em er
+  generalize hu : execAll verdict s=u at ez em er e4 e5
   have up : u.pc=c.base+BitVec.ofNat 32 decRejectBrAt := by rw [←hu, execAll_pc _ _ (by decide), hp, ofNat_add_assoc]; rfl
   have ub : Body c (SWr c.A) u := h.same em (er 13 (by decide) (by decide))
     (fun r a b => er r (by omega) (by omega))
@@ -178,12 +203,18 @@ theorem decrypt_tail_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (hb : AB
     rintro w ⟨wp, w4, wm, wr⟩
     have wb : Body c (SWr c.A) w := vb.same wm (wr 13 (by decide) (by decide))
       (fun r a b => wr r (by omega) (by omega))
-    apply decrypt_return_w c hv hb w wp _ hlr hE
-    refine ⟨wb.sp, wb.high, wb.hi, ?_, ?_, ?_⟩
-    · simpa [if_neg hbad] using w4
-    · simp only [decrypt_eq, if_neg hbad]
-      exact bytesAt_congr (fun j hj => wb.frame _ (hv.not_swr hb.outStack hj))
-    · intro y hy; exact wb.frame y (fun hw => hy (.inl hw))
+    have wd : DecryptReady c w := by
+      refine ⟨wb.sp, wb.high, wb.hi, ?_, ?_, ?_⟩
+      · simpa [if_neg hbad] using w4
+      · simp only [decrypt_eq, if_neg hbad]
+        exact bytesAt_congr (fun j hj => wb.frame _ (hv.not_swr hb.outStack hj))
+      · intro y hy; exact wb.frame y (fun hw => hy (.inl hw))
+    apply (decrypt_return_win_w c hv hb w wp wd hlr hE).mono (fun _ _ h => h)
+    rintro t ⟨ht, t12, tw⟩
+    refine ⟨ht, ?_, ?_⟩
+    · rw [t12, wr 12 (by decide) (by decide), ←hv', setReg_ne _ _ _ _ (by decide), er 12 (by decide) (by decide), h12]
+    · rw [decide_eq_false hbad]
+      exact tw _ _ he _ _ (by rw [wm, ←hv', setReg_mem, em]; exact hlw)
   · intro heq
     have hok : c.expected=c.tagB := by
       apply hz.mp
@@ -205,31 +236,65 @@ theorem decrypt_tail_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (hb : AB
       rw [hw.keep y (fun o ho e => hy (.inl (e ▸ swr_lo c.A o ho)))
         (fun o ho e => hy (.inl (e ▸ swr_A c.A (4+o) (by omega)))) (fun h => hy (.inr h))]
       exact vb.frame y (fun h => hy (.inl h))
+    -- the stack words the ChaCha20 call leaves below `A`
+    have lw : LowWin c 1#32 (decLow9 c.regs0 true) w.mem := by
+      refine ⟨fun o ho => hw.low o ho (by rw [←hv', setReg_mem, em]; exact hlw.low o ho), fun i hi => ?_,
+        wb.nonce, hw.ctr⟩
+      rw [hw.saved i hi]
+      by_cases h8 : i = 8
+      · subst h8
+        simp only [↓reduceIte, decLow9, List.getD_cons_succ, List.getD_cons_zero]
+        rw [he.pc, BitVec.add_sub_cancel]
+      · rw [if_neg h8, ChaCha20Xor.chSavedRegs_get v.regs i hi, ←hv']
+        rcases (by omega : i = 0 ∨ i = 1 ∨ i = 2 ∨ i = 3 ∨ i = 4 ∨ i = 5 ∨ i = 6 ∨ i = 7) with
+          rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
+          simp only [Frame.saved, decLow9, ↓reduceIte, List.getD_cons_succ, List.getD_cons_zero] <;>
+          rw [setReg_ne _ _ _ _ (by decide)]
+        · rw [er 8 (by decide) (by decide), h.hi 8 (by decide) (by decide)]
+        · rw [er 9 (by decide) (by decide), h.hi 9 (by decide) (by decide)]
+        · rw [er 10 (by decide) (by decide), h.hi 10 (by decide) (by decide)]
+        · rw [er 11 (by decide) (by decide), h.hi 11 (by decide) (by decide)]
+        · rw [e4, h4]
+        · exact e5
+        · rw [er 6 (by decide) (by decide), h6, he.r3]
+        · rw [er 7 (by decide) (by decide), h7]
+    have w12 : w.regs 12 = 0#32 := by
+      rw [hw.r12, ←hv', setReg_ne _ _ _ _ (by decide), er 12 (by decide) (by decide), h12, ite_self]
     apply ReachS.bind
     apply (status_reach_w c hv (DAllowed c) false decAcceptAt sa (by decide) w hw.pc (regionOf hE (by decide +kernel) (by decide +kernel))).mono
       (fun _ _ h => h)
     rintro x ⟨xp, x4, xm, xr⟩
     apply ReachW.bR (pcOf hE (by decide +kernel) (by decide +kernel)) (by have := hv.base4; omega) decClrAAt (brImm11 decSkipAt decClrAAt) xp (by decide) bsk (by decide) (by decide)
     generalize hy : x.setReg 15 (c.base+BitVec.ofNat 32 decClrAAt)=y
-    apply decrypt_return_w c hv hb y (by rw [←hy, M0Crypto.Armv6M.State.pc, setReg_eq]) _ hlr hE
     have ym : y.mem=w.mem := by rw [←hy, setReg_mem, xm]
-    refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
-    · rw [←hy, setReg_ne _ _ _ _ (by decide), xr 13 (by decide) (by decide), wb.sp]
-    · rw [ym]; exact wb.high
-    · intro r a b
-      rw [←hy, setReg_ne _ _ _ _ (by rintro rfl; omega), xr r (by omega) (by omega), wb.hi r a b]
-    · rw [←hy, setReg_ne _ _ _ _ (by decide), x4, if_pos hok]; rfl
-    · simp only [decrypt_eq, if_pos hok]
-      rw [ym]; exact hw.out
-    · intro a ha; rw [ym]; exact wf a ha
+    have yd : DecryptReady c y := by
+      refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
+      · rw [←hy, setReg_ne _ _ _ _ (by decide), xr 13 (by decide) (by decide), wb.sp]
+      · rw [ym]; exact wb.high
+      · intro r a b
+        rw [←hy, setReg_ne _ _ _ _ (by rintro rfl; omega), xr r (by omega) (by omega), wb.hi r a b]
+      · rw [←hy, setReg_ne _ _ _ _ (by decide), x4, if_pos hok]; rfl
+      · simp only [decrypt_eq, if_pos hok]
+        rw [ym]; exact hw.out
+      · intro a ha; rw [ym]; exact wf a ha
+    apply (decrypt_return_win_w c hv hb y (by rw [←hy, M0Crypto.Armv6M.State.pc, setReg_eq]) yd hlr hE).mono
+      (fun _ _ h => h)
+    rintro t ⟨ht, t12, tw⟩
+    refine ⟨ht, ?_, ?_⟩
+    · rw [t12, ←hy, setReg_ne _ _ _ _ (by decide), xr 12 (by decide) (by decide), w12]
+    · rw [decide_eq_true hok]
+      exact tw _ _ he _ _ (by rw [ym]; exact lw)
 
-/-- The decrypt setup and MAC phases establish the inputs to tag comparison. -/
-theorem decrypt_compare_entry_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (hb : ABuf c) (s : State)
+/-- The decrypt setup and MAC phases establish the inputs to tag comparison, and the stack words
+below `A` and the registers the rest of the run keeps or stores. -/
+theorem decrypt_compare_entry_win_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (hb : ABuf c) (s : State)
     (he : AEntry c decOff s) (hPc : ∀ pc, DecAllPc c.base pc → Pc pc) :
     ReachW c.base Pc (DAllowed c) s (fun y =>
       y.pc = c.base + BitVec.ofNat 32 decCmpAAt ∧ Body c (SWr c.A) y ∧
       Ctx.bytesAt y.mem c.tag 16 = c.tagB ∧
-      Ctx.bytesAt y.mem (c.A + 72#32) 16 = c.expected) := by
+      Ctx.bytesAt y.mem (c.A + 72#32) 16 = c.expected ∧
+      LowWin c 0#32 (decLow9 c.regs0 false) y.mem ∧ y.regs 12 = 0#32 ∧
+      y.regs 6 = BitVec.ofNat 32 (c.len.toNat % 16) ∧ y.regs 7 = c.regs0 7) := by
   have hE : ∀ pc, M0Crypto.Release.ConstantTime.PCBetween c.base decOff decEnd pc → Pc pc := fun pc h => hPc pc (.inl h)
   have hCha : ∀ pc, ChaCha20Policy.ChaPc c.base pc → Pc pc := fun pc h => hPc pc (.inr (.inl h))
   have hBlk : ∀ pc, Poly1305Blocks.BlkPc c.base pc → Pc pc := fun pc h => hPc pc (.inr (.inr (.inl h)))
@@ -248,39 +313,39 @@ theorem decrypt_compare_entry_w {Pc : Word → Prop} (c : ACall) (hv : AValid c)
   have aadU : Ctx.bytesAt u.mem c.aad c.alen.toNat=c.aadB :=
     bytesAt_congr (fun j hj => bu.frame _ (hv.not_swr hb.aadS hj))
   apply ReachS.bind
-  apply ((mac_phase_w c hv (SWr c.A) decLoadAadAt loadAad 0x24 0x25 rfl laad
+  apply ((mac_phase_win_w c hv (SWr c.A) decLoadAadAt loadAad 0x24 0x25 rfl laad
     (blImm (decLoadAadAt + seqSize loadAad + macBlOff) blocksOff)
     (blImm (decLoadAadAt + seqSize loadAad + macBl2Off) blocksOff)
     mad (by decide) (by decide) u hu.pc c.aad c.alen hb.aadS bu.high.aad bu.high.alen bu u.mem [] pi
     (macWr_swr c.A) (regionOf hE (by decide +kernel) (by decide +kernel)) (regionOf hE (by decide +kernel) (by decide +kernel)) hBlk).monoW (fun _ h => .inl h)).mono (fun _ _ h => h)
-  intro v hv'
+  rintro v ⟨hv', -, hv7⟩
   have pv : PInv c.A u.mem (c.aadB++pad16 c.aadB) v.mem := by
     have h := hv'.inv; rw [aadU, List.nil_append] at h; exact h
   have inV : Ctx.bytesAt v.mem c.inp c.len.toNat=c.ptB :=
     bytesAt_congr (fun j hj => hv'.body.frame _ (hv.not_swr hb.inS hj))
   apply ReachS.bind
-  apply ((mac_phase_w c hv (SWr c.A) decLoadInAt loadIn 0x1c 0x1d rfl lin
+  apply ((mac_phase_win_w c hv (SWr c.A) decLoadInAt loadIn 0x1c 0x1d rfl lin
     (blImm (decLoadInAt + seqSize loadIn + macBlOff) blocksOff)
     (blImm (decLoadInAt + seqSize loadIn + macBl2Off) blocksOff)
     mct (by decide) (by decide) v hv'.pc c.inp c.len hb.inS hv'.body.high.inp hv'.body.high.len hv'.body
     u.mem _ pv (macWr_swr c.A) (regionOf hE (by decide +kernel) (by decide +kernel)) (regionOf hE (by decide +kernel) (by decide +kernel)) hBlk).monoW (fun _ h => .inl h)).mono (fun _ _ h => h)
-  intro w hw
+  rintro w ⟨hw, hwR, hw7⟩
   have pw : PInv c.A u.mem ((c.aadB++pad16 c.aadB)++(c.ptB++pad16 c.ptB)) w.mem := by
     have h := hw.inv; rw [inV] at h; exact h
   apply ReachS.bind
-  apply ((lengths_reach_w c hv decLengthsAt (blImm (decLengthsAt + seqSize lengths) blocksOff) slen bll tl (by decide) (by decide)
+  apply ((lengths_win_w c hv decLengthsAt (blImm (decLengthsAt + seqSize lengths) blocksOff) slen bll tl (by decide) (by decide)
     w hw.pc hw.body.sp hw.body.high hw.body.code u.mem _ pw (regionOf hE (by decide +kernel) (by decide +kernel)) hBlk).monoW
     (fun y h => .inl (macWr_swr _ y h))).mono (fun _ _ h => h)
-  intro x hx
+  rintro x ⟨hx, hxL, hxS⟩
   have bx := hw.body.lengths hv hx (macWr_swr c.A)
   have px : PInv c.A u.mem (macData c.aadB c.ptB) x.mem := by
     have h := hx.inv
     simpa only [macData, ACall.aadB, ACall.ptB, bytesAt_length, lengthBlock, List.append_assoc] using h
   apply ReachS.bind
-  apply ((finish_phase_w c hv hb true decFinDAt sf (blImm (decFinDAt + seqSize (finArgs true)) finishOff) blf tf (by decide) (by decide)
+  apply ((finish_phase_win_w c hv hb true decFinDAt sf (blImm (decFinDAt + seqSize (finArgs true)) finishOff) blf tf (by decide) (by decide)
     x hx.pc bx.sp bx.high bx.code ic u hu.init hu.ictx hu.pkey _ px (regionOf hE (by decide +kernel) (by decide +kernel)) (pcOf hE (by decide +kernel) (by decide +kernel)) hFin).monoW
     (fun y h => .inl (finishWr_swr _ y h))).mono (fun _ _ h => h)
-  intro y hy
+  rintro y ⟨hy, hyS, hy12⟩
   have yf : ∀ a, ¬SWr c.A a → y.mem a=c.m0 a := fun a ha =>
     (hy.frame a (fun h => ha (finishWr_swr _ a h))).trans (bx.frame a ha)
   have yb : Body c (SWr c.A) y := ⟨hy.sp,
@@ -289,27 +354,86 @@ theorem decrypt_compare_entry_w {Pc : Word → Prop} (c : ACall) (hv : AValid c)
     (fun r a b => (hy.hi r (by omega) b).trans (bx.hi r a b)), yf, hv.codeAt_of yf⟩
   have tagY : Ctx.bytesAt y.mem c.tag 16=c.tagB :=
     bytesAt_congr (fun j hj => yf _ (hv.not_swr hb.tagStack hj))
+  have nf : ∀ o, o < 156 → ¬ FinishWr c.A (if true = true then c.A + 72#32 else c.tag)
+      (c.A - 176#32 + BitVec.ofNat 32 o) := fun o ho => finishWr_X hv hb true o (.inl ho)
+  obtain ⟨x4, x5, x6⟩ := hwR
+  have w7 : w.regs 7 = c.regs0 7 := by rw [hw7, hv7, hu.r7]
   apply ReachS.done
-  refine ⟨hy.pc, yb, tagY, ?_⟩
-  exact hy.tagBytes
+  refine ⟨hy.pc, yb, tagY, hy.tagBytes, ⟨?_, ?_, yb.nonce, ?_⟩, hy12, ?_, ?_⟩
+  · intro o ho
+    rw [hy.frame _ (nf o (by omega))]
+    by_cases h112 : o < 112
+    · rw [hx.frame _ (macWr_X hv o (.inl h112)), hw.frame _ (macWr_X hv o (.inl h112)),
+        hv'.frame _ (macWr_X hv o (.inl h112))]
+      exact hu.low o ho
+    · obtain ⟨k, rfl⟩ : ∃ k, o = 112 + k := ⟨o - 112, by omega⟩
+      rw [X_64]; exact hxL k (by omega)
+  · intro i hi
+    by_cases h4 : i < 4
+    · rw [read32_congr (m := x.mem) (fun k hk => by rw [ofNat_add_assoc]; exact hy.frame _ (nf _ (by omega))),
+        X_slot64, hxS i h4]
+      have r := hw.body.hi
+      rcases (by omega : i = 0 ∨ i = 1 ∨ i = 2 ∨ i = 3) with rfl | rfl | rfl | rfl <;>
+        simp only [Frame.saved, decLow9, Bool.false_eq_true, ↓reduceIte] <;>
+        rw [r _ (by decide) (by decide)] <;> rfl
+    · obtain ⟨j, rfl⟩ : ∃ j, i = 4 + j := ⟨i - 4, by omega⟩
+      rw [X_slot20, hyS j (by omega)]
+      have r := hx.hi
+      rcases (by omega : j = 0 ∨ j = 1 ∨ j = 2 ∨ j = 3 ∨ j = 4) with rfl | rfl | rfl | rfl | rfl <;>
+        simp only [decLow9, Bool.false_eq_true, ↓reduceIte, List.getD_cons_succ, List.getD_cons_zero]
+      · rw [r 4 (by decide) (by decide), x4, he.r2, he.r3]
+      · rw [r 5 (by decide) (by decide), x5, he.r3]
+      · rw [r 6 (by decide) (by decide), x6, he.r3]
+      · rw [r 7 (by decide) (by decide), w7]
+      · rw [he.pc, BitVec.add_sub_cancel]
+  · rw [← hu.ctr]
+    refine read32_congr (fun k hk => ?_)
+    rw [show c.A + 4#32 = c.A + BitVec.ofNat 32 4 from rfl, ofNat_add_assoc,
+      hy.frame _ (finish_not_A c hv hb true _ (by omega) (.inl (by omega))),
+      hx.frame _ (mac_not_A c.A _ (by omega) (.inl (by omega))),
+      hw.frame _ (mac_not_A c.A _ (by omega) (.inl (by omega))),
+      hv'.frame _ (mac_not_A c.A _ (by omega) (.inl (by omega)))]
+  · rw [hy.hi 6 (by decide) (by decide), hx.hi 6 (by decide) (by decide), x6]
+  · rw [hy.hi 7 (by decide) (by decide), hx.hi 7 (by decide) (by decide), w7]
+
+/-- The decrypt setup and MAC phases establish the inputs to tag comparison. -/
+theorem decrypt_compare_entry_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (hb : ABuf c) (s : State)
+    (he : AEntry c decOff s) (hPc : ∀ pc, DecAllPc c.base pc → Pc pc) :
+    ReachW c.base Pc (DAllowed c) s (fun y =>
+      y.pc = c.base + BitVec.ofNat 32 decCmpAAt ∧ Body c (SWr c.A) y ∧
+      Ctx.bytesAt y.mem c.tag 16 = c.tagB ∧
+      Ctx.bytesAt y.mem (c.A + 72#32) 16 = c.expected) :=
+  (decrypt_compare_entry_win_w c hv hb s he hPc).mono (fun _ _ h => h)
+    (fun _ h => ⟨h.1, h.2.1, h.2.2.1, h.2.2.2.1⟩)
+
+/-- Full checked-decryption run of the frozen machine code, with r12 and the stack window. -/
+theorem decrypt_win_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (hb : ABuf c) (s : State)
+    (he : AEntry c decOff s) (hlr : (c.regs0 14).getLsbD 0=true)
+    (hPc : ∀ pc, DecAllPc c.base pc → Pc pc) :
+    ReachW c.base Pc (DAllowed c) s (fun t => DecryptResult c t ∧ t.regs 12 = 0#32 ∧
+      Ctx.bytesAt t.mem (c.sp0 - 320#32) 320 =
+        decWindow c.regs0 c.nonce (decide (c.expected = c.tagB)) (Ctx.bytesAt c.m0 (c.sp0 - 320#32) 320)) := by
+  have hE : ∀ pc, M0Crypto.Release.ConstantTime.PCBetween c.base decOff decEnd pc → Pc pc := fun pc h => hPc pc (.inl h)
+  apply ReachS.bind
+  apply (decrypt_compare_entry_win_w c hv hb s he hPc).mono (fun _ _ h => h)
+  rintro y ⟨ypc, yb, tagY, tag, ylw, y12, y6, y7⟩
+  apply ReachS.bind
+  apply ((compare_win_w c hv y ypc yb.sp yb.high (regionOf hE (by decide +kernel) (by decide +kernel)) (regionOf hE (by decide +kernel) (by decide +kernel)) (pcOf hE (by decide +kernel) (by decide +kernel))).monoW (fun _ h => False.elim h)).mono
+    (fun _ _ h => h)
+  rintro z ⟨zp, zm, zr, zeq, z4⟩
+  have zb := yb.same zm (zr 13 (by decide) (by decide)) (fun r a b => zr r (by omega) (by omega))
+  apply decrypt_tail_win_w c hv hb he z zp zb _ hlr (by rw [zm]; exact ylw) z4
+    (by rw [zr 6 (by decide) (by decide), y6]) (by rw [zr 7 (by decide) (by decide), y7])
+    (by rw [zr 12 (by decide) (by decide), y12]) hPc
+  rw [zeq, tagY, tag]
+  exact eq_comm
 
 /-- Full checked-decryption run of the frozen machine code. -/
 theorem decrypt_reach_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (hb : ABuf c) (s : State)
     (he : AEntry c decOff s) (hlr : (c.regs0 14).getLsbD 0=true)
     (hPc : ∀ pc, DecAllPc c.base pc → Pc pc) :
-    ReachW c.base Pc (DAllowed c) s (DecryptResult c) := by
-  have hE : ∀ pc, M0Crypto.Release.ConstantTime.PCBetween c.base decOff decEnd pc → Pc pc := fun pc h => hPc pc (.inl h)
-  apply ReachS.bind
-  apply (decrypt_compare_entry_w c hv hb s he hPc).mono (fun _ _ h => h)
-  rintro y ⟨ypc, yb, tagY, tag⟩
-  apply ReachS.bind
-  apply ((compare_reach_w c hv y ypc yb.sp yb.high (regionOf hE (by decide +kernel) (by decide +kernel)) (regionOf hE (by decide +kernel) (by decide +kernel)) (pcOf hE (by decide +kernel) (by decide +kernel))).monoW (fun _ h => False.elim h)).mono
-    (fun _ _ h => h)
-  rintro z ⟨zp, zm, zr, zeq⟩
-  have zb := yb.same zm (zr 13 (by decide) (by decide)) (fun r a b => zr r (by omega) (by omega))
-  apply decrypt_tail_w c hv hb z zp zb _ hlr hPc
-  rw [zeq, tagY, tag]
-  exact eq_comm
+    ReachW c.base Pc (DAllowed c) s (DecryptResult c) :=
+  (decrypt_win_w c hv hb s he hlr hPc).mono (fun _ _ h => h) (fun _ h => h.1)
 
 theorem decrypt_compare_entry (c : ACall) (hv : AValid c) (hb : ABuf c) (s : State)
     (he : AEntry c decOff s) :
@@ -324,11 +448,14 @@ theorem decrypt_reach (c : ACall) (hv : AValid c) (hb : ABuf c) (s : State)
     Reach c.base (DAllowed c) s (DecryptResult c) :=
   (decrypt_reach_w (Pc := fun _ => True) c hv hb s he hlr (fun _ _ => trivial)).toReach
 
-/-- Checked-decryption theorem in the single-memory ARMv6-M model. -/
-theorem decrypt_correct (c : ACall) (s : State) (hp : APre c decOff s) :
+/-- Checked-decryption theorem in the single-memory ARMv6-M model, with r12 and the stack window. -/
+theorem decrypt_win (c : ACall) (s : State) (hp : APre c decOff s) :
     ∃ n, ∀ fuel, n ≤ fuel → ∃ t tr,
       Thumb.runUntil c.ret fuel s = .ok (t, tr) ∧
-      DecryptResult c t ∧ WritesTo (DAllowed c) tr := by
+      (DecryptResult c t ∧ t.regs 12 = 0#32 ∧
+        Ctx.bytesAt t.mem (c.sp0 - 320#32) 320 =
+          decWindow c.regs0 c.nonce (decide (c.expected = c.tagB)) (Ctx.bytesAt c.m0 (c.sp0 - 320#32) 320)) ∧
+      WritesTo (DAllowed c) tr := by
   obtain ⟨hv, hb, he, hlr, hret⟩ := hp
   replace hret := Region.ne hret
   apply Reach.runUntil (by rw [he.mem]; exact hv.code)
@@ -339,7 +466,22 @@ theorem decrypt_correct (c : ACall) (s : State) (hp : APre c decOff s) :
       · exact hv.code_not_swr hi h
       · exact not_out hb.codeO hi h)
     (fun i hi => hret i (by rwa [B_len] at hi))
-  exact (decrypt_reach c hv hb s he hlr).mono fun t ht => ⟨ht.abi.pc, ht⟩
+  exact (decrypt_win_w (Pc := fun _ => True) c hv hb s he hlr (fun _ _ => trivial)).toReach.mono
+    fun t ht => ⟨ht.1.abi.pc, ht⟩
+
+/-- Every valid call returns with `DecryptResult`; see `decrypt_correct` for the window. -/
+theorem decrypt_returns (c : ACall) (s : State) (hp : APre c decOff s) :
+    ∃ n, ∀ fuel, n ≤ fuel → ∃ t tr,
+      Thumb.runUntil c.ret fuel s = .ok (t, tr) ∧
+      DecryptResult c t ∧ WritesTo (DAllowed c) tr :=
+  let ⟨n, hn⟩ := decrypt_win c s hp
+  ⟨n, fun fuel hf => let ⟨t, tr, h1, h2, h3⟩ := hn fuel hf; ⟨t, tr, h1, h2.1, h3⟩⟩
+
+/-- Checked-decryption theorem in the single-memory ARMv6-M model. -/
+theorem decrypt_correct : DecryptCorrect :=
+  ⟨decWindow, fun c s hp =>
+    let ⟨n, hn⟩ := decrypt_win c s hp
+    ⟨n, fun fuel hf => let ⟨t, tr, h1, ⟨h2, h3, h4⟩, h5⟩ := hn fuel hf; ⟨t, tr, h1, h2, h5, h3, h4⟩⟩⟩
 
 /-- Rejected calls write only the AEAD stack, including exact in-place calls. -/
 theorem rejected_writes (c : ACall) (tr : List Event)

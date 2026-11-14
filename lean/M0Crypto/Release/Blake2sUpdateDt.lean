@@ -29,7 +29,7 @@ theorem Inv.same {s : State} {st0 : SState} {t u : State} {k : Nat} {st : SState
    by rw [hr 6 (by decide) (by decide)]; exact h.r6, by rw [hr 7 (by decide) (by decide)]; exact h.r7,
    by rw [hr 13 (by decide) (by decide)]; exact h.r13,
    fun r h8 h11 => by rw [hr r (by omega) (by omega)]; exact h.hi r h8 h11, h.kn,
-   by rw [hm]; exact h.ctx, Ag.of_mem h.ag hm, h.tot, h.ab⟩
+   by rw [hm]; exact h.ctx, Ag.of_mem h.ag hm, h.tot, h.ab, h.gh.of (hr 12 (by decide) (by decide)) hm⟩
 
 theorem Inv.setPc {s : State} {st0 : SState} {u : State} {k : Nat} {st : SState} (h : Inv s st0 u k st)
     (v : Word) : Inv s st0 (u.setReg 15 v) k st :=
@@ -37,7 +37,8 @@ theorem Inv.setPc {s : State} {st0 : SState} {u : State} {k : Nat} {st : SState}
 
 /-- Where the loop goes after the flush test: to the buffer path, or to the direct-block loop. -/
 def DtPost (base : Word) (s : State) (st0 : SState) (k : Nat) (v : State) : Prop :=
-  (v.pc = base + BitVec.ofNat 32 oBuf ∧ ∃ st', Inv s st0 v k st' ∧ st'.pending.length < 64) ∨
+  (v.pc = base + BitVec.ofNat 32 oBuf ∧ ∃ st', Inv s st0 v k st' ∧ st'.pending.length < 64 ∧
+    NoDir s k st'.pending.length) ∨
   (v.pc = base + BitVec.ofNat 32 oDirect ∧ ∃ st', Inv s st0 v k st' ∧ st'.pending.length = 0 ∧
     64 < nn s - k ∧ (v.regs 5).toNat % 4 = 0)
 
@@ -62,7 +63,11 @@ theorem dt_reach {base : Word} {s : State} {st0 : SState} (e : UpdateEntry base 
   apply ReachS.bcondPcNR hb2 oDTBne1 oBuf 1 (brImm8 oDTBne1 oBuf) hp1 (by decide +kernel) dtBne1_at
     (by decide +kernel) (by decide +kernel)
   · intro hc
-    exact ReachS.done (Or.inl ⟨by rw [sr_pc], st, hI1.setPc _, hlt⟩)
+    have hnd : NoDir s k st.pending.length := by
+      rintro ⟨h0, -, -⟩
+      rw [cp1, az', hI.r7, h0] at hc
+      simp at hc
+    exact ReachS.done (Or.inl ⟨by rw [sr_pc], st, hI1.setPc _, hlt, hnd⟩)
   · intro hc
     rw [cp1] at hc
     have hz : u1.z = true := by simpa using hc
@@ -101,7 +106,20 @@ theorem dt_reach {base : Word} {s : State} {st0 : SState} (e : UpdateEntry base 
     apply ReachS.bcondPcNR hb2 oDTBls oBuf 9 (brImm8 oDTBls oBuf) hp3 (by decide +kernel) dtBls_at
       (by decide +kernel) (by decide +kernel)
     · intro hc
-      exact ReachS.done (Or.inl ⟨by rw [sr_pc], st, hI3.setPc _, hlt⟩)
+      have hnd : NoDir s k st.pending.length := by
+        rintro ⟨-, hgt, -⟩
+        have hcc : u3.c = true := by rw [bc', hr6']; simp; omega
+        have hzz : u3.z = false := by
+          rw [bz']
+          apply Bool.eq_false_iff.mpr
+          intro h
+          have := congrArg BitVec.toNat (beq_iff_eq.mp h)
+          rw [hr6'] at this
+          simp at this
+          omega
+        rw [cp9, hcc, hzz] at hc
+        simp at hc
+      exact ReachS.done (Or.inl ⟨by rw [sr_pc], st, hI3.setPc _, hlt, hnd⟩)
     · intro hc
       rw [cp9] at hc
       have hgt : 64 < nn s - k := by
@@ -140,7 +158,12 @@ theorem dt_reach {base : Word} {s : State} {st0 : SState} (e : UpdateEntry base 
       apply ReachS.bcondPcNR hb2 oDTBne2 oBuf 1 (brImm8 oDTBne2 oBuf) hp5 (by decide +kernel) dtBne2_at
         (by decide +kernel) (by decide +kernel)
       · intro hc
-        exact ReachS.done (Or.inl ⟨by rw [sr_pc], st, hI5.setPc _, hlt⟩)
+        have hnd : NoDir s k st.pending.length := by
+          rintro ⟨-, -, hal⟩
+          rw [cp1, dz, hI4.r5, BitVec.toNat_add, BitVec.toNat_ofNat] at hc
+          simp at hc
+          omega
+        exact ReachS.done (Or.inl ⟨by rw [sr_pc], st, hI5.setPc _, hlt, hnd⟩)
       · intro hc
         rw [cp1] at hc
         have hz : u5.z = true := by simpa using hc

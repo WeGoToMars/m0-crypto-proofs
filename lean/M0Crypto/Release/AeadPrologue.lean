@@ -195,6 +195,8 @@ structure Hi (c : ACall) (m : Mem) : Prop where
   tag : read32 m (c.A + 108#32) = c.tag
   inp : read32 m (c.A + 112#32) = c.inp
   len : read32 m (c.A + 116#32) = c.len
+  /-- The alignment word below the saved registers keeps its entry value. -/
+  gap : read32 m (c.A + 120#32) = read32 c.m0 (c.A + 120#32)
   saved : ∀ i (hi : i < 5), read32 m (c.A + BitVec.ofNat 32 (124 + 4 * i)) =
     c.saved[i]'(by simp [ACall.saved]; omega)
   aad : read32 m (c.A + 144#32) = c.aad
@@ -208,7 +210,7 @@ theorem Hi.congr {c : ACall} {m m' : Mem} (h : Hi c m)
     fun a h1 h2 => read32_congr (fun k hk => by rw [ofNat_add_assoc]; exact hm _ (by omega) (by omega))
   exact ⟨(r 104 (by omega) (by omega)).trans h.out, (r 108 (by omega) (by omega)).trans h.tag,
     (r 112 (by omega) (by omega)).trans h.inp, (r 116 (by omega) (by omega)).trans h.len,
-    fun i hi => (r _ (by omega) (by omega)).trans (h.saved i hi),
+    (r 120 (by omega) (by omega)).trans h.gap, fun i hi => (r _ (by omega) (by omega)).trans (h.saved i hi),
     (r 144 (by omega) (by omega)).trans h.aad, (r 148 (by omega) (by omega)).trans h.alen,
     (r 152 (by omega) (by omega)).trans h.key, (r 156 (by omega) (by omega)).trans h.nonce⟩
 
@@ -322,7 +324,7 @@ theorem pro_reach_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (e : Nat) (
       have st : ∀ b, b % 4 = 0 → 144 ≤ b → b < 160 →
           read32 t1.mem (c.A + BitVec.ofNat 32 b) = read32 c.m0 (c.A + BitVec.ofNat 32 b) := fun b h1 h2 h3 => by
         rw [am]; exact rd_store_other _ _ _ 124 b (by simp [ACall.saved]; omega) (by simp; omega)
-      refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+      refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
       · rw [rd_wr_ne _ _ _ 116 104 (by decide) (by decide) (by decide) (by decide) (by decide),
           rd_wr_ne _ _ _ 112 104 (by decide) (by decide) (by decide) (by decide) (by decide),
           rd_wr_ne _ _ _ 108 104 (by decide) (by decide) (by decide) (by decide) (by decide)]
@@ -333,6 +335,8 @@ theorem pro_reach_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (e : Nat) (
       · rw [rd_wr_ne _ _ _ 116 112 (by decide) (by decide) (by decide) (by decide) (by decide)]
         exact M0Crypto.Armv6M.read32_write32_same _ _ _
       · exact M0Crypto.Armv6M.read32_write32_same _ _ _
+      · rw [w4 120 (by decide) (by decide) (by decide), am]
+        exact rd_store_other _ _ _ 124 120 (by simp [ACall.saved]) (by simp [ACall.saved])
       · intro i hi
         rw [w4 _ (by omega) (by omega) (by omega), am]
         exact rd_store_same _ _ _ 124 i (by simp [ACall.saved]; omega) (by simp [ACall.saved])

@@ -55,8 +55,8 @@ theorem chacha20_call_rd {Rd : Word → Prop} (xc : Ctx) (xv : Valid xc) (u : St
 /-- Containment of a ChaCha callee's readable bytes in the AEAD's. -/
 theorem chaRd_enc (c : ACall) (xc : Ctx) (hsp : xc.sp0 = c.A) (hbase : xc.base = c.base)
     (hkey : xc.key = c.key) (hnon : xc.nonce = c.nonce)
-    (hin : ∀ o < xc.len.toNat, TraceSpec.AeadEncryptReadRegion c (xc.inp + BitVec.ofNat 32 o)) {Rd : Word → Prop}
-    (hsub : ∀ y, TraceSpec.AeadEncryptReadRegion c y → Rd y) (y : Word) (h : TraceSpec.ChaCha20XorReadRegion xc y) : Rd y := by
+    (hin : ∀ o < xc.len.toNat, AeadCommonReadRegion c (xc.inp + BitVec.ofNat 32 o)) {Rd : Word → Prop}
+    (hsub : ∀ y, AeadCommonReadRegion c y → Rd y) (y : Word) (h : TraceSpec.ChaCha20XorReadRegion xc y) : Rd y := by
   apply hsub
   rcases h with h | h | h | h | h <;> obtain ⟨o, ho, rfl⟩ := Region.exists h
   · exact hin o ho
@@ -76,12 +76,12 @@ theorem key_reach_r {Rd : Word → Prop} (c : ACall) (hv : AValid c) (e : Nat) (
     (he : e % 2 = 0) (hex : e + copyOff ≤ Artifacts.Release.size) (p : State) (hp : ProPost c e p)
     (hpro : ¬ SiteRd c.base (c.base + BitVec.ofNat 32 (e + proXorOff)))
     (hstop : ¬ ChaCha20Policy.ChaPc c.base (c.base + BitVec.ofNat 32 (e + copyOff)))
-    (hsub : ∀ y, TraceSpec.AeadEncryptReadRegion c y → Rd y) :
+    (hsub : ∀ y, AeadCommonReadRegion c y → Rd y) :
     ReachS c.base (RdP c.base Rd) p (XPost c e) :=
   key_reach_gen (Pn := fun pc => pc = c.base + BitVec.ofNat 32 (e + proXorOff)) c hv e i hbl ht he hex p hp rfl
     (fun x ev h => rdP_of_free (fun pc h => by subst h; exact hpro) x ev h)
     fun xc u xv xe hlr hbase hsp hout hlen hctr hretE hinp hkey hnon => by
-      have hin : ∀ o < xc.len.toNat, TraceSpec.AeadEncryptReadRegion c (xc.inp + BitVec.ofNat 32 o) := by
+      have hin : ∀ o < xc.len.toNat, AeadCommonReadRegion c (xc.inp + BitVec.ofNat 32 o) := by
         intro o ho
         rw [hlen] at ho
         have ho' : o < 64 := ho
@@ -104,14 +104,14 @@ theorem crypt_reach_r {Rd : Word → Prop} (c : ACall) (hv : AValid c) (hb : ABu
     (hns : ∀ j < seqSize crypt, ¬ SiteRd c.base (c.base + BitVec.ofNat 32 (off + j)))
     (hnx : ¬ SiteRd c.base (c.base + BitVec.ofNat 32 (off + cryptXorOff)))
     (hret : ¬ ChaCha20Policy.ChaPc c.base (c.base + BitVec.ofNat 32 (off + cryptEnd)))
-    (hsub : ∀ y, TraceSpec.AeadEncryptReadRegion c y → Rd y) :
+    (hsub : ∀ y, AeadCommonReadRegion c y → Rd y) :
     ReachS c.base (RdP c.base Rd) t (CryptPost c off t) :=
   crypt_reach_select_gen (Pn := fun pc => (∃ j < seqSize crypt, pc = c.base + BitVec.ofNat 32 (off + j)) ∨
       pc = c.base + BitVec.ofNat 32 (off + cryptXorOff)) c hv hb off i hseq hbl ht ho hox t tpc t13 thi tn tout
     _ (fun j hj => Or.inl ⟨j, hj, rfl⟩) (Or.inr rfl)
     (fun x ev h => rdP_of_free (fun pc h' => by rcases h' with ⟨j, hj, rfl⟩ | rfl; exact hns j hj; exact hnx) x ev h)
     (fun xc u xv xe hlr hbase hout hlen hctr hsp hretE hinp hkey hnon => by
-      have hin : ∀ o < xc.len.toNat, TraceSpec.AeadEncryptReadRegion c (xc.inp + BitVec.ofNat 32 o) := by
+      have hin : ∀ o < xc.len.toNat, AeadCommonReadRegion c (xc.inp + BitVec.ofNat 32 o) := by
         intro o ho
         rw [hlen] at ho
         exact .inp ho (by rw [hinp])

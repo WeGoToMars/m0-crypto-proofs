@@ -89,7 +89,7 @@ done
 
 if has chacha20poly1305; then
 echo "== 4c. specification agrees with the library's test vectors (RFC 8439, Wycheproof, pyca/cryptography)"
-python3 -I tools/spec_vectors.py "$LIB/tests/aead_vectors.h"
+python3 -I tools/spec_vectors.py "$LIB/tests/aead_vectors.h" "$LIB/tests/chacha20_vectors.h"
 fi
 if has blake2s; then
 echo "== 4c. BLAKE2s specification agrees with the library's test vectors (Python hashlib)"
@@ -137,13 +137,14 @@ echo "== 7. library primitives on QEMU Cortex-M0 (behaviour only, not timing)"
 "$LIB/tools/test_qemu.sh" $ASSETS > "$TMP/qemu.txt" 2>&1 || { cat "$TMP/qemu.txt"; echo "FAIL: QEMU primitive tests" >&2; exit 1; }
 grep -E 'peak stack|RESULT' "$TMP/qemu.txt"
 
-echo "== 7b. machine model agrees with QEMU after every instruction of sampled calls"
+echo "== 7b. machine model agrees with QEMU after every instruction a call can execute"
 FIRST=${ASSETS%% *}
 if has chacha20poly1305; then
     python3 -I tools/qemu_steps.py chacha20poly1305 "${QEMU:-qemu-system-arm}" llvm-nm \
         "$LIB/build/lib/chacha20poly1305/text.bin" \
         "$LIB/build/test/test_chacha20.elf" m0c_chacha20_xor \
-        "$LIB/build/test/test_aead.elf" m0c_chacha20poly1305_encrypt,m0c_chacha20poly1305_decrypt
+        "$LIB/build/test/test_aead.elf" \
+        m0c_chacha20poly1305_encrypt,m0c_chacha20poly1305_decrypt,m0c_poly1305_blocks
 fi
 if has blake2s; then
     python3 -I tools/qemu_steps.py blake2s "${QEMU:-qemu-system-arm}" llvm-nm \

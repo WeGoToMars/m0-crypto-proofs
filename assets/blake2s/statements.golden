@@ -4,18 +4,43 @@ M0Crypto.Release.Blake2s.Init.init_reads : M0Crypto.Release.TraceSpec.Blake2sIni
 M0Crypto.Release.Blake2s.Init.init_stack : M0Crypto.Release.TraceSpec.Blake2sInitStack
 M0Crypto.Release.NonVacuity.init_pre_nonvacuous : M0Crypto.Release.Blake2s.Init.Pre M0Crypto.Release.NonVacuity.iCtx
   (M0Crypto.Release.NonVacuity.stOf M0Crypto.Release.NonVacuity.bufMem M0Crypto.Release.NonVacuity.iCtx.regs0)
+M0Crypto.Release.NonVacuity.init_constant_time_nonvacuous : M0Crypto.Release.Blake2s.Init.Pre
+    M0Crypto.Release.NonVacuity.iCtx
+    (M0Crypto.Release.NonVacuity.stOf M0Crypto.Release.NonVacuity.bufMem M0Crypto.Release.NonVacuity.iCtx.regs0) ∧
+  M0Crypto.Release.Blake2s.Init.Pre M0Crypto.Release.NonVacuity.iCtx2
+      (M0Crypto.Release.NonVacuity.stOf M0Crypto.Release.NonVacuity.zeroCtxMem
+        M0Crypto.Release.NonVacuity.iCtx2.regs0) ∧
+    M0Crypto.Release.NonVacuity.iCtx.pub = M0Crypto.Release.NonVacuity.iCtx2.pub ∧
+      M0Crypto.Release.Blake2s.bytesAt M0Crypto.Release.NonVacuity.iCtx.m0 M0Crypto.Release.NonVacuity.iCtx.context
+          M0Crypto.Release.Blake2s.contextBytes ≠
+        M0Crypto.Release.Blake2s.bytesAt M0Crypto.Release.NonVacuity.iCtx2.m0 M0Crypto.Release.NonVacuity.iCtx2.context
+          M0Crypto.Release.Blake2s.contextBytes
 M0Crypto.Release.Blake2s.Update.update_correct : M0Crypto.Release.Blake2s.Update.Correct
 M0Crypto.Release.Blake2s.Update.update_constant_time : M0Crypto.Release.TraceSpec.Blake2sUpdateConstantTime
 M0Crypto.Release.Blake2s.Update.update_reads : M0Crypto.Release.TraceSpec.Blake2sUpdateReads
 M0Crypto.Release.Blake2s.Update.update_stack : M0Crypto.Release.TraceSpec.Blake2sUpdateStack
 M0Crypto.Release.NonVacuity.update_pre_nonvacuous : M0Crypto.Release.Blake2s.Update.Pre M0Crypto.Release.NonVacuity.uCtx
   (M0Crypto.Release.NonVacuity.stOf M0Crypto.Release.NonVacuity.bufMem M0Crypto.Release.NonVacuity.uCtx.regs0)
+M0Crypto.Release.NonVacuity.update_constant_time_nonvacuous : M0Crypto.Release.Blake2s.Update.Pre
+    M0Crypto.Release.NonVacuity.uCtx
+    (M0Crypto.Release.NonVacuity.stOf M0Crypto.Release.NonVacuity.bufMem M0Crypto.Release.NonVacuity.uCtx.regs0) ∧
+  M0Crypto.Release.Blake2s.Update.Pre M0Crypto.Release.NonVacuity.uCtx2
+      (M0Crypto.Release.NonVacuity.stOf M0Crypto.Release.NonVacuity.uMem2 M0Crypto.Release.NonVacuity.uCtx2.regs0) ∧
+    M0Crypto.Release.NonVacuity.uCtx.pub = M0Crypto.Release.NonVacuity.uCtx2.pub ∧
+      M0Crypto.Release.NonVacuity.uCtx.inputB ≠ M0Crypto.Release.NonVacuity.uCtx2.inputB
 M0Crypto.Release.Blake2s.Final.final_correct : M0Crypto.Release.Blake2s.Final.Correct
 M0Crypto.Release.Blake2s.Final.final_constant_time : M0Crypto.Release.TraceSpec.Blake2sFinalConstantTime
 M0Crypto.Release.Blake2s.Final.final_reads : M0Crypto.Release.TraceSpec.Blake2sFinalReads
 M0Crypto.Release.Blake2s.Final.final_stack : M0Crypto.Release.TraceSpec.Blake2sFinalStack
 M0Crypto.Release.NonVacuity.final_pre_nonvacuous : M0Crypto.Release.Blake2s.Final.Pre M0Crypto.Release.NonVacuity.fCtx
   (M0Crypto.Release.NonVacuity.stOf M0Crypto.Release.NonVacuity.bufMem M0Crypto.Release.NonVacuity.fCtx.regs0)
+M0Crypto.Release.NonVacuity.final_constant_time_nonvacuous : M0Crypto.Release.Blake2s.Final.Pre
+    M0Crypto.Release.NonVacuity.fCtx
+    (M0Crypto.Release.NonVacuity.stOf M0Crypto.Release.NonVacuity.bufMem M0Crypto.Release.NonVacuity.fCtx.regs0) ∧
+  M0Crypto.Release.Blake2s.Final.Pre M0Crypto.Release.NonVacuity.fCtx2
+      (M0Crypto.Release.NonVacuity.stOf M0Crypto.Release.NonVacuity.bufMem2 M0Crypto.Release.NonVacuity.fCtx2.regs0) ∧
+    M0Crypto.Release.NonVacuity.fCtx.pub = M0Crypto.Release.NonVacuity.fCtx2.pub ∧
+      M0Crypto.Release.NonVacuity.fCtx.stream ≠ M0Crypto.Release.NonVacuity.fCtx2.stream
 M0Crypto.Release.Blake2s.hash_correct : M0Crypto.Release.Blake2s.HashCorrect
 M0Crypto.Release.Blake2s.hash_constant_time : M0Crypto.Release.Blake2s.HashConstantTime
 M0Crypto.Release.NonVacuity.hash_correct_nonvacuous : M0Crypto.Release.Blake2s.HashCorrectHyp
@@ -159,7 +184,11 @@ inductive M0Crypto.Release.Blake2s.Init.Result : M0Crypto.Release.Blake2s.Init.C
       (∀ (r : M0Crypto.Armv6M.Reg), 4 ≤ ↑r → ↑r < 12 → t.regs r = c.regs0 r) →
         M0Crypto.Release.Blake2s.ContextHolds t.mem c.context M0Crypto.Spec.Blake2s.State.init →
           (∀ (y : M0Crypto.Armv6M.Word), ¬M0Crypto.Release.Blake2s.Init.WrOk c y → t.mem y = c.m0 y) →
-            M0Crypto.Release.Blake2s.Init.Result c t
+            M0Crypto.Armv6M.read32 t.mem c.fp = c.regs0 14 →
+              t.regs 0 = c.context + 36#32 →
+                t.regs 1 = M0Crypto.Spec.Blake2s.IV[6]! →
+                  t.regs 2 = M0Crypto.Spec.Blake2s.IV[7]! →
+                    t.regs 3 = 0 → t.regs 12 = c.regs0 12 → M0Crypto.Release.Blake2s.Init.Result c t
 def M0Crypto.Release.Blake2s.Init.Correct : Prop :=
   ∀ (c : M0Crypto.Release.Blake2s.Init.Ctx) (s : M0Crypto.Armv6M.State),
   M0Crypto.Release.Blake2s.Init.Pre c s →
@@ -229,15 +258,19 @@ inductive M0Crypto.Release.Blake2s.Update.Result : M0Crypto.Release.Blake2s.Upda
           (∀ (y : M0Crypto.Armv6M.Word), ¬M0Crypto.Release.Blake2s.Update.WrOk c y → t.mem y = c.m0 y) →
             (∀ (r : M0Crypto.Armv6M.Reg), ↑r < 4 → t.regs r = 0) → M0Crypto.Release.Blake2s.Update.Result c t
 def M0Crypto.Release.Blake2s.Update.Correct : Prop :=
+  ∃ residue,
   ∀ (c : M0Crypto.Release.Blake2s.Update.Ctx) (s : M0Crypto.Armv6M.State),
-  M0Crypto.Release.Blake2s.Update.Pre c s →
-    ∃ n,
-      ∀ (fuel : Nat),
-        n ≤ fuel →
-          ∃ t tr,
-            M0Crypto.Thumb.runUntil c.ret fuel s = Except.ok (t, tr) ∧
-              M0Crypto.Release.Blake2s.Update.Result c t ∧
-                M0Crypto.Release.WritesTo (M0Crypto.Release.Blake2s.Update.WrOk c) tr
+    M0Crypto.Release.Blake2s.Update.Pre c s →
+      ∃ n,
+        ∀ (fuel : Nat),
+          n ≤ fuel →
+            ∃ t tr,
+              M0Crypto.Thumb.runUntil c.ret fuel s = Except.ok (t, tr) ∧
+                M0Crypto.Release.Blake2s.Update.Result c t ∧
+                  M0Crypto.Release.WritesTo (M0Crypto.Release.Blake2s.Update.WrOk c) tr ∧
+                    (M0Crypto.Release.Blake2s.bytesAt t.mem c.fp M0Crypto.Release.Blake2s.streamStackBytes, t.regs 12) =
+                      residue c.regs0 c.stream.pending.length
+                        (M0Crypto.Release.Blake2s.bytesAt c.m0 c.fp M0Crypto.Release.Blake2s.streamStackBytes)
 inductive M0Crypto.Release.Blake2s.Final.Ctx : Type
   | M0Crypto.Release.Blake2s.Final.Ctx.mk : M0Crypto.Armv6M.Word →
   M0Crypto.Armv6M.Word →
@@ -295,17 +328,21 @@ inductive M0Crypto.Release.Blake2s.Final.Result : M0Crypto.Release.Blake2s.Final
         M0Crypto.Release.Blake2s.bytesAt t.mem c.out M0Crypto.Release.Blake2s.digestBytes =
             M0Crypto.Spec.Blake2s.finish c.stream →
           (∀ (y : M0Crypto.Armv6M.Word), ¬M0Crypto.Release.Blake2s.Final.WrOk c y → t.mem y = c.m0 y) →
-            (∀ (r : M0Crypto.Armv6M.Reg), ↑r < 4 → t.regs r = 0) → M0Crypto.Release.Blake2s.Final.Result c t
+            (∀ (r : M0Crypto.Armv6M.Reg), ↑r < 4 → t.regs r = 0) →
+              t.regs 12 = 0 → M0Crypto.Release.Blake2s.Final.Result c t
 def M0Crypto.Release.Blake2s.Final.Correct : Prop :=
+  ∃ window,
   ∀ (c : M0Crypto.Release.Blake2s.Final.Ctx) (s : M0Crypto.Armv6M.State),
-  M0Crypto.Release.Blake2s.Final.Pre c s →
-    ∃ n,
-      ∀ (fuel : Nat),
-        n ≤ fuel →
-          ∃ t tr,
-            M0Crypto.Thumb.runUntil c.ret fuel s = Except.ok (t, tr) ∧
-              M0Crypto.Release.Blake2s.Final.Result c t ∧
-                M0Crypto.Release.WritesTo (M0Crypto.Release.Blake2s.Final.WrOk c) tr
+    M0Crypto.Release.Blake2s.Final.Pre c s →
+      ∃ n,
+        ∀ (fuel : Nat),
+          n ≤ fuel →
+            ∃ t tr,
+              M0Crypto.Thumb.runUntil c.ret fuel s = Except.ok (t, tr) ∧
+                M0Crypto.Release.Blake2s.Final.Result c t ∧
+                  M0Crypto.Release.WritesTo (M0Crypto.Release.Blake2s.Final.WrOk c) tr ∧
+                    M0Crypto.Release.Blake2s.bytesAt t.mem c.fp M0Crypto.Release.Blake2s.streamStackBytes =
+                      window c.regs0
 def M0Crypto.Release.Blake2s.returnAddr : M0Crypto.Armv6M.State → M0Crypto.Armv6M.Word :=
   fun s => s.regs 14 &&& ~~~1#32
 def M0Crypto.Release.Blake2s.inputAt : M0Crypto.Armv6M.State → List M0Crypto.Spec.Blake2s.Byte :=

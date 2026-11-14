@@ -26,11 +26,16 @@ tools/qemu_steps.py) from the recorded entry state until the first arrival at th
 address. After every instruction r0-r15 and N, Z, C, V must be equal, and at the stop the 16 KiB
 of RAM must be equal. Finally the output buffer must equal the RFC 7748 vector.
 
+A second run of the image then covers the rest: at the first arrival at each instruction of the
+unit that these windows did not execute, it starts a window that ends at the first instruction
+outside that remainder (typically the entry of the next field routine). Every instruction of
+the unit (m0c_fe_mul .. end of m0c_x25519) must be traced; the code has no data-dependent
+branch, so this call executes all of them.
+
 The windows are found by pattern in the disassembly of the linked image (`llvm-objdump`, symbol
 range from `llvm-nm -S`), not by fixed address, and loop iterations are chosen by the counter
 slot the code itself names (`str r0, [sp, #...]` after `movs r0, #0xfe`). It checks the model,
-not timing, and only the instructions the windows reach; the summary says how many distinct
-instructions of the X25519 unit (m0c_fe_mul .. end of m0c_x25519) that is.
+not timing.
 
 --no-model records the QEMU windows and stops (no Lean). The Lean run needs the X25519 asset workspace's (assets/x25519)
 M0Crypto.Thumb.FastRun to be built; it does not build anything itself.
@@ -271,10 +276,67 @@ def record(qemu, elf, text, windows, slot, syms):
         out = gdb.read(syms["x25519_out"][0], 32).hex()
         if out != WANT:
             fail(f"QEMU output {out} differs from the RFC 7748 vector")
-        lo = syms["m0c_fe_mul"][0]
-        hi = syms["m0c_x25519"][0] + syms["m0c_x25519"][1]
-        unit = {a for a, _ in disasm(elf, lo, hi - lo)}
-        return cases, traced, len(pcs & unit), len(unit)
+        return cases, traced, pcs
+    finally:
+        proc.kill()
+        proc.wait()
+        if os.path.exists(path):
+            os.unlink(path)
+        os.rmdir(tmp)
+
+
+def cover(qemu, elf, todo):
+    """Windows of a second run of the image: at the first arrival at each address in `todo`
+    (the unit's instructions the named windows did not execute), single-step until the first
+    instruction outside `todo` as it stood when the window began. Returns the cases, the QEMU
+    states and the addresses executed."""
+    tmp = tempfile.mkdtemp()
+    path = os.path.join(tmp, "gdb")
+    proc = subprocess.Popen(
+        [qemu, "-machine", "microbit", "-nographic", "-monitor", "none", "-serial", "none",
+         "-semihosting-config", "enable=on,target=native", "-kernel", str(elf), "-S",
+         "-chardev", f"socket,id=g,path={path},server=on,wait=on", "-gdb", "chardev:g"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        while not os.path.exists(path):
+            if proc.poll() is not None:
+                fail("QEMU did not start")
+        gdb = Gdb(path)
+        todo = set(todo)
+        for a in todo:
+            if gdb.cmd(f"Z1,{a:x},2") != "OK":
+                fail("cannot set a breakpoint")
+        cases, traced, pcs = [], {}, set()
+        while todo:
+            try:
+                reply = gdb.cmd("c")
+            except (EOFError, OSError):   # the program ended
+                break
+            if not reply.startswith(("T05", "S05")):
+                break
+            state = gdb.regs()
+            start = int(state.split()[15], 16)
+            if start not in todo:
+                fail(f"stopped at {start:#x}, which is not a watched address")
+            label = f"cover_{start:x}"
+            cases += [f"case {label}", f"ram {RAM[0]:x} {gdb.read(*RAM).hex()}",
+                      f"regs {state}"]
+            steps, window = [], set()
+            pc = start
+            while pc in todo:
+                window.add(pc)
+                gdb.cmd("s")
+                steps.append(gdb.regs())
+                pc = int(steps[-1].split()[15], 16)
+                if len(steps) > 200000:
+                    fail(f"window at {start:#x}: no end within 200000 steps")
+            cases.append(f"stop {pc:x}")
+            traced[label] = (steps, gdb.read(*RAM).hex())
+            for a in window:
+                gdb.cmd(f"z1,{a:x},2")
+            todo -= window
+            pcs |= window
+        return cases, traced, pcs
     finally:
         proc.kill()
         proc.wait()
@@ -331,17 +393,28 @@ def main():
     syms = sized_symbols(elf)
     windows, slot = find_windows(elf, syms, args.hit)
     print(f"image {elf}; counter slot sp+{slot:#x}")
-    cases, traced, covered, unit = record(args.qemu, elf, text, windows, slot, syms)
+    cases, traced, pcs = record(args.qemu, elf, text, windows, slot, syms)
+    lo = syms["m0c_fe_mul"][0]
+    hi = syms["m0c_x25519"][0] + syms["m0c_x25519"][1]
+    unit = {a for a, _ in disasm(elf, lo, hi - lo)}
+    named = len(pcs & unit)
+    more_cases, more, more_pcs = cover(args.qemu, elf, unit - pcs)
+    cases += more_cases
+    traced.update(more)
+    covered = len((pcs | more_pcs) & unit)
     steps = sum(len(s) for s, _ in traced.values())
-    print(f"QEMU: {steps} instructions in {len(traced)} windows, {covered} of the unit's {unit} "
-          f"instructions; output equals RFC 7748 vector 1")
+    print(f"QEMU: {steps} instructions in {len(traced)} windows ({len(more)} of them from the "
+          f"{len(unit) - named} instructions the named windows miss), {covered} of the unit's "
+          f"{len(unit)} instructions; output equals RFC 7748 vector 1")
     if args.no_model:
         print("model comparison skipped (--no-model)")
         return
     total = compare(cases, traced, work, args.timeout)
     print(f"ok: model and QEMU agree after each of {total} instructions in {len(traced)} windows "
-          f"of one m0c_x25519 call ({covered} of {unit} distinct instructions of the X25519 unit), "
-          f"and on the RAM at each window's end")
+          f"of one m0c_x25519 call ({covered} of {len(unit)} distinct instructions of the X25519 "
+          f"unit), and on the RAM at each window's end")
+    if covered != len(unit):
+        fail(f"{len(unit) - covered} instructions of the unit were not traced")
 
 
 if __name__ == "__main__":

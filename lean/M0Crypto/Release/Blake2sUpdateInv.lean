@@ -1,4 +1,4 @@
-import M0Crypto.Release.Blake2sUpdateBytes
+import M0Crypto.Release.Blake2sUpdateWin
 import M0Crypto.Release.ReachPc
 import M0Crypto.Release.Blake2sFrames
 
@@ -63,10 +63,14 @@ theorem wu_frame {base : Word} (s : State) {pc : Word} (hns : ¬ SiteAt base pc)
 
 theorem WU.wrU {base : Word} {s : State} {pc y : Word} (h : WU base s pc y) : WrU s y := h.1
 
-def nn (s : State) : Nat := (s.regs 2).toNat
 /-- The bytes of the input. -/
 def LL (s : State) : List (BitVec 8) := bytesAt s.mem (s.regs 1) (nn s)
-def fb (s : State) : Word := s.regs 13 - STREAM_FRAME_W
+
+theorem UpdateEntry.uargs_eq {base : Word} {s : State} {st0 : SState} (e : UpdateEntry base s st0) :
+    uargs s = ⟨base, s.regs 0, s.regs 1, nn s⟩ := by
+  unfold uargs uargsR
+  rw [show s.regs 15 = s.pc from rfl, e.pc, BitVec.add_sub_cancel]
+  rfl
 
 /-- The bytes `update` may read through its caller's pointers: the 112-byte context window at `r0`
 and the `n` input bytes at `r1`. -/
@@ -98,6 +102,20 @@ theorem pm_eq (s : State) (y : Word) (h : ∀ o < STREAM_FRAME, y ≠ fb s + Bit
   have h20 : s.regs 13 - 20#32 = fb s + BitVec.ofNat 32 STREAM_LOCALS := by unfold fb; bv_omega
   rw [h20, ofNat_add_assoc, ofNat_add_assoc] at heq
   exact h (STREAM_LOCALS + 4 * i + k) (by omega) (by rw [heq, Nat.add_assoc])
+
+/-- Below the pushed words, the prologue leaves memory as at entry. -/
+theorem pm_low (s : State) (hsp : STREAM_FRAME ≤ (s.regs 13).toNat) (o : Nat) (ho : o < STREAM_LOCALS) :
+    pm s (fb s + BitVec.ofNat 32 o) = s.mem (fb s + BitVec.ofNat 32 o) := by
+  unfold pm
+  apply M0Crypto.Thumb.storeWords_other
+  intro i k hi hk heq
+  simp at hi
+  have h20 : s.regs 13 - 20#32 = fb s + BitVec.ofNat 32 STREAM_LOCALS := by unfold fb; bv_omega
+  rw [h20, ofNat_add_assoc, ofNat_add_assoc] at heq
+  have hfb : (fb s).toNat = (s.regs 13).toNat - STREAM_FRAME := by unfold fb; bv_omega
+  have := congrArg BitVec.toNat heq
+  rw [toNat_add_ofNat _ _ (by omega), toNat_add_ofNat _ _ (by omega)] at this
+  omega
 
 theorem Ag.eq {s t : State} (h : Ag s t) {y : Word} (h1 : ∀ o < 112, y ≠ s.regs 0 + BitVec.ofNat 32 o)
     (h2 : ∀ o < STREAM_FRAME, y ≠ fb s + BitVec.ofNat 32 o) : t.mem y = s.mem y :=
@@ -139,6 +157,20 @@ theorem lohi_of_tot (lo hi : Word) (N : Nat) (hN : N < 2 ^ 64) (h : lo.toNat + 2
     rw [BitVec.toNat_ofNat]
     omega
 
+theorem fb_ne_ctx {base : Word} {s : State} {st0 : SState} (e : UpdateEntry base s st0) {o c : Nat}
+    (ho : o < STREAM_FRAME) (hc : c < 112) : fb s + BitVec.ofNat 32 o ≠ s.regs 0 + BitVec.ofNat 32 c :=
+  fun he => disj_ne e.cF hc ho he.symm
+
+theorem fb_inj {base : Word} {s : State} {st0 : SState} (e : UpdateEntry base s st0) {o o' : Nat}
+    (ho : o < STREAM_FRAME) (ho' : o' < STREAM_FRAME) (h : fb s + BitVec.ofNat 32 o = fb s + BitVec.ofNat 32 o') :
+    o = o' := by
+  have hfb : (fb s).toNat = (s.regs 13).toNat - STREAM_FRAME := by unfold fb; have := e.spLo; bv_omega
+  have hn := (s.regs 13).isLt
+  have hlo := e.spLo
+  have := congrArg BitVec.toNat h
+  rw [toNat_add_ofNat _ _ (by omega), toNat_add_ofNat _ _ (by omega)] at this
+  omega
+
 /-- The loop invariant, with `k` input bytes consumed and `st` the stream the context now holds. -/
 structure Inv (s : State) (st0 : SState) (t : State) (k : Nat) (st : SState) : Prop where
   r4 : t.regs 4 = s.regs 0
@@ -152,6 +184,8 @@ structure Inv (s : State) (st0 : SState) (t : State) (k : Nat) (st : SState) : P
   ag : Ag s t
   tot : st.count + st.pending.length + (nn s - k) = st0.count + st0.pending.length + nn s
   ab : M0Crypto.Spec.Blake2s.absorb st ((LL s).drop k) = M0Crypto.Spec.Blake2s.absorb st0 (LL s)
+  /-- What the calls so far left in the window and `r12`. -/
+  gh : GI s st0.pending.length t k st.pending.length
 
 /-- A context byte at a constant offset `a + k` from a register equal to the context pointer. -/
 theorem wu_ctx_w {base : Word} (s : State) {pc : Word} (c a : Word) (k : Nat) (hc : c = s.regs 0)

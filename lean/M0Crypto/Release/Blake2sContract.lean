@@ -92,7 +92,7 @@ end M0Crypto.Release.Blake2s
 
 namespace M0Crypto.Release.Blake2s.Init
 
-open M0Crypto.Armv6M (Word Reg State Mem)
+open M0Crypto.Armv6M (Word Reg State Mem read32)
 open M0Crypto.Release.Frame (Disj)
 open M0Crypto.Release.Blake2s (contextBytes initStackBytes ContextHolds)
 
@@ -167,6 +167,15 @@ structure Result (c : Ctx) (t : State) : Prop where
   holds : ContextHolds t.mem c.context Spec.Blake2s.State.init
   /-- Memory outside the allowed writes is unchanged. -/
   mem : ∀ y, ¬ WrOk c y → t.mem y = c.m0 y
+  /-- The stack window holds the caller's LR, which `init` pushed. -/
+  frame : read32 t.mem c.fp = c.regs0 14
+  /-- r0 is the context pointer plus 36, r1 and r2 the last two IV words, r3 zero. -/
+  r0 : t.regs 0 = c.context + 36#32
+  r1 : t.regs 1 = Spec.Blake2s.IV[6]!
+  r2 : t.regs 2 = Spec.Blake2s.IV[7]!
+  r3 : t.regs 3 = 0
+  /-- r12 is unchanged. -/
+  r12 : t.regs 12 = c.regs0 12
 
 /-- Every valid call returns, with `Result` and only allowed writes. -/
 def Correct : Prop :=
@@ -277,11 +286,16 @@ structure Result (c : Ctx) (t : State) : Prop where
   /-- r0-r3 are zero: no input byte stays in a scratch register. -/
   scratch : ∀ r : Reg, r.val < 4 → t.regs r = 0
 
-/-- Every valid call returns, with `Result` and only allowed writes. -/
+/-- Every valid call returns, with `Result` and only allowed writes. The bytes of the stack window
+and r12 at return are one function (`residue`) of only the registers at entry, the pending byte
+count at entry and the window's bytes at entry. -/
 def Correct : Prop :=
+  ∃ residue : (Reg → Word) → Nat → List (BitVec 8) → List (BitVec 8) × Word,
   ∀ c s, Pre c s →
     ∃ n, ∀ fuel, n ≤ fuel → ∃ t tr, Thumb.runUntil c.ret fuel s = .ok (t, tr) ∧
-      Result c t ∧ WritesTo (WrOk c) tr
+      Result c t ∧ WritesTo (WrOk c) tr ∧
+      (bytesAt t.mem c.fp streamStackBytes, t.regs 12) =
+        residue c.regs0 c.stream.pending.length (bytesAt c.m0 c.fp streamStackBytes)
 
 end M0Crypto.Release.Blake2s.Update
 
@@ -381,11 +395,15 @@ structure Result (c : Ctx) (t : State) : Prop where
   mem : ∀ y, ¬ WrOk c y → t.mem y = c.m0 y
   /-- r0-r3 are zero: no digest word stays in a scratch register. -/
   scratch : ∀ r : Reg, r.val < 4 → t.regs r = 0
+  /-- r12 is zero. -/
+  r12 : t.regs 12 = 0
 
-/-- Every valid call returns, with `Result` and only allowed writes. -/
+/-- Every valid call returns, with `Result` and only allowed writes. The bytes of the stack window
+at return are one function (`window`) of only the registers at entry. -/
 def Correct : Prop :=
+  ∃ window : (Reg → Word) → List (BitVec 8),
   ∀ c s, Pre c s →
     ∃ n, ∀ fuel, n ≤ fuel → ∃ t tr, Thumb.runUntil c.ret fuel s = .ok (t, tr) ∧
-      Result c t ∧ WritesTo (WrOk c) tr
+      Result c t ∧ WritesTo (WrOk c) tr ∧ bytesAt t.mem c.fp streamStackBytes = window c.regs0
 
 end M0Crypto.Release.Blake2s.Final

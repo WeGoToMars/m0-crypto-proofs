@@ -39,7 +39,8 @@ theorem Init.returns {c : Init.Ctx} {s t : State} {fuel : Nat} {tr : List Event}
 
 theorem Update.returns {c : Update.Ctx} {s w : State} {fuel : Nat} {tr : List Event}
     (hp : Update.Pre c s) (hrun : runUntil c.ret fuel s = .ok (w, tr)) : Update.Result c w := by
-  obtain ⟨n, hn⟩ := Update.update_correct c s hp
+  obtain ⟨_, hU⟩ := Update.update_correct
+  obtain ⟨n, hn⟩ := hU c s hp
   obtain ⟨w', _, hr, R, _⟩ := hn (max n fuel) (Nat.le_max_left _ _)
   rw [runUntil_unique hrun hr]; exact R
 
@@ -60,7 +61,8 @@ theorem updates_return {base c : Word} : ∀ (calls : List State) (m : Mem)
     rw [List.map_cons, List.sum_cons] at hb
     have ht := total_absorb (inputAt s) st
     have hP := he st (holds_congr hc hm) (by unfold total at hb; omega)
-    obtain ⟨n, hn⟩ := Update.update_correct _ _ hP
+    obtain ⟨_, hU⟩ := Update.update_correct
+    obtain ⟨n, hn⟩ := hU _ _ hP
     obtain ⟨w, tr, hru, R, -⟩ := hn n (Nat.le_refl n)
     have hc' : ContextHolds w.mem c (absorb st (inputAt s)) := by rw [← h0]; exact R.holds
     refine ⟨n, w, tr, hru, updates_return rest w.mem _ K hc' (by rw [ht, inputAt_length]; omega)
@@ -83,7 +85,8 @@ theorem hash_correct : HashCorrect := by
   intro sf hfm ⟨_, hfe⟩
   rw [htot0] at h2
   have hPf := hfe _ (holds_congr h1 hfm) (by unfold total at h2; omega)
-  obtain ⟨nf, hnf⟩ := Final.final_correct _ _ hPf
+  obtain ⟨_, hF⟩ := Final.final_correct
+  obtain ⟨nf, hnf⟩ := hF _ _ hPf
   obtain ⟨tf, trf, hruf, Rf, -⟩ := hnf nf (Nat.le_refl nf)
   exact ⟨nf, tf, trf, hruf, Rf.out.trans (Spec.Blake2s.stream_partition (calls.map inputAt))⟩
 

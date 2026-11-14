@@ -4,6 +4,9 @@
 The library's on-target tests compare the code with generated headers of external vectors:
   tests/aead_vectors.h    RFC 8439 §2.8.2, Wycheproof and pyca/cryptography vectors; run by
                           lean/SpecVectors.lean (`M0Crypto.Spec.Aead`) in assets/chacha20poly1305
+  tests/chacha20_vectors.h  pyca/cryptography ChaCha20 at chosen counters (with the counter rule
+                          `counterOk` at the 2^32 boundary) and AEAD tags for AAD and messages
+                          longer than 65,535 bytes; run by lean/SpecVectors.lean
   tests/x25519_vectors.h  RFC 7748 §5.2 and §6.1 and Wycheproof vectors; run by
                           lean/SpecVectorsX25519.lean (`M0Crypto.Spec.X25519`) in assets/x25519
   tests/blake2s_vectors.h BLAKE2s-256 digests from Python hashlib of a byte pattern at 204
@@ -12,7 +15,7 @@ The library's on-target tests compare the code with generated headers of externa
 This script hands the same vectors to the Lean runner of the header's asset. The specification
 is then tested directly against independent implementations, not only through the code.
 
-Usage: spec_vectors.py HEADER
+Usage: spec_vectors.py HEADER [HEADER...]   (headers of one asset)
 """
 import re
 import subprocess
@@ -26,7 +29,8 @@ ROOT = Path(__file__).resolve().parent.parent
 def table(text, name):
     """The initialiser rows of the C array `name`, as lists of integers."""
     body = re.search(name + r"\[\] = \{(.*?)\n\};", text, re.S).group(1)
-    return [[int(x, 0) for x in row.split(",")] for row in re.findall(r"\{([^{}]*)\}", body)]
+    return [[int(x.strip().rstrip("u"), 0) for x in row.split(",")]
+            for row in re.findall(r"\{([^{}]*)\}", body)]
 
 
 def x25519_lines(text):
@@ -55,6 +59,30 @@ def blake2s_lines(text):
     return [f"blake2s {msg(n)} {d.hex()}" for n, d in zip(lens, digests)]
 
 
+def chacha20_lines(text):
+    """`chacha`/`counter` lines per row of chacha_vecs, an `aead-tag` line per row of
+    aead_long_vecs. Messages and AAD are the header's CV_PATTERN(s, i)."""
+    a, b, c = map(int, re.search(r"#define CV_PATTERN\(s, i\) \(\(uint8_t\)\(\(i\) \* (\d+)u \+ "
+                                 r"\(\(i\) >> 8\) \* (\d+)u \+ \(s\) \* (\d+)u\)\)", text).groups())
+    pat = lambda s, n: bytes((i * a + (i >> 8) * b + s * c) & 0xFF for i in range(n)).hex() or "-"
+    arr = lambda name: bytes(int(x, 0) for x in re.search(
+        name + r"\[\d*\] = \{(.*?)\};", text, re.S).group(1).split(","))
+    key, nonce, out = arr("cv_key").hex(), arr("cv_nonce").hex(), arr("cv_out")
+    maxout = int(re.search(r"#define CV_MAXOUT (\d+)", text).group(1))
+    lines = []
+    for counter, n, result, off in table(text, "chacha_vecs"):
+        if result == 0 and n <= maxout:
+            lines.append(" ".join(["chacha", key, nonce, str(counter), pat(0, n),
+                                   out[off:off + n].hex() or "-"]))
+        else:
+            lines.append(" ".join(["counter", str(int(result == 0)), str(counter), str(n)]))
+    body = re.search(r"aead_long_vecs\[\] = \{(.*?)\n\};", text, re.S).group(1)
+    for alen, n, tag in re.findall(r"\{(\d+)u, (\d+)u, \{([^{}]*)\}\}", body):
+        tag = bytes(int(x, 0) for x in tag.split(","))
+        lines.append(" ".join(["aead-tag", key, nonce, pat(1, int(alen)), pat(0, int(n)), tag.hex()]))
+    return lines
+
+
 def run(lean_file, asset, lines):
     with tempfile.NamedTemporaryFile("w", suffix=".txt") as f:
         f.write("\n".join(lines) + "\n")
@@ -63,14 +91,7 @@ def run(lean_file, asset, lines):
                               cwd=ROOT / "assets" / asset).returncode
 
 
-def main(argv):
-    if len(argv) != 2:
-        sys.exit(__doc__)
-    text = Path(argv[1]).read_text()
-    if "x25519_vecs" in text:
-        sys.exit(run("lean/SpecVectorsX25519.lean", "x25519", x25519_lines(text)))
-    if "b2v_digest" in text:
-        sys.exit(run("lean/SpecVectorsBlake2s.lean", "blake2s", blake2s_lines(text)))
+def aead_lines(text):
     blob = bytes(int(x, 16) for x in re.findall(
         r"0x[0-9a-f]{2}", re.search(r"vec_blob\[\] = \{(.*?)\n\};", text, re.S).group(1)))
 
@@ -83,7 +104,31 @@ def main(argv):
                                hx(inp, n), hx(ct, n), hx(tag, 16)]))
     for key, msg, n, tag in table(text, "poly_vecs"):
         lines.append(" ".join(["poly", hx(key, 32), hx(msg, n), hx(tag, 16)]))
-    sys.exit(run("lean/SpecVectors.lean", "chacha20poly1305", lines))
+    return lines
+
+
+def main(argv):
+    if len(argv) < 2:
+        sys.exit(__doc__)
+    runners = set()
+    lines = []
+    for header in argv[1:]:
+        text = Path(header).read_text()
+        if "x25519_vecs" in text:
+            runners.add(("lean/SpecVectorsX25519.lean", "x25519"))
+            lines += x25519_lines(text)
+        elif "b2v_digest" in text:
+            runners.add(("lean/SpecVectorsBlake2s.lean", "blake2s"))
+            lines += blake2s_lines(text)
+        elif "chacha_vecs" in text:
+            runners.add(("lean/SpecVectors.lean", "chacha20poly1305"))
+            lines += chacha20_lines(text)
+        else:
+            runners.add(("lean/SpecVectors.lean", "chacha20poly1305"))
+            lines += aead_lines(text)
+    if len(runners) != 1:
+        sys.exit("spec_vectors: the headers belong to different assets")
+    sys.exit(run(*runners.pop(), lines))
 
 
 if __name__ == "__main__":

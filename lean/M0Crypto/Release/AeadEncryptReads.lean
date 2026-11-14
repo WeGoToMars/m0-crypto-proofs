@@ -24,14 +24,15 @@ theorem encrypt_reach_r {Rd : Word → Prop} (c : ACall) (hv : AValid c) (hb : A
     (hsub : ∀ y, TraceSpec.AeadEncryptReadRegion c y → Rd y) :
     ReachS c.base (RdP c.base Rd) s (EncryptResult c) := by
   have hn : ∀ pc, NoSite c.base pc → ¬ SiteRd c.base pc := fun _ h => h
-  have hblk := rd_blk c hsub
+  have hsubC : ∀ y, AeadCommonReadRegion c y → Rd y := fun y h => hsub y (.common h)
+  have hblk := rd_blk c hsubC
   obtain ⟨spro, blx, scopy, bli, scrypt, blc, laad, maat, lout, mcat, slen, bll, sf, blf,
     sca, scl, bcl, sepi, pop⟩ := enc_at
   obtain ⟨tx, ti', tc, tl, tf⟩ := enc_calls
   apply ReachS.bind
   apply (aead_setup_r (Rd := Rd) c hv encOff (blImm (encOff + proXorOff) xorOff) (blImm (encOff + initCallOff) initOff)
     spro blx tx scopy bli ti' (by decide) (by decide) s he (region_ns (by decide +kernel) (by decide)) (pt_ns (by decide +kernel) (by decide)) (region_ns (by decide +kernel) (by decide)) (pt_ns (by decide +kernel) (by decide))
-    (not_pcBetween (by decide) (by decide) (Or.inr (by decide))) hsub).mono (fun _ _ h => h)
+    (not_pcBetween (by decide) (by decide) (Or.inr (by decide))) hsubC).mono (fun _ _ h => h)
   rintro u ⟨ic, hu⟩
   have bu := hu.body hv
   have pi := PInv.init c.A ic u hu.init hu.ictx
@@ -41,7 +42,7 @@ theorem encrypt_reach_r {Rd : Word → Prop} (c : ACall) (hv : AValid c) (hb : A
     (fun j hj => not_siteRd (by have := (by decide : encCryptAt + seqSize crypt < 2 ^ 32); omega)
       (no_readSite (by decide +kernel : firstReadSite encCryptAt (seqSize crypt) = none) j hj))
     (pt_ns (by decide +kernel) (by decide))
-    (not_pcBetween (by decide) (by decide) (Or.inr (by decide))) hsub).mono (fun _ _ h => h)
+    (not_pcBetween (by decide) (by decide) (Or.inr (by decide))) hsubC).mono (fun _ _ h => h)
   intro v hv'
   have bv := bu.crypt hv hb hv'
   have pv : PInv c.A u.mem [] v.mem := pi.congr (fun j hj => by

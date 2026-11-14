@@ -398,7 +398,8 @@ theorem counterOk_zero (c : Ctx) (h : c.len = 0) : M0Crypto.Spec.Aead.counterOk 
 theorem fin0_w {Pc Wr : Word → Prop} (c : Ctx) (hv : Valid c) (hPc : ∀ pc, ChaCha20Policy.ChaPc c.base pc → Pc pc) (hlr : (c.regs0 14).getLsbD 0 = true) (t : State)
     (hpc : t.pc = c.base + BitVec.ofNat 32 zOff) (h13 : t.regs 13 = c.fp)
     (hsv : ∀ i < 9, read32 t.mem (slot c.fp (slotSaved + i)) = Frame.saved c.regs0 i)
-    (P : State → Prop) (hP : ∀ u, u.mem = t.mem → u.regs 0 = 0 → P u) :
+    (P : State → Prop) (hP : ∀ u, u.mem = t.mem → u.regs 0 = 0 →
+      (∀ r : Reg, (1 ≤ r.val ∧ r.val < 4) ∨ r.val = 12 → u.regs r = t.regs r) → P u) :
     ReachW c.base Pc Wr t fun u => u.pc = c.regs0 14 &&& ~~~1#32 ∧ u.regs 13 = c.sp0 ∧
       (∀ r : Reg, 4 ≤ r.val → r.val < 12 → u.regs r = c.regs0 r) ∧ P u := by
   have hb2 : c.base.toNat % 2 = 0 := by have := hv.base4; omega
@@ -423,19 +424,47 @@ theorem fin0_w {Pc Wr : Word → Prop} (c : Ctx) (hv : Valid c) (hPc : ∀ pc, C
   apply (ChaCha20Return.ret_w c hv Wr hPc s1 spc (by rw [sr 13 (by decide) (by decide), h13])
     (fun i hi => by rw [sm]; exact hsv i hi) hlr).mono (fun _ _ h => h)
   rintro u ⟨upc, usp, ucal, ulow, umem⟩
-  exact ⟨upc, usp, ucal, hP u (umem.trans sm) ((ulow 0 (.inl (by decide))).trans s0)⟩
+  exact ⟨upc, usp, ucal, hP u (umem.trans sm) ((ulow 0 (.inl (by decide))).trans s0)
+    (fun r hr => (ulow r (by omega)).trans (sr r (by omega) (by omega)))⟩
 
 /-- From `zOff` with `MemOk P` for the full prefix: `movs r0, #0` and the epilogue. -/
 theorem fin0 (c : Ctx) (hv : Valid c) {Wr : Word → Prop} (hlr : (c.regs0 14).getLsbD 0 = true) (t : State)
     (hpc : t.pc = c.base + BitVec.ofNat 32 zOff) (h13 : t.regs 13 = c.fp)
     (hsv : ∀ i < 9, read32 t.mem (slot c.fp (slotSaved + i)) = Frame.saved c.regs0 i)
-    (P : State → Prop) (hP : ∀ u, u.mem = t.mem → u.regs 0 = 0 → P u) :
+    (P : State → Prop) (hP : ∀ u, u.mem = t.mem → u.regs 0 = 0 →
+      (∀ r : Reg, (1 ≤ r.val ∧ r.val < 4) ∨ r.val = 12 → u.regs r = t.regs r) → P u) :
     Reach c.base Wr t fun u => u.pc = c.regs0 14 &&& ~~~1#32 ∧ u.regs 13 = c.sp0 ∧
       (∀ r : Reg, 4 ≤ r.val → r.val < 12 → u.regs r = c.regs0 r) ∧ P u :=
   (fin0_w (Pc := fun _ => True) c hv (fun _ _ => trivial) hlr t hpc h13 hsv P hP).toReach
 
 theorem mP_saved' (c : Ctx) (hv : Valid c) : ∀ i < 9, read32 c.mP (slot c.fp (slotSaved + i)) = Frame.saved c.regs0 i :=
   fun i hi => ChaCha20Return.mP_saved c hv i hi
+
+theorem chSavedRegs_get (r : Reg → Word) (i : Nat) (hi : i < 9) : r chSavedRegs[i]! = Frame.saved r i := by
+  match i, hi with
+  | 0, _ | 1, _ | 2, _ | 3, _ | 4, _ | 5, _ | 6, _ | 7, _ | 8, _ => rfl
+
+theorem chSavedRegs_lt (i : Nat) (hi : i < 8) : 4 ≤ (chSavedRegs[i]!).val ∧ (chSavedRegs[i]!).val < 12 := by
+  match i, hi with
+  | 0, _ | 1, _ | 2, _ | 3, _ | 4, _ | 5, _ | 6, _ | 7, _ => decide
+
+theorem saved_result (c : Ctx) {m : Mem}
+    (h : ∀ i < 9, read32 m (slot c.fp (slotSaved + i)) = Frame.saved c.regs0 i) :
+    ∀ i < 9, read32 m (slot c.fp (chFrameWords + i)) = c.regs0 chSavedRegs[i]! :=
+  fun i hi => by rw [chSavedRegs_get c.regs0 i hi]; exact h i hi
+
+/-- The pushes leave the frame words as at entry. -/
+theorem frame_mP (c : Ctx) (hv : Valid c) :
+    ∀ i < chFrameWords, read32 c.mP (slot c.fp i) = read32 c.m0 (slot c.fp i) := by
+  intro i hi
+  apply read32_congr
+  intro k hk
+  apply ChaCha20Return.mP_other
+  intro q hq e
+  have sFW := ChaCha20Layout.chFrameWords_eq
+  have := hv.spLo
+  simp only [Ctx.fp, ChaCha20Layout.chStackBytes, ChaCha20Layout.chStackWords, Frame.slot_eq] at e
+  bv_omega
 
 theorem wrOk_wr {c : Ctx} {y : Word} (h : WrOk c y) : c.Wr y := by
   rcases h with h | h
@@ -455,15 +484,20 @@ theorem xor_reach_w {Pc : Word → Prop} (c : Ctx) (hv : Valid c) (hPc : ∀ pc,
   have sJ : ChaCha20Layout.slotJ = 16 := by decide
   apply ChaCha20Setup.checks_w c hv (WrOk c) (fun o ho => .inl (Region.mk ho rfl)) hPc s h
   · -- len = 0
-    intro t pc sp mem hz
+    intro t pc sp mem hz hr
     have hok := counterOk_zero c hz
-    apply (fin0_w c hv hPc hlr t pc sp (by rw [mem]; exact mP_saved' c hv) (fun u => u.mem = t.mem ∧ u.regs 0 = 0)
-      (fun u a b => ⟨a, b⟩)).mono (fun _ _ h => h)
-    rintro u ⟨upc, usp, ucal, um, u0⟩
-    refine ⟨upc, upc, usp, ucal, by rw [u0, hok]; rfl, fun y hy => ?_, fun _ hne => absurd hz hne⟩
-    rw [um, mem, if_neg (by rw [hz]; simp), mP_outS c hv hy]
+    apply (fin0_w c hv hPc hlr t pc sp (by rw [mem]; exact mP_saved' c hv)
+      (fun u => u.mem = t.mem ∧ u.regs 0 = 0 ∧
+        ∀ r : Reg, (1 ≤ r.val ∧ r.val < 4) ∨ r.val = 12 → u.regs r = t.regs r)
+      (fun u a b d => ⟨a, b, d⟩)).mono (fun _ _ h => h)
+    rintro u ⟨upc, usp, ucal, um, u0, ur⟩
+    refine ⟨upc, upc, usp, ucal, by rw [u0, hok]; rfl, fun r hr' => ?_, fun y hy => ?_, fun i hi => ?_,
+      saved_result c (by rw [um, mem]; exact mP_saved' c hv)⟩
+    · rw [if_neg (fun h' => h'.2 hz), ur r hr', hr r (by omega)]
+    · rw [um, mem, if_neg (by rw [hz]; simp), mP_outS c hv hy]
+    · rw [if_neg (fun h' => h'.2 hz), um, mem]; exact frame_mP c hv i hi
   · -- counter overflow
-    intro t pc sp mem _ hok
+    intro t pc sp mem _ hok hr
     apply ReachW.block hb2 [.movImm 0 0, .dp .mvns 0 0] errOff pc (by decide) err_at (by decide)
       (by simp [alignedAll, Instr.accesses]) (WritesTo.of_noWritesMem _ _ (by decide) _)
       (ChaCha20Policy.chaRegion hPc (by decide +kernel))
@@ -488,10 +522,16 @@ theorem xor_reach_w {Pc : Word → Prop} (c : Ctx) (hv : Valid c) (hPc : ∀ pc,
       (by rw [ChaCha20Setup.setReg15_regs _ _ 13 (by decide), sr 13 (by decide) (by decide), sp])
       (fun i hi => by simp only [M0Crypto.Armv6M.State.setReg]; rw [sm, mem]; exact mP_saved' c hv i hi) hlr).mono (fun _ _ h => h)
     rintro u ⟨upc, usp, ucal, ulow, um⟩
-    refine ⟨upc, upc, usp, ucal, ?_, fun y hy => ?_, fun h' => absurd h' (by rw [hok]; decide)⟩
+    have hk : ¬ (M0Crypto.Spec.Aead.counterOk c.ctr.toNat c.len.toNat = true ∧ c.len ≠ 0) := fun h' => by
+      rw [hok] at h'; exact Bool.false_ne_true h'.1
+    have umem : u.mem = c.mP := by rw [um]; simp only [M0Crypto.Armv6M.State.setReg]; rw [sm, mem]
+    refine ⟨upc, upc, usp, ucal, ?_, fun r hr' => ?_, fun y hy => ?_, fun i hi => ?_,
+      saved_result c (by rw [umem]; exact mP_saved' c hv)⟩
     · rw [ulow 0 (.inl (by decide)), ChaCha20Setup.setReg15_regs _ _ 0 (by decide), s0, hok]; rfl
-    · rw [um]; simp only [M0Crypto.Armv6M.State.setReg]
-      rw [sm, mem, hok]; simp only [Bool.false_eq_true, false_and, if_false]; exact mP_outS c hv hy
+    · rw [if_neg hk, ulow r (by omega), ChaCha20Setup.setReg15_regs _ _ _ (by omega), sr r (by omega) (by omega),
+        hr r (by omega)]
+    · rw [umem, hok]; simp only [Bool.false_eq_true, false_and, if_false]; exact mP_outS c hv hy
+    · rw [if_neg hk, umem]; exact frame_mP c hv i hi
   · -- accepted
     intro t hacc
     apply ReachW.monoW (Wr := c.Wr) _ (fun y hy => by
@@ -515,19 +555,50 @@ theorem xor_reach_w {Pc : Word → Prop} (c : Ctx) (hv : Valid c) (hPc : ∀ pc,
           rw [hy, usp]
           simp [slot, ofNat_add_assoc]
         · omega)
-    obtain ⟨-, -, -, -, -, v13, vz, vm⟩ := clr_effect u
+    obtain ⟨-, v1, v2, v3, v12, v13, vz, vm⟩ := clr_effect u
     have vmem : c.MemOk c.len.toNat (execAll clr u).mem := fun y hy => by
       rw [vm y (by rw [usp]; rintro ⟨o, ho, rfl⟩; exact hy o (by omega) rfl)]; exact umem y hy
     apply (fin0_w c hv hPc hlr _ (by rw [execAll_pc _ _ (by decide), upc, ofNat_add_assoc, clr_end])
       (by rw [v13, usp]) (saved_memOk c hv vmem (Nat.le_refl _))
-      (fun w => w.mem = (execAll clr u).mem ∧ w.regs 0 = 0) (fun w a b => ⟨a, b⟩)).mono (fun _ _ h => h)
-    rintro w ⟨wpc, wsp, wcal, wm, w0⟩
-    refine ⟨wpc, wpc, wsp, wcal, by rw [w0, hacc.ok]; rfl, fun y hy => ?_, fun _ _ i hi => ?_⟩
+      (fun w => w.mem = (execAll clr u).mem ∧ w.regs 0 = 0 ∧
+        ∀ r : Reg, (1 ≤ r.val ∧ r.val < 4) ∨ r.val = 12 → w.regs r = (execAll clr u).regs r)
+      (fun w a b d => ⟨a, b, d⟩)).mono (fun _ _ h => h)
+    rintro w ⟨wpc, wsp, wcal, wm, w0, wr⟩
+    have hk : M0Crypto.Spec.Aead.counterOk c.ctr.toNat c.len.toNat = true ∧ c.len ≠ 0 := ⟨hacc.ok, hacc.ne⟩
+    refine ⟨wpc, wpc, wsp, wcal, by rw [w0, hacc.ok]; rfl, fun r hr => ?_, fun y hy => ?_, fun i hi => ?_,
+      saved_result c (by rw [wm]; exact saved_memOk c hv vmem (Nat.le_refl _))⟩
+    · rw [if_pos hk, wr r hr]
+      have hr' : r = 1 ∨ r = 2 ∨ r = 3 ∨ r = 12 := by
+        rcases hr with ⟨h1, h4⟩ | h12
+        · have : r.val = 1 ∨ r.val = 2 ∨ r.val = 3 := by omega
+          rcases this with h | h | h
+          · exact .inl (Fin.ext h)
+          · exact .inr (.inl (Fin.ext h))
+          · exact .inr (.inr (.inl (Fin.ext h)))
+        · exact .inr (.inr (.inr (Fin.ext h12)))
+      rcases hr' with rfl | rfl | rfl | rfl
+      · exact v1
+      · exact v2
+      · exact v3
+      · exact v12
     · rw [wm, vmem y (outS_outF hy), hacc.ok]
       by_cases hl : c.oidx y < c.len.toNat
       · rw [if_pos hl, if_pos ⟨rfl, hl⟩]
       · rw [if_neg hl, if_neg (fun e => hl e.2), mP_outS c hv hy]
-    · rw [wm, ← usp]; exact vz i hi
+    · rw [if_pos hk, wm, ← usp]; exact vz i hi
+
+/-- Byte `o` of the frame at return. -/
+theorem Result.frame_byte {c : Ctx} {t : State} (h : Result c t) (o : Nat) (ho : o < 4 * chFrameWords) :
+    t.mem (c.fp + BitVec.ofNat 32 o) =
+      if M0Crypto.Spec.Aead.counterOk c.ctr.toNat c.len.toNat = true ∧ c.len ≠ 0 then 0#8
+      else c.m0 (c.fp + BitVec.ofNat 32 o) := by
+  have hk : o % 4 < 4 := Nat.mod_lt _ (by decide)
+  have e : c.fp + BitVec.ofNat 32 o = slot c.fp (o / 4) + BitVec.ofNat 32 (o % 4) := by
+    rw [Frame.slot_eq, ofNat_add_assoc]; congr 2; omega
+  rw [e, Frame.byte_of_read32 t.mem _ _ hk, h.frame _ (by omega)]
+  split
+  · simp
+  · rw [Frame.byte_of_read32 c.m0 _ _ hk]
 
 /-- **Whole function, as a run of the release bytes**: every call satisfying `Valid` and
 `Entry` reaches the return address in a `Result` state, writing only the frame and output. -/
@@ -542,10 +613,12 @@ theorem xor_reach (c : Ctx) (hv : Valid c) (s : State) (h : ChaCha20Setup.Entry 
 valid call (`Pre`: `Valid`, that is alignment, non-overlap, exact in-place or disjoint buffers and
 code in memory; entry state `Entry`; a Thumb return address outside the artifact), the
 run to the return address terminates in a `Result` state: SP and r4-r11 restored, r0 = 0 iff the
-RFC 8439 counter range fits, the output buffer holds RFC 8439 ChaCha20 of the input (on success),
-all other memory outside the 176 stack bytes unchanged, the 140-byte frame zeroed after a
-non-empty call; and every write lies in the 176 stack bytes or, only if the call is accepted,
-the output buffer (`WrOk`). Reads and intermediate SP values are not bounded here. -/
+RFC 8439 counter range fits, r1-r3 and r12 zero after an accepted non-empty call and unchanged
+otherwise, the output buffer holds RFC 8439 ChaCha20 of the input (on success), all other memory
+outside the 176 stack bytes unchanged, the 140-byte frame zeroed after an accepted non-empty call
+and unchanged otherwise, the 36 bytes above it holding the caller's r4-r11 and LR; and every write
+lies in the 176 stack bytes or, only if the call is accepted, the output buffer (`WrOk`). Reads
+and intermediate SP values are not bounded here. -/
 theorem xor_correct (c : Ctx) (s : State) (hp : Pre c s) :
     ∃ n, ∀ fuel, n ≤ fuel → ∃ s' tr, Thumb.runUntil c.ret fuel s = .ok (s', tr) ∧
       Result c s' ∧ WritesTo (WrOk c) tr := by

@@ -115,7 +115,7 @@ theorem copy_reachSR {base : Word} {s : State} (e : CopyEntry base s) :
     simp only [popL, Instr.accesses, wordAccesses, List.mem_map, List.mem_range] at ha
     obtain ⟨i, _, rfl⟩ := ha
     simp at hk
-  · refine ReachS.done ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · refine ReachS.done ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, fun i hi => by rw [sm]; exact key i hi⟩
     · rw [spc, U13, k4]
     · rw [s13', U13]; unfold fr; bv_omega
     · rw [s4, U13, k0]
@@ -134,6 +134,8 @@ theorem copy_reachSR {base : Word} {s : State} (e : CopyEntry base s) :
       rw [sm, hciU.cp.2 y hy2, pm]
       refine storeWords_other _ _ _ _ (fun j k hj hk eq => ?_)
       exact hy1 (4 * j + k) (by simp at hj; omega) (by rw [eq, ofNat_add_assoc]; rfl)
+    · rw [so 12 (Or.inr ⟨by decide, by decide⟩), hciU.hi 12 (by decide) (by decide),
+        po 12 (by decide) (by decide) (by decide)]
 
 theorem copy_reachS {base : Word} {s : State} (e : CopyEntry base s) :
     ReachS base (PN (WC base s)) s (CopyPost s) :=

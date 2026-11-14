@@ -148,9 +148,10 @@ theorem checks_S {Pc : Word → Prop} (c : Ctx) (hv : Valid c) (Wr : Word → Pr
     (hPc : ∀ pc, ChaCha20Policy.ChaPc c.base pc → Pc pc)
     (s : State) (h : Entry c s) (Q : State → Prop)
     (k0 : ∀ t, t.pc = c.base + BitVec.ofNat 32 zOff → t.regs 13 = c.fp → t.mem = c.mP → c.len = 0 →
+      (∀ r : Reg, r.val < 4 ∨ r.val = 12 → t.regs r = c.regs0 r) →
       ReachS c.base (ChaCha20Policy.EvP Pc allowed) t Q)
     (kerr : ∀ t, t.pc = c.base + BitVec.ofNat 32 errOff → t.regs 13 = c.fp → t.mem = c.mP → c.len ≠ 0 →
-      M0Crypto.Spec.Aead.counterOk c.ctr.toNat c.len.toNat = false → ReachS c.base (ChaCha20Policy.EvP Pc allowed) t Q)
+      M0Crypto.Spec.Aead.counterOk c.ctr.toNat c.len.toNat = false → (∀ r : Reg, r.val < 4 ∨ r.val = 12 → t.regs r = c.regs0 r) → ReachS c.base (ChaCha20Policy.EvP Pc allowed) t Q)
     (kacc : ∀ t, Acc c t → ReachS c.base (ChaCha20Policy.EvP Pc allowed) t Q) : ReachS c.base (ChaCha20Policy.EvP Pc allowed) s Q := by
   have sSB := ChaCha20Layout.chStackBytes_eq
   have hb2 : c.base.toNat % 2 = 0 := by have := hv.base4; omega
@@ -273,6 +274,9 @@ theorem checks_S {Pc : Word → Prop} (c : Ctx) (hv : Valid c) (Wr : Word → Pr
       · show t3.mem = c.mP; rw [m3, m2]
       · exact hne
       · rw [hok]; exact hc
+      · intro r hr
+        rw [setReg15_regs _ _ _ (by omega), setReg15_regs _ _ _ (by omega), r3 r (by omega) (by omega) (by omega),
+          r2 r (by omega), pr r (by omega)]
   · intro hz
     simp only [condPassed, Bool.not_eq_false'] at hz
     rw [z1] at hz
@@ -283,18 +287,22 @@ theorem checks_S {Pc : Word → Prop} (c : Ctx) (hv : Valid c) (Wr : Word → Pr
     · rw [setReg15_regs _ _ 13 (by decide), setReg15_regs _ _ 13 (by decide), r1 13 (by decide), p13]
     · show t1.mem = c.mP; rw [m1, pm]
     · exact hl
+    · intro r hr
+      rw [setReg15_regs _ _ _ (by omega), setReg15_regs _ _ _ (by omega), r1 r (by omega), pr r (by omega)]
 
 theorem checks_events (c : Ctx) (hv : Valid c) (Wr : Word → Prop) (hW : ∀ o < chStackBytes, Wr (c.fp + BitVec.ofNat 32 o))
     (allowed : Word → Kind → Word → Prop) (hA : ChaCha20Policy.Admits (ChaCha20Policy.FrontPc c.base) Wr allowed)
     (s : State) (h : Entry c s) (Q : State → Prop)
     (k0 : ∀ t, t.pc = c.base + BitVec.ofNat 32 zOff → t.regs 13 = c.fp → t.mem = c.mP → c.len = 0 →
+      (∀ r : Reg, r.val < 4 ∨ r.val = 12 → t.regs r = c.regs0 r) →
       ConstantTime.ReachEvents c.base allowed t Q)
     (kerr : ∀ t, t.pc = c.base + BitVec.ofNat 32 errOff → t.regs 13 = c.fp → t.mem = c.mP → c.len ≠ 0 →
-      M0Crypto.Spec.Aead.counterOk c.ctr.toNat c.len.toNat = false → ConstantTime.ReachEvents c.base allowed t Q)
+      M0Crypto.Spec.Aead.counterOk c.ctr.toNat c.len.toNat = false → (∀ r : Reg, r.val < 4 ∨ r.val = 12 → t.regs r = c.regs0 r) →
+      ConstantTime.ReachEvents c.base allowed t Q)
     (kacc : ∀ t, Acc c t → ConstantTime.ReachEvents c.base allowed t Q) : ConstantTime.ReachEvents c.base allowed s Q :=
   ChaCha20Policy.ofEvP (checks_S (Pc := fun _ => True) c hv Wr hW allowed hA (fun _ _ => trivial) s h Q
-    (fun t h1 h2 h3 h4 => ChaCha20Policy.reachEvents_toEvP (k0 t h1 h2 h3 h4))
-    (fun t h1 h2 h3 h4 h5 => ChaCha20Policy.reachEvents_toEvP (kerr t h1 h2 h3 h4 h5))
+    (fun t h1 h2 h3 h4 h5 => ChaCha20Policy.reachEvents_toEvP (k0 t h1 h2 h3 h4 h5))
+    (fun t h1 h2 h3 h4 h5 h6 => ChaCha20Policy.reachEvents_toEvP (kerr t h1 h2 h3 h4 h5 h6))
     (fun t h1 => ChaCha20Policy.reachEvents_toEvP (kacc t h1)))
 
 /-- The prologue and the two entry checks, with every program counter in `Pc`. -/
@@ -302,27 +310,29 @@ theorem checks_w {Pc : Word → Prop} (c : Ctx) (hv : Valid c) (Wr : Word → Pr
     (hPc : ∀ pc, ChaCha20Policy.ChaPc c.base pc → Pc pc)
     (s : State) (h : Entry c s) (Q : State → Prop)
     (k0 : ∀ t, t.pc = c.base + BitVec.ofNat 32 zOff → t.regs 13 = c.fp → t.mem = c.mP → c.len = 0 →
+      (∀ r : Reg, r.val < 4 ∨ r.val = 12 → t.regs r = c.regs0 r) →
       ReachW c.base Pc Wr t Q)
     (kerr : ∀ t, t.pc = c.base + BitVec.ofNat 32 errOff → t.regs 13 = c.fp → t.mem = c.mP → c.len ≠ 0 →
-      M0Crypto.Spec.Aead.counterOk c.ctr.toNat c.len.toNat = false → ReachW c.base Pc Wr t Q)
+      M0Crypto.Spec.Aead.counterOk c.ctr.toNat c.len.toNat = false → (∀ r : Reg, r.val < 4 ∨ r.val = 12 → t.regs r = c.regs0 r) → ReachW c.base Pc Wr t Q)
     (kacc : ∀ t, Acc c t → ReachW c.base Pc Wr t Q) : ReachW c.base Pc Wr s Q :=
   ChaCha20Policy.ofEvPW
     (checks_S c hv Wr hW _ (ChaCha20Policy.admits_writeOnly _ Wr) hPc s h Q
-      (fun t h1 h2 h3 h4 => ChaCha20Policy.reachW_toEvP (k0 t h1 h2 h3 h4))
-      (fun t h1 h2 h3 h4 h5 => ChaCha20Policy.reachW_toEvP (kerr t h1 h2 h3 h4 h5))
+      (fun t h1 h2 h3 h4 h5 => ChaCha20Policy.reachW_toEvP (k0 t h1 h2 h3 h4 h5))
+      (fun t h1 h2 h3 h4 h5 h6 => ChaCha20Policy.reachW_toEvP (kerr t h1 h2 h3 h4 h5 h6))
       (fun t h1 => ChaCha20Policy.reachW_toEvP (kacc t h1)))
 
 /-- The prologue and the two entry checks. -/
 theorem checks (c : Ctx) (hv : Valid c) (Wr : Word → Prop) (hW : ∀ o < chStackBytes, Wr (c.fp + BitVec.ofNat 32 o))
     (s : State) (h : Entry c s) (Q : State → Prop)
     (k0 : ∀ t, t.pc = c.base + BitVec.ofNat 32 zOff → t.regs 13 = c.fp → t.mem = c.mP → c.len = 0 →
+      (∀ r : Reg, r.val < 4 ∨ r.val = 12 → t.regs r = c.regs0 r) →
       Reach c.base Wr t Q)
     (kerr : ∀ t, t.pc = c.base + BitVec.ofNat 32 errOff → t.regs 13 = c.fp → t.mem = c.mP → c.len ≠ 0 →
-      M0Crypto.Spec.Aead.counterOk c.ctr.toNat c.len.toNat = false → Reach c.base Wr t Q)
+      M0Crypto.Spec.Aead.counterOk c.ctr.toNat c.len.toNat = false → (∀ r : Reg, r.val < 4 ∨ r.val = 12 → t.regs r = c.regs0 r) → Reach c.base Wr t Q)
     (kacc : ∀ t, Acc c t → Reach c.base Wr t Q) : Reach c.base Wr s Q :=
   (checks_w (Pc := fun _ => True) c hv Wr hW (fun _ _ => trivial) s h Q
-    (fun t h1 h2 h3 h4 => (k0 t h1 h2 h3 h4).toReachW)
-    (fun t h1 h2 h3 h4 h5 => (kerr t h1 h2 h3 h4 h5).toReachW)
+    (fun t h1 h2 h3 h4 h5 => (k0 t h1 h2 h3 h4 h5).toReachW)
+    (fun t h1 h2 h3 h4 h5 h6 => (kerr t h1 h2 h3 h4 h5 h6).toReachW)
     (fun t h1 => (kacc t h1).toReachW)).toReach
 
 /-! ## `LOAD_LE32 r3, off` -/

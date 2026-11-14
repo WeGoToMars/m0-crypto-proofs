@@ -30,6 +30,10 @@ structure BcPost (base : Word) (off : Nat) (u v : State) : Prop where
   copy : ∀ i < (u.regs 2).toNat, v.mem (u.regs 0 + BitVec.ofNat 32 i) = u.mem (u.regs 1 + BitVec.ofNat 32 i)
   mem : ∀ y, (∀ o < 20, y ≠ u.regs 13 - 20#32 + BitVec.ofNat 32 o) →
     (∀ o < (u.regs 2).toNat, y ≠ u.regs 0 + BitVec.ofNat 32 o) → v.mem y = u.mem y
+  r12 : v.regs 12 = u.regs 12
+  /-- Copy's frame keeps `r4`-`r7` and the return address. -/
+  saved : ∀ i (hi : i < 5), read32 v.mem (u.regs 13 - 20#32 + BitVec.ofNat 32 (4 * i)) =
+    [u.regs 4, u.regs 5, u.regs 6, u.regs 7, (base + BitVec.ofNat 32 (off + 4)) ||| 1#32][i]'(by simpa using hi)
 
 /-- The writes of a call to copy, seen from the state `u` before the `bl`: its frame and the
 destination, and only the destination at its store sites. -/
@@ -75,7 +79,7 @@ theorem bl_copyS {base : Word} {W : Word → Word → Prop} {R : Word → Prop} 
       by unfold fr; rw [s1, s2, s13]; exact srcF⟩
   have hq : ∀ v, CopyPost sc v → BcPost base off u v := by
     intro v hp
-    refine ⟨?_, ?_, ?_, ?_, ?_⟩
+    refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
     · have hbs := codeD.1
       rw [hp.pc, h14', M0Crypto.Release.lr_mask]
       rw [toNat_add_ofNat _ _ (by omega)]
@@ -105,6 +109,18 @@ theorem bl_copyS {base : Word} {W : Word → Word → Prop} {R : Word → Prop} 
       have := hp.mem y (by intro o ho; unfold fr; rw [s13]; exact hy1 o ho)
         (by intro o ho; rw [s0]; exact hy2 o (by rw [s2] at ho; exact ho))
       rw [this, scm]
+    · rw [hp.r12, sr 12 (by decide) (by decide)]
+    · intro i hi
+      have h := hp.saved i hi
+      unfold fr at h
+      rw [s13] at h
+      rw [h]
+      rcases (by omega : i = 0 ∨ i = 1 ∨ i = 2 ∨ i = 3 ∨ i = 4) with rfl | rfl | rfl | rfl | rfl
+      · exact sr 4 (by decide) (by decide)
+      · exact sr 5 (by decide) (by decide)
+      · exact sr 6 (by decide) (by decide)
+      · exact sr 7 (by decide) (by decide)
+      · exact h14'
   refine (copy_reachSR e).mono
     (fun _ ev hp => ⟨⟨fun y hy => hW _ _ ?_, hp.1.2⟩, fun hld y hy => hRc y ?_⟩) hq
   · obtain ⟨hw, hs⟩ := hp.1.1 y hy

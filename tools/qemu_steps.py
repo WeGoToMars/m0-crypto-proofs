@@ -8,8 +8,12 @@ every instruction, r0-r15 and the N, Z, C, V flags must be equal, and at the ret
 must be equal. The model's decoder and executor are thereby checked against an independent
 ARMv6-M implementation on every instruction these calls execute.
 
-It checks the model, not timing, and only the instructions the traced calls reach; the
-summary line says how many of the artifact's instructions that is.
+The selected calls are calls 1, 2, 3, 5, 8, ..., 987 of each listed function (a call made
+inside a call of a listed function is part of that call), and then, from a second run of each
+image with a breakpoint on every artifact address those calls did not execute, each call
+that executes one. So every instruction of the artifact that the images execute is compared;
+artifact code running outside a call of the listed functions is an error. The summary line
+gives the number of distinct instructions. It checks the model, not timing.
 
 QEMU is driven through its gdb stub (remote serial protocol over a Unix socket).
 
@@ -18,7 +22,8 @@ Usage: qemu_steps.py ASSET QEMU NM TEXT_BIN ELF FUNCTION[,FUNCTION...] [ELF FUNC
   TEXT_BIN  the asset's release artifact (build/lib/ASSET/text.bin); the image must contain
             these bytes
   ELF       a test image (build/test/*.elf)
-  FUNCTION  an exported function to trace in that image
+  FUNCTION  a function to trace in that image: exported, or an internal routine the image
+            calls directly
 """
 import os
 import socket
@@ -87,59 +92,135 @@ def symbols(nm, elf):
     return {f[2]: int(f[0], 16) for f in (l.split() for l in out.splitlines()) if len(f) == 3}
 
 
-def trace_image(qemu, nm, text, elf, functions, cases, qemu_states):
-    """Single-step the selected calls; append the model's input and QEMU's states."""
-    syms = symbols(nm, elf)
-    size = syms["_etext"]
-    tmp = tempfile.mkdtemp()
-    path = os.path.join(tmp, "gdb")
-    proc = subprocess.Popen(
-        [qemu, "-machine", "microbit", "-nographic", "-monitor", "none", "-serial", "none",
-         "-semihosting-config", "enable=on,target=native", "-kernel", elf, "-S",
-         "-chardev", f"socket,id=g,path={path},server=on,wait=on", "-gdb", "chardev:g"],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    try:
-        while not os.path.exists(path):
-            if proc.poll() is not None:
+class Image:
+    """One test image under QEMU, stopped at its first instruction."""
+
+    def __init__(self, qemu, nm, text, elf):
+        self.syms = symbols(nm, elf)
+        self.tmp = tempfile.mkdtemp()
+        self.path = os.path.join(self.tmp, "gdb")
+        self.proc = subprocess.Popen(
+            [qemu, "-machine", "microbit", "-nographic", "-monitor", "none", "-serial", "none",
+             "-semihosting-config", "enable=on,target=native", "-kernel", elf, "-S",
+             "-chardev", f"socket,id=g,path={self.path},server=on,wait=on", "-gdb", "chardev:g"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        while not os.path.exists(self.path):
+            if self.proc.poll() is not None:
                 sys.exit("qemu_steps: QEMU did not start")
-        gdb = Gdb(path)
-        flash = gdb.read(0, size)
-        base = flash.find(text)
-        if base < 0:
+        self.gdb = Gdb(self.path)
+        self.flash = self.gdb.read(0, self.syms["_etext"])
+        self.base = self.flash.find(text)
+        if self.base < 0:
             sys.exit(f"qemu_steps: {elf} does not contain the release artifact")
-        cases.append(f"flash 0 {flash.hex()}")
+        self.bps = set()
+
+    def close(self):
+        self.proc.kill()
+        self.proc.wait()
+        if os.path.exists(self.path):
+            os.unlink(self.path)
+        os.rmdir(self.tmp)
+
+    def pc(self):
+        return int(self.gdb.regs().split()[15], 16)
+
+    def run_to(self, addrs):
+        """Continue to one of `addrs` (after leaving the current instruction); its PC, or None
+        if the program ends first."""
+        try:
+            for a in self.bps - addrs:
+                self.gdb.cmd(f"z1,{a:x},2")
+            for a in addrs - self.bps:
+                if self.gdb.cmd(f"Z1,{a:x},2") != "OK":
+                    sys.exit("qemu_steps: cannot set a breakpoint")
+            self.bps = set(addrs)
+            self.gdb.cmd("s")
+            pc = self.pc()
+            if pc in addrs:
+                return pc
+            reply = self.gdb.cmd("c")
+        except (EOFError, OSError):   # QEMU exited: the test program ended
+            return None
+        if not (reply.startswith("T05") or reply.startswith("S05")):
+            return None
+        return self.pc()
+
+    def calls(self, functions, watch=frozenset(), watched=None):
+        """Yield (function, number, return address) at the entry of each outermost call of
+        `functions` (a call of one inside another is part of the outer call). The consumer
+        may single-step the call to its return; otherwise the program runs to it. A stop at an
+        address in `watch` calls `watched(pc, function, number)`; outside a call it is an
+        error."""
+        entries = {self.syms[fn] & ~1: fn for fn in functions}
+        count = dict.fromkeys(functions, 0)
+        while (pc := self.run_to(set(entries) | watch)) is not None:
+            if pc not in entries:
+                sys.exit(f"qemu_steps: artifact offset {pc - self.base:#x} runs outside a call of "
+                         f"{', '.join(functions)}")
+            fn, ret = entries[pc], int(self.gdb.regs().split()[14], 16) & ~1
+            count[fn] += 1
+            yield fn, count[fn], ret
+            pc = self.pc()
+            while pc != ret:
+                if pc in watch:
+                    watched(pc, fn, count[fn])
+                pc = self.run_to({ret} | watch)
+                if pc is None:
+                    sys.exit(f"qemu_steps: {fn} call {count[fn]} did not return")
+        if 0 in count.values():
+            sys.exit(f"qemu_steps: the image never calls {[f for f in count if not count[f]]}")
+
+
+def trace_image(qemu, nm, text, elf, functions, pick, cases, qemu_states):
+    """Single-step the calls `pick` ({function: call numbers}) selects; append the model's
+    input and QEMU's states. Returns the artifact offsets they execute."""
+    img = Image(qemu, nm, text, elf)
+    try:
+        cases.append(f"flash 0 {img.flash.hex()}")
         pcs = set()
-        entries = {syms[fn] & ~1: fn for fn in functions}
-        calls = dict.fromkeys(functions, 0)
-        while min(calls.values()) < CALLS[-1] and gdb.run_to(entries):
-            state = gdb.regs()
-            words = state.split()
-            fn = entries[int(words[15], 16)]
-            calls[fn] += 1
-            if calls[fn] not in CALLS:
-                gdb.cmd("s")   # leave the entry before the breakpoints are set again
-                continue
-            name = f"{Path(elf).stem}:{fn}:{calls[fn]}"
-            stop = int(words[14], 16) & ~1
-            cases += [f"case {name}", f"ram {RAM[0]:x} {gdb.read(*RAM).hex()}",
-                      f"regs {state}", f"stop {stop:x}"]
-            steps = []
-            while int(words[15], 16) != stop:
-                pcs.add(int(words[15], 16) - base)
-                gdb.cmd("s")
+        done = dict.fromkeys(functions, 0)
+        for fn, n, stop in img.calls(functions):
+            if n in pick.get(fn, ()):
+                gdb = img.gdb
                 state = gdb.regs()
                 words = state.split()
-                steps.append(state)
-            qemu_states[name] = (steps, gdb.read(*RAM).hex())
-        if 0 in calls.values():
-            sys.exit(f"qemu_steps: {elf} never calls {[f for f in calls if not calls[f]]}")
+                name = f"{Path(elf).stem}:{fn}:{n}"
+                cases += [f"case {name}", f"ram {RAM[0]:x} {gdb.read(*RAM).hex()}",
+                          f"regs {state}", f"stop {stop:x}"]
+                steps = []
+                while int(words[15], 16) != stop:
+                    pcs.add(int(words[15], 16) - img.base)
+                    gdb.cmd("s")
+                    state = gdb.regs()
+                    words = state.split()
+                    steps.append(state)
+                qemu_states[name] = (steps, gdb.read(*RAM).hex())
+            done[fn] = n
+            if all(n >= max(pick.get(f, {0})) for f, n in done.items()):
+                break   # no selected call is left
         return pcs
     finally:
-        proc.kill()
-        proc.wait()
-        if os.path.exists(path):
-            os.unlink(path)
-        os.rmdir(tmp)
+        img.close()
+
+
+def find_calls(qemu, nm, text, elf, functions, todo):
+    """Run the whole image with a breakpoint on each artifact offset in `todo`; return the
+    calls that reach one, as {function: call numbers}, and the offsets they reach."""
+    img = Image(qemu, nm, text, elf)
+    try:
+        watch = {img.base + o for o in todo}
+        found, reached = {}, set()
+
+        def watched(pc, fn, n):
+            found.setdefault(fn, set()).add(n)
+            reached.add(pc - img.base)
+            watch.discard(pc)
+
+        for _ in img.calls(functions, watch, watched):
+            pass
+        return found, reached
+    finally:
+        img.close()
 
 
 def main(argv):
@@ -149,8 +230,19 @@ def main(argv):
     argv = argv[1:]
     qemu, nm, text = argv[1], argv[2], Path(argv[3]).read_bytes()
     cases, qemu_states, pcs = [], {}, set()
-    for elf, functions in zip(argv[4::2], argv[5::2]):
-        pcs |= trace_image(qemu, nm, text, elf, functions.split(","), cases, qemu_states)
+    images = [(elf, functions.split(",")) for elf, functions in zip(argv[4::2], argv[5::2])]
+    for elf, functions in images:
+        pcs |= trace_image(qemu, nm, text, elf, functions, dict.fromkeys(functions, CALLS),
+                           cases, qemu_states)
+    # Then every call that executes an instruction the sampled calls did not (every even
+    # offset is watched, so literal pools are too; execution never reaches them).
+    for elf, functions in images:
+        todo = set(range(0, len(text), 2)) - pcs
+        found, reached = find_calls(qemu, nm, text, elf, functions, todo)
+        if found:
+            pcs |= trace_image(qemu, nm, text, elf, functions, found, cases, qemu_states)
+        if reached - pcs:
+            sys.exit(f"qemu_steps: offsets {sorted(reached - pcs)} were not traced")
     with tempfile.NamedTemporaryFile("w", suffix=".txt") as f:
         f.write("\n".join(cases) + "\n")
         f.flush()
@@ -177,7 +269,8 @@ def main(argv):
         total += len(steps)
     instructions = len({p for p in pcs if 0 <= p < len(text)})
     print(f"ok: model and QEMU agree after each of {total} instructions in {len(qemu_states)} calls "
-          f"({instructions} distinct instructions of the artifact), and on the final RAM")
+          f"({instructions} distinct instructions of the artifact: every one these images execute), "
+          f"and on the final RAM")
 
 
 if __name__ == "__main__":

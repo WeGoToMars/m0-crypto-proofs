@@ -676,6 +676,14 @@ theorem tailMem_other (m : Mem) (V : Nat → Word) (hp : Word) (y : Word)
     congr 2; omega
   rw [key (hp + 16#32) 16 _ _ rfl (by simp), key hp 0 _ _ (by simp) (by simp)]
 
+/-- The register whose entry value word `i` above the locals holds (`i < 9`): `r8`-`r11`, `r4`-`r7`,
+`lr`, as the prologue pushes them. -/
+def savedRegC (i : Nat) : Reg := ([8, 9, 10, 11, 4, 5, 6, 7, 14] : List Reg)[i]!
+
+theorem savedRegC_range (i : Nat) (hi : i < 8) : 4 ≤ (savedRegC i).val ∧ (savedRegC i).val ≤ 11 := by
+  match i, hi with
+  | 0, _ | 1, _ | 2, _ | 3, _ | 4, _ | 5, _ | 6, _ | 7, _ => decide
+
 /-- What a call computes: the chain words are the RFC 7693 compression result, `r4`-`r11` and `sp`
 are restored, control returns to `lr`, and memory changes only in the frame and the chain window.
 The call leaves no working value behind: `r0`-`r3` and `r12` are zero and so is every word of the
@@ -699,6 +707,7 @@ structure Post (s t : State) : Prop where
   scratch : ∀ r : Reg, r.val < 4 → t.regs r = 0#32
   r12 : t.regs 12 = 0#32
   wipe : ∀ i < LOCALS_WORDS, read32 t.mem (slot (fpOf s) i) = 0#32
+  saved : ∀ i < 9, read32 t.mem (slot (fpOf s) (LOCALS_WORDS + i)) = s.regs (savedRegC i)
 
 theorem ofNat_T (a b : Word) :
     BitVec.ofNat 32 (a.toNat + 2 ^ 32 * b.toNat) = a ∧
@@ -750,7 +759,7 @@ theorem compress_reachSR {base : Word} {s : State} (e : Entry base s) (Q : State
     (rdF HPTR_WORDS (by omega) (by omega) _ f24) e.hpF hsp4 e.hp4 hWh hWf hRh hpc0 hbit Q ?_
   intro t hm h13 r4 r5 r6 r7 r8 r9 r10 r11 hpcT hz h12
   refine hQ t ?_
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, hz, h12, ?_⟩
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, hz, h12, ?_, ?_⟩
   · rw [hpcT, show SAVED_8 = 4 * SLOTW_8 from rfl, show (SAVED_8_W : Word) = BitVec.ofNat 32 (4 * SLOTW_8) from rfl,
       rdF SLOTW_8 (by omega) (by omega) _ f33]
   · rw [h13]; unfold fpOf; bv_omega
@@ -800,6 +809,28 @@ theorem compress_reachSR {base : Word} {s : State} (e : Entry base s) (Q : State
       rw [BitVec.add_assoc, ← BitVec.ofNat_add]
   · intro i hi
     rw [hm]; exact retMem_wipe _ _ _ _ i hi
+  · intro i hi
+    have hsn := (s.regs 13).isLt
+    have hlo := e.spLo
+    obtain ⟨h1, h2, h3⟩ := e.hpF
+    have ha : (slot (fpOf s) (LOCALS_WORDS + i)).toNat = (fpOf s).toNat + 4 * (LOCALS_WORDS + i) := by
+      unfold slot; exact toNat_add_ofNat _ _ (by omega)
+    rw [hm, retMem_read _ _ _ _ _ ⟨by omega, by omega, Or.inl (by omega)⟩]
+    rw [read32_congr (m := t0.mem) fun k hk => tailMem_other _ _ _ _ fun o ho he => by
+      have e1 := congrArg BitVec.toNat he
+      rw [toNat_add_ofNat _ _ (by omega), ha, toNat_add_ofNat _ _ (by omega)] at e1
+      omega]
+    rcases (by omega : i = 0 ∨ i = 1 ∨ i = 2 ∨ i = 3 ∨ i = 4 ∨ i = 5 ∨ i = 6 ∨ i = 7 ∨ i = 8) with
+      rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+    · exact rdF _ (by omega) (by omega) _ f25
+    · exact rdF _ (by omega) (by omega) _ f26
+    · exact rdF _ (by omega) (by omega) _ f27
+    · exact rdF _ (by omega) (by omega) _ f28
+    · exact rdF _ (by omega) (by omega) _ f29
+    · exact rdF _ (by omega) (by omega) _ f30
+    · exact rdF _ (by omega) (by omega) _ f31
+    · exact rdF _ (by omega) (by omega) _ f32
+    · exact rdF _ (by omega) (by omega) _ f33
 
 /-- The same judgment with only the write bound. -/
 theorem compress_reachS {base : Word} {s : State} (e : Entry base s) (Q : State → Prop)

@@ -102,6 +102,37 @@ theorem save_out (i : Nat) (hi : i < 9) {y : Word}
   simp only [LFRAME, SAVED, X25519.stackBytes, X25519.wipeBytes] at *
   omega
 
+/-- Word `i` above the wiped bytes, read from `fp`, is word `i` of the save area from `E c`. -/
+theorem save_fp (i : Nat) (hi : i < 9) :
+    c.fp + BitVec.ofNat 32 (X25519.wipeBytes + 4 * i) = E c + BitVec.ofNat 32 (LFRAME + 4 * i) := by
+  have hsp := hv.spLo
+  have hF := fp_toNat hv
+  have e1 := E_add hv (d := LFRAME + 4 * i) (by simp only [LFRAME, SAVED]; omega)
+  have hE := E_toNat hv
+  have := c.sp0.isLt
+  apply BitVec.eq_of_toNat_eq
+  rw [e1, Frame.toNat_add_ofNat _ _ (by
+    simp only [X25519.wipeBytes, X25519.stackBytes] at *; omega)]
+  simp only [LFRAME, SAVED, X25519.stackBytes, X25519.wipeBytes] at *
+  omega
+
+/-- Save-area words lie in the stack window. -/
+theorem save_win (i : Nat) (hi : i < 9) {y : Word}
+    (h : Region (E c + BitVec.ofNat 32 (LFRAME + 4 * i)) 4 y) : Region c.fp X25519.stackBytes y := by
+  have hsp := hv.spLo
+  have e1 := E_add hv (d := LFRAME + 4 * i) (by simp only [LFRAME, SAVED]; omega)
+  have hE := E_toNat hv
+  have hF := fp_toNat hv
+  have := c.sp0.isLt
+  refine region_sub (by simp only [X25519.stackBytes] at *; omega) ?_ ?_ h
+  · rw [e1]; simp only [LFRAME, SAVED, X25519.stackBytes] at *; omega
+  · rw [e1]; simp only [LFRAME, SAVED, X25519.stackBytes] at *; omega
+
+omit hv in
+theorem savedRegs_get (i : Nat) (hi : i < 9) : X25519.savedRegs[i]! = savedReg i := by
+  match i, hi with
+  | 0, _ | 1, _ | 2, _ | 3, _ | 4, _ | 5, _ | 6, _ | 7, _ | 8, _ => rfl
+
 omit hv in
 theorem saved_list (i : Nat) (hi : i < 9) (hl : i < (savedList c).length) :
     (savedList c)[i] = c.regs0 (savedReg i) := by
@@ -224,7 +255,13 @@ theorem x25519_run {c : X25519.Ctx} {s : State} (hp : X25519.Pre c s) :
   refine (X25519OutAt.tail_w hv hp.thumb (fun _ _ h => X25519Ev.liftS h)
     (fun _ _ h => X25519Ev.liftW h) t6pc b6.sp r6 hout hsv).mono (fun _ _ h => h) ?_
   rintro t ⟨tpc, tsp, tcal, t0, t1', t2', t3', t12, tout, twipe, tmem⟩
-  refine ⟨tpc, tpc, tsp, tcal, t0, t1', t2', t3', t12, fun y hy => ?_, twipe⟩
+  have tsaved : ∀ i < 9, read32 t.mem (c.fp + BitVec.ofNat 32 (X25519.wipeBytes + 4 * i)) =
+      c.regs0 X25519.savedRegs[i]! := by
+    intro i hi
+    rw [save_fp hv i hi, savedRegs_get i hi, ← hsv i hi]
+    exact read32_congr' fun y hy => tmem y (save_out hv i hi hy)
+      (Region.not (X25519MulcFacts.region_ne hv.outS (save_win hv i hi hy)))
+  refine ⟨tpc, tpc, tsp, tcal, t0, t1', t2', t3', t12, fun y hy => ?_, twipe, tsaved⟩
   by_cases ho : Region c.out 32 y
   · simp only [ho, ↓reduceIte]
     have hi : c.oidx y < 32 := ho
@@ -257,7 +294,7 @@ namespace M0Crypto.Release.X25519
 
 /-- Every valid call of `m0c_x25519` returns with `Result` (RFC 7748 output in
 `out`, callee-saved registers and SP restored, r0-r3 and r12 zero, the 480 stack bytes below the
-saved registers zero) and writes
+saved registers zero, the 36 above them the caller's saved registers) and writes
 only its stack window and `out`. -/
 theorem x25519_correct : Correct := X25519Correct.x25519_correct
 

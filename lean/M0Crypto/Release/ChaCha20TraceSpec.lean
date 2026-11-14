@@ -47,7 +47,7 @@ functional theorems:
 1. Constant-time trace independence (equal traces for equal public inputs; decrypt also
    conditioned on equal authentication verdict).
 2. Read bounds (all reads are confined to the caller-provided buffers, code and stack window;
-   the decryption bound also admits the output buffer).
+   the decryption bound has no output region).
 3. Stack bounds (SP remains within the entry's stack window at every step).
 -/
 
@@ -71,11 +71,14 @@ def AeadEncryptReadRegion (c : ACall) (y : Word) : Prop :=
   Region c.base Artifacts.Release.size y ∨
   Region (c.sp0 - BitVec.ofNat 32 aeadStackBytes) (aeadStackBytes + 16) y
 
-/-- Allowed readable regions for `m0c_chacha20poly1305_decrypt`: the encrypt set plus
-tag[0, 16). This over-approximates what decryption reads (it also admits `out[0, len)`; the proof
-does not show that decryption avoids it); the claim bounds the set of read addresses, not their order. -/
+/-- Allowed readable regions for `m0c_chacha20poly1305_decrypt`: input buffer (MAC and ChaCha20
+read the ciphertext), AAD, key, nonce, tag, code, and the AEAD stack window including the 16 bytes
+of caller stack arguments. There is no `out` region: decryption reads `out` bytes only through
+`in` (in place) or where `key` or `nonce` overlaps `out`. -/
 def AeadDecryptReadRegion (c : ACall) (y : Word) : Prop :=
-  AeadEncryptReadRegion c y ∨ Region c.tag 16 y
+  Region c.inp c.len.toNat y ∨ Region c.aad c.alen.toNat y ∨ Region c.key 32 y ∨
+  Region c.nonce 12 y ∨ Region c.tag 16 y ∨ Region c.base Artifacts.Release.size y ∨
+  Region (c.sp0 - BitVec.ofNat 32 aeadStackBytes) (aeadStackBytes + 16) y
 
 /-! ## ChaCha20 specifications -/
 

@@ -5,7 +5,7 @@ set_option maxHeartbeats 4000000
 
 /-! Composable Poly1305 finish call for either AEAD entry point. -/
 namespace M0Crypto.Release.Aead
-open M0Crypto.Armv6M (Word Reg State Mem read32)
+open M0Crypto.Armv6M (Word Reg State Mem read32 slot)
 open M0Crypto.Thumb
 open M0Crypto.Release.Frame
 open M0Crypto.Release.Poly1305Finish (FCtx FValid FEntry)
@@ -38,7 +38,7 @@ structure FinishPost (c : ACall) (tag : Word) (off : Nat) (msg : List M0Crypto.S
 
 /-- From the `bl finish` instruction, refine the accumulated message to the RFC tag.
 The tag destination is either the caller tag or the stack's expected-tag block. -/
-theorem finish_call_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (tag : Word) (off : Nat) (i : BitVec 25)
+theorem finish_call_win_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (tag : Word) (off : Nat) (i : BitVec 25)
     (hbl : instrAt B off = some (.bl i)) (ht : blTarget off i = BitVec.ofNat 32 finishOff)
     (ho : off % 2 = 0) (hox : off + blSize ≤ Artifacts.Release.size)
     (s : State) (hpc : s.pc = c.base + BitVec.ofNat 32 off) (h13 : s.regs 13 = c.A)
@@ -49,7 +49,10 @@ theorem finish_call_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (tag : Wo
     (msg : List M0Crypto.Spec.ChaCha20.Byte) (hp : PInv c.A ti.mem msg s.mem)
     (hrg : Pc (c.base + BitVec.ofNat 32 off))
     (hfin : ∀ pc, Poly1305Finish.FinPc c.base pc → Pc pc) :
-    ReachW c.base Pc (FinishWr c.A tag) s (FinishPost c tag off msg s) := by
+    ReachW c.base Pc (FinishWr c.A tag) s (fun t => FinishPost c tag off msg s t ∧
+      (∀ j < 5, read32 t.mem (slot (c.A - 20#32) j) =
+        [s.regs 4, s.regs 5, s.regs 6, s.regs 7, (c.base + BitVec.ofNat 32 (off + blSize)) ||| 1#32].getD j 0#32) ∧
+      t.regs 12 = 0#32) := by
   have hb2 : c.base.toNat % 2 = 0 := by have := hv.base4; omega
   apply ReachW.blR hrg hb2 finishOff i hpc ho hbl (by have := blSize_eq; omega) ht
   rw [show off + 4 = off + blSize by rw [blSize_eq]]
@@ -81,7 +84,7 @@ theorem finish_call_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (tag : Wo
   have hlr : (fc.regs0 14).getLsbD 0 = true := by show (x.regs 14).getLsbD 0 = true; rw [x14]; exact lr_odd _
   apply ((Poly1305Finish.finish_reach_w fc fv x fe hlr).monoPc hfin).mono (fun _ _ h => h)
   intro t ht'
-  refine ⟨?_, ht'.sp, ?_, ?_, ?_⟩
+  refine ⟨⟨?_, ht'.sp, ?_, ?_, ?_⟩, ?_, ht'.cleared 12 (.inr rfl)⟩
   · rw [ht'.ret]; show x.regs 14 &&& ~~~1#32 = _
     rw [x14, lr_mask _ (even_off c.base hv.base4 _ (by have := blSize_eq; omega))]
   · intro r a b
@@ -99,6 +102,26 @@ theorem finish_call_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (tag : Wo
     rw [xm] at tagval
     rw [tagval, ← hctx, Poly1305Context.poly1305_chain ic ti hi s.mem msg hp.len
       (by rw [hctx]; exact hp.pad) (by rw [hctx]; exact hp.acc), hk]
+  · intro j hj
+    refine (Poly1305Finish.result_saved fc fv x t fe ht' j hj).trans ?_
+    show [x.regs 4, x.regs 5, x.regs 6, x.regs 7, x.regs 14].getD j 0#32 = _
+    rw [xr 4 (by decide) (by decide), xr 5 (by decide) (by decide), xr 6 (by decide) (by decide),
+      xr 7 (by decide) (by decide), x14]
+
+theorem finish_call_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (tag : Word) (off : Nat) (i : BitVec 25)
+    (hbl : instrAt B off = some (.bl i)) (ht : blTarget off i = BitVec.ofNat 32 finishOff)
+    (ho : off % 2 = 0) (hox : off + blSize ≤ Artifacts.Release.size)
+    (s : State) (hpc : s.pc = c.base + BitVec.ofNat 32 off) (h13 : s.regs 13 = c.A)
+    (h0 : s.regs 0 = c.A + 8#32) (h1 : s.regs 1 = tag) (hc : CodeAt s.mem c.base B)
+    (hcodeT : Disj c.base Artifacts.Release.size tag 16) (htagS : Disj tag 16 (c.A - 20#32) 20)
+    (ic : Poly1305Init.ICtx) (ti : State) (hi : Poly1305Init.IResult ic ti) (hctx : ic.ctx = c.A + 8#32)
+    (hk : Ctx.bytesAt ic.m0 ic.key 32 = M0Crypto.Spec.Aead.polyKey c.keyB c.nonceB)
+    (msg : List M0Crypto.Spec.ChaCha20.Byte) (hp : PInv c.A ti.mem msg s.mem)
+    (hrg : Pc (c.base + BitVec.ofNat 32 off))
+    (hfin : ∀ pc, Poly1305Finish.FinPc c.base pc → Pc pc) :
+    ReachW c.base Pc (FinishWr c.A tag) s (FinishPost c tag off msg s) :=
+  (finish_call_win_w c hv tag off i hbl ht ho hox s hpc h13 h0 h1 hc hcodeT htagS ic ti hi hctx hk msg hp hrg
+    hfin).mono (fun _ _ h => h) (fun _ h => h.1)
 
 theorem finish_call (c : ACall) (hv : AValid c) (tag : Word) (off : Nat) (i : BitVec 25)
     (hbl : instrAt B off = some (.bl i)) (ht : blTarget off i = BitVec.ofNat 32 finishOff)

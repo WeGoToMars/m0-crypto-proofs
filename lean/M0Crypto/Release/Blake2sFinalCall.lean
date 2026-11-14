@@ -24,6 +24,7 @@ open M0Crypto.Release.Blake2sStreamEff
 open M0Crypto.Release.Blake2s (regs_strSp mem_strSp)
 open M0Crypto.Release.Blake2sCopy (sr_ne sr_pc)
 open M0Crypto.Release.Frame (Disj read32_congr toNat_add_ofNat)
+open M0Crypto.Release.Blake2sCompress (savedRegC savedRegC_range)
 
 theorem fcall_eff (t : State) :
     (execAll fCall t).regs 0 = t.regs 4 ∧
@@ -86,6 +87,13 @@ structure CallPost (base : Word) (t u : State) (T : Nat) : Prop where
     (M0Crypto.Spec.Blake2s.compress (arr8 (wd t.mem (t.regs 4))) (arr16 (wd t.mem (t.regs 4 + 40#32))) T true)[i]!
   mem : ∀ y, (∀ o < STREAM_LOCALS, y ≠ t.regs 13 - COMPRESS_FRAME_W + BitVec.ofNat 32 o) →
     (∀ o < 32, y ≠ t.regs 4 + BitVec.ofNat 32 o) → u.mem y = t.mem y
+  r12 : u.regs 12 = 0#32
+  wipe : ∀ i < LOCALS_WORDS, read32 u.mem (slot (t.regs 13 - COMPRESS_FRAME_W) i) = 0#32
+  saved : ∀ i < 8, read32 u.mem (slot (t.regs 13 - COMPRESS_FRAME_W) (LOCALS_WORDS + i)) = t.regs (savedRegC i)
+  savedLr : read32 u.mem (slot (t.regs 13 - COMPRESS_FRAME_W) (LOCALS_WORDS + 8)) =
+    (base + BitVec.ofNat 32 (oFBl + 4)) ||| 1#32
+  /-- The stacked `f0` argument: all ones. -/
+  pad : read32 u.mem (t.regs 13) = 0xFFFFFFFF#32
 
 theorem arr8_congr {f g : Nat → Word} (h : ∀ i < 8, f i = g i) : arr8 f = arr8 g := by
   unfold arr8
@@ -198,7 +206,7 @@ theorem call_reach {base : Word} {W : Word → Word → Prop} {Rd : Word → Pro
     omega
   have hq : ∀ u', Post sc u' → CallPost base t u' T := by
     intro u' hp
-    refine ⟨?_, ?_, ?_, ?_, ?_⟩
+    refine ⟨?_, ?_, ?_, ?_, ?_, hp.r12, fun i hi => by rw [← fp]; exact hp.wipe i hi, fun i hi => ?_, ?_, ?_⟩
     · rw [hp.pc, h14, M0Crypto.Release.lr_mask]
       · rw [show oFBl + 4 = oTstO by decide]
       · have hlt : oFBl + 4 < Artifacts.Release.size := by decide
@@ -245,6 +253,28 @@ theorem call_reach {base : Word} {W : Word → Word → Prop} {Rd : Word → Pro
       apply hy1 (COMPRESS_FRAME + k) (by omega)
       rw [heq]; apply BitVec.eq_of_toNat_eq
       simp only [BitVec.toNat_add, BitVec.toNat_sub, BitVec.toNat_ofNat]; omega
+    · rw [← fp, hp.saved i (by omega)]
+      obtain ⟨h4, h11⟩ := savedRegC_range i hi
+      rw [sr _ (fun h => by rw [h] at h11; exact absurd h11 (by decide)) (by omega),
+        ev _ (fun h => by rw [h] at h4; exact absurd h4 (by decide)) (by omega)]
+    · rw [← fp, hp.saved 8 (by omega)]
+      exact h14
+    · have hw : read32 sc.mem (t.regs 13) = 0xFFFFFFFF#32 := by
+        rw [scm, hum, M0Crypto.Armv6M.read32_write32_same]
+      rw [← hw]
+      apply read32_congr
+      intro k hk
+      apply hp.mem
+      · intro o ho h
+        rw [fp] at h
+        have := congrArg BitVec.toNat h
+        rw [toNat_add_ofNat _ _ (by omega), toNat_add_ofNat _ _ (by omega)] at this
+        omega
+      · intro o ho h
+        rw [s0] at h
+        have := congrArg BitVec.toNat h
+        rw [toNat_add_ofNat _ _ (by omega), toNat_add_ofNat _ _ (by omega)] at this
+        omega
   refine (compress_reachSR e (CallPost base t · T) hq).mono (fun _ ev hp => ⟨⟨fun y hy => hW _ _ ?_, hp.1.2⟩,
     fun hl y hy => by
       rcases hp.2 (show Blake2sCompress.cLd ev.instr = true from hl) y hy with ⟨o, ho, rfl⟩ | ⟨o, ho, rfl⟩

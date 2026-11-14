@@ -3,7 +3,7 @@
 # tools/extract_release.py from the library's m0crypto_x25519.o) and builds only the
 # asset root M0Crypto.Assets.X25519 and its imports.
 name = "m0crypto_x25519"
-version = "0.3.0"
+version = "0.3.1"
 defaultTargets = ["Asset"]
 
 # Makes every module under ../../lean local to this workspace (built here, not looked up).

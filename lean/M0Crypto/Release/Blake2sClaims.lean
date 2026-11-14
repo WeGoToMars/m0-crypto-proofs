@@ -126,7 +126,8 @@ theorem init_correct : Correct := by
   refine ⟨n, fun fuel hf => ?_⟩
   obtain ⟨t, tr, hru, P, hw⟩ := hn fuel hf
   rw [h.ret_eq] at hru
-  refine ⟨t, tr, hru, ⟨?_, ?_, ?_, ?_, ?_⟩, fun e he y hy => h.wrOk (hw e he y hy)⟩
+  refine ⟨t, tr, hru, ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, P.r1.trans rfl, P.r2.trans rfl, P.r3, ?_⟩,
+    fun e he y hy => h.wrOk (hw e he y hy)⟩
   · rw [P.pc, h.ret_eq]
   · rw [P.sp, h.regs13]
   · intro r h4 h12; rw [P.keep r h4 (by omega), h.entry.regs]
@@ -134,6 +135,11 @@ theorem init_correct : Correct := by
   · intro y hy
     rw [P.mem y (fun o ho e => hy (h.wrOk (Or.inl ⟨o, ho, e⟩)))
       (fun o ho e => hy (h.wrOk (Or.inr ⟨o, ho, e⟩))), h.entry.mem]
+  · have := P.frame
+    rw [h.regs13, h.entry.regs] at this
+    exact this
+  · rw [P.r0, h.regs0]
+  · rw [P.r12, h.entry.regs]
 
 /-- `init` constant time: two valid calls with equal public inputs (`Ctx.pub`) have equal
 event traces. -/
@@ -235,12 +241,12 @@ theorem Pre.input (h : Pre c s) : Blake2sUpdate.LL s = c.inputB := by
 stream with the input absorbed, callee-saved registers and SP restored, r0-r3 zero, and writes
 only its stack window and the context. -/
 theorem update_correct : Correct := by
-  intro c s h
+  refine ⟨Blake2sUpdate.updWin, fun c s h => ?_⟩
   obtain ⟨n, hn⟩ := Blake2sHash.update_correct_of_entry h.toEntry h.retNe
   refine ⟨n, fun fuel hf => ?_⟩
   obtain ⟨t, tr, hru, P, hw⟩ := hn fuel hf
   rw [h.ret_eq] at hru
-  refine ⟨t, tr, hru, ⟨?_, ?_, ?_, ?_, ?_, P.scratch⟩, fun e he y hy => h.wrOk (hw e he y hy)⟩
+  refine ⟨t, tr, hru, ⟨?_, ?_, ?_, ?_, ?_, P.scratch⟩, fun e he y hy => h.wrOk (hw e he y hy), ?_⟩
   · rw [P.pc, h.ret_eq]
   · rw [P.sp, h.regs13]
   · intro r h4 h12
@@ -248,6 +254,10 @@ theorem update_correct : Correct := by
   · rw [← h.regs0, ← h.input]; exact ctx_holds P.ctx
   · intro y hy
     rw [P.mem y (fun hw => hy (h.wrOk hw)), h.entry.mem]
+  · have hfb : Blake2sUpdate.fb s = c.fp := by unfold Blake2sUpdate.fb; rw [h.regs13]; rfl
+    have := P.win
+    rw [hfb, h.entry.mem, h.entry.regs] at this
+    exact this
 
 /-- `update` constant time: two valid calls with equal public inputs (`Ctx.pub`) have equal
 event traces. -/
@@ -353,18 +363,21 @@ theorem Pre.wrOk (h : Pre c s) {y : Word} (hy : Blake2sFinal.WrF s y) : WrOk c y
 stream in `out`, callee-saved registers and SP restored, r0-r3 zero, and writes only its stack
 window, the context and `out`. -/
 theorem final_correct : Correct := by
-  intro c s h
+  refine ⟨Blake2sFinal.finWin, fun c s h => ?_⟩
   obtain ⟨n, hn⟩ := Blake2sHash.final_correct_of_entry h.toEntry h.retNe
   refine ⟨n, fun fuel hf => ?_⟩
   obtain ⟨t, tr, hru, P, hw⟩ := hn fuel hf
   rw [h.ret_eq] at hru
-  refine ⟨t, tr, hru, ⟨?_, ?_, ?_, ?_, ?_, P.scratch⟩, fun e he y hy => h.wrOk (hw e he y hy)⟩
+  refine ⟨t, tr, hru, ⟨?_, ?_, ?_, ?_, ?_, P.scratch, P.r12⟩, fun e he y hy => h.wrOk (hw e he y hy), ?_⟩
   · rw [P.pc, h.ret_eq]
   · rw [P.sp, h.regs13]
   · intro r h4 h12; rw [P.keep r h4 (by omega), h.entry.regs]
   · rw [← h.regs1]; exact P.out
   · intro y hy
     rw [P.mem y (fun hw => hy (h.wrOk hw)), h.entry.mem]
+  · have := P.win
+    rw [h.regs13, h.entry.regs] at this
+    exact this
 
 /-- `final` constant time: two valid calls with equal public inputs (`Ctx.pub`) have equal
 event traces. -/

@@ -97,6 +97,9 @@ structure XPost (c : ACall) (e : Nat) (u : State) : Prop where
   nonce : read32 u.mem c.A = c.nonce
   high : Hi c u.mem
   out : ∀ y, ¬ SWr c.A y → u.mem y = c.m0 y
+  /-- The callee frame below the saved registers is zero. -/
+  low : ∀ o < 140, u.mem (c.A - 176#32 + BitVec.ofNat 32 o) = 0#8
+  ctr : read32 u.mem (c.A + 4#32) = 0#32
 
 theorem key_reach_gen {Pn : Word → Prop} {P : State → Event → Prop} (c : ACall) (hv : AValid c) (e : Nat)
     (i : BitVec 25)
@@ -187,7 +190,7 @@ theorem key_reach_gen {Pn : Word → Prop} {P : State → Event → Prop} (c : A
     exact hj _ hlt e1.symm
   have tw : ∀ o, 104 ≤ o → o < 160 → t.mem (c.A + BitVec.ofNat 32 o) = p.mem (c.A + BitVec.ofNat 32 o) :=
     fun o h1 h2 => tm _ (hiS o h2) (fun j hj => off_ne _ (by omega) (by omega) (by omega))
-  refine ⟨?_, hr.sp, ?_, ?_, ?_, hp.high.congr tw, ?_⟩
+  refine ⟨?_, hr.sp, ?_, ?_, ?_, hp.high.congr tw, ?_, ?_, ?_⟩
   · rw [tpc]; show u.regs 14 &&& ~~~1#32 = _
     rw [u14, lr_mask _ (even_off c.base hv.base4 (e + proXorOff + 4) (by have := proXorOff_even; omega)), hret]
   · intro r a b
@@ -218,6 +221,17 @@ theorem key_reach_gen {Pn : Word → Prop} {P : State → Event → Prop} (c : A
   · intro y hy
     rw [tm y (Region.not fun o ho e => hy (e ▸ swr_lo c.A o ho)) (fun j hj e => hy (e ▸ swr_A c.A _ (by omega))),
       hp.out y (swr_of_hi hy)]
+  · intro o ho
+    have hfp : xc.fp = c.A - 176#32 := by
+      show c.A - BitVec.ofNat 32 ChaCha20Layout.chStackBytes = _; rw [sSB]
+    have := hr.frame_byte o (by rw [ChaCha20Layout.chFrameWords_eq]; omega)
+    rw [hfp, if_pos ⟨hok, by show (64#32 : Word) ≠ 0#32; decide⟩] at this
+    exact this
+  · rw [← hp.ctr]
+    apply read32_congr
+    intro k hk
+    rw [ofNat_add_assoc]
+    exact tm _ (hiS (4 + k) (by omega)) (fun j hj => off_ne _ (by omega) (by omega) (by omega))
 
 theorem key_reach_w {Pc : Word → Prop} (c : ACall) (hv : AValid c) (e : Nat) (i : BitVec 25)
     (hbl : instrAt B (e + proXorOff) = some (.bl i)) (ht : blTarget (e + proXorOff) i = BitVec.ofNat 32 xorOff)

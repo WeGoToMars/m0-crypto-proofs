@@ -68,7 +68,8 @@ def regList (l : BitVec 8) (extra : Option String) : String :=
 def condName (c : Nat) : String :=
   match c with
   | 0 => "eq" | 1 => "ne" | 2 => "hs" | 3 => "lo" | 4 => "mi" | 5 => "pl" | 6 => "vs"
-  | 7 => "vc" | 8 => "hi" | 9 => "ls" | 10 => "ge" | 11 => "lt" | 12 => "gt" | _ => "le"
+  | 7 => "vc" | 8 => "hi" | 9 => "ls" | 10 => "ge" | 11 => "lt" | 12 => "gt" | 13 => "le"
+  | 14 => "al" | _ => "<und>"
 
 def memName : MemOp → String
   | .str => "str" | .strh => "strh" | .strb => "strb"

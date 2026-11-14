@@ -110,6 +110,9 @@ structure UpdatePost (s : State) (st0 : SState) (w : State) : Prop where
   ctx : Ctx w.mem (s.regs 0) (M0Crypto.Spec.Blake2s.absorb st0 (LL s))
   mem : ∀ y, ¬ WrU s y → w.mem y = s.mem y
   scratch : ∀ r : Reg, r.val < 4 → w.regs r = 0#32
+  /-- The stack window and `r12`: `updWin` of the entry registers, pending count and window. -/
+  win : (bytesAt w.mem (fb s) STREAM_FRAME, w.regs 12) =
+    updWin s.regs st0.pending.length (bytesAt s.mem (fb s) STREAM_FRAME)
 
 theorem absorb_done {s : State} {st0 st : SState} {t : State} (hI : Inv s st0 t (nn s) st) :
     M0Crypto.Spec.Blake2s.absorb st0 (LL s) = st := by
@@ -168,7 +171,10 @@ theorem out_reach {base : Word} {s : State} {st0 : SState} (e : UpdateEntry base
     simp only [uPop, Instr.accesses, wordAccesses, List.mem_map, List.mem_range] at ha
     obtain ⟨i, _, rfl⟩ := ha
     simp at hk
-  · refine ReachS.done ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · obtain ⟨g, hwg, h12, hf⟩ := hI.gh
+    rw [fut_done (a := uargs s) (k := nn s) g (Nat.le_refl _)] at hf
+    have hg : Fut (uargsR s.regs) 0 st0.pending.length UG.init = g := hf.symm
+    refine ReachS.done ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
     · rw [wpc, e16, hs5]
     · rw [w13, hu13]; bv_omega
     · rw [w4, hu13]; exact hs1
@@ -188,5 +194,28 @@ theorem out_reach {base : Word} {s : State} {st0 : SState} (e : UpdateEntry base
         exact hy (Or.inr ⟨104 + k, by omega, he⟩)
     · intro r h4
       rw [wo r (Or.inl h4) (by omega) (by omega)]; exact uz r h4
+    · simp only [updWin, hg]
+      rw [Prod.mk.injEq]
+      refine ⟨?_, by
+        rw [wo 12 (Or.inr (by decide)) (by decide) (by decide), uo 12 (by decide) (by decide) (by decide), h12]⟩
+      apply bytes_of_win
+      · apply win_congr hwg
+        intro o ho
+        rw [wm, um, write32_other' _ _ _ _ (fun k hk he => ?_)]
+        rw [hI.r4, show (104#32 : Word) = BitVec.ofNat 32 104 from rfl, ofNat_add_assoc] at he
+        exact fb_ne_ctx e (by omega) (by omega) he
+      · intro i hi
+        rw [wm]
+        rcases (show i = 0 ∨ i = 1 ∨ i = 2 ∨ i = 3 ∨ i = 4 by omega) with rfl | rfl | rfl | rfl | rfl
+        · rw [show fb s + BitVec.ofNat 32 (STREAM_LOCALS + 4 * 0) = s.regs 13 - 20#32 by unfold fb; bv_omega]
+          exact hs1
+        · rw [show fb s + BitVec.ofNat 32 (STREAM_LOCALS + 4 * 1) = s.regs 13 - 16#32 by unfold fb; bv_omega]
+          exact hs2
+        · rw [show fb s + BitVec.ofNat 32 (STREAM_LOCALS + 4 * 2) = s.regs 13 - 12#32 by unfold fb; bv_omega]
+          exact hs3
+        · rw [show fb s + BitVec.ofNat 32 (STREAM_LOCALS + 4 * 3) = s.regs 13 - 8#32 by unfold fb; bv_omega]
+          exact hs4
+        · rw [show fb s + BitVec.ofNat 32 (STREAM_LOCALS + 4 * 4) = s.regs 13 - 4#32 by unfold fb; bv_omega]
+          exact hs5
 
 end M0Crypto.Release.Blake2sUpdate

@@ -116,7 +116,7 @@ theorem bytesAt_slice (m : Mem) (p : Word) (k len n : Nat) (h : k + len ≤ n) :
 /-- The direct loop ends in the buffer path, with more input consumed. -/
 def DirPost (base : Word) (s : State) (st0 : SState) (k0 : Nat) (v : State) : Prop :=
   v.pc = base + BitVec.ofNat 32 oBuf ∧ ∃ k' st', k0 < k' ∧ k' < nn s ∧ Inv s st0 v k' st' ∧
-    st'.pending.length < 64
+    st'.pending.length < 64 ∧ NoDir s k' st'.pending.length
 
 theorem direct_tl_nosite : ∀ off ∈ allSites,
     off < oDirect + seqSize pre2 + seqSize nfPre + seqSize nfSt ∨
@@ -227,7 +227,7 @@ theorem direct_loop {base : Word} {s : State} {st0 : SState} (e : UpdateEntry ba
   have hw6n : (w.regs 6).toNat = nn s - (k + 64) := by
     rw [hw6, BitVec.toNat_ofNat]; apply Nat.mod_eq_of_lt; omega
   have hIw : Inv s st0 w (k + 64) ⟨compress h0 (blockWords (((LL s).drop k).take 64)) (c0 + 64) false, c0 + 64, []⟩ := by
-    refine ⟨?_, ?_, hw6, ?_, ?_, ?_, by omega, ?_, ?_, ?_, ?_⟩
+    refine ⟨?_, ?_, hw6, ?_, ?_, ?_, by omega, ?_, ?_, ?_, ?_, ?_⟩
     · rw [dO 4 (by decide) (by decide) (by decide), hkeep 4 (by decide) (by decide), hI.r4]
     · rw [d5, hkeep 5 (by decide) (by decide), hI.r5, BitVec.add_assoc, ← BitVec.ofNat_add]
     · rw [dO 7 (by decide) (by decide) (by decide), hkeep 7 (by decide) (by decide), hI.r7]
@@ -244,6 +244,18 @@ theorem direct_loop {base : Word} {s : State} {st0 : SState} (e : UpdateEntry ba
         simp only [List.length_drop, LL, bytesAt_length]; omega
       rw [M0Crypto.Spec.Blake2s.absorb_direct h0 c0 _ hlen]
       simp only [List.drop_drop]
+    · obtain ⟨g, -, -, hf⟩ := hI.gh
+      have hwin := win_nf (base := base) (s := s) r13
+        (fun r h8 h11 => by rw [u_o r (by omega) (by omega)]; exact hI.hi r h8 h11) hv
+      rw [hE] at hwin
+      refine ⟨⟨true, some (rec5 (uargs s) k (nn s - k) 0 oDirectBl)⟩, ?_, ?_, ?_⟩
+      · have hl : [t2.regs 4, t2.regs 5, t2.regs 6, t2.regs 7, retAt base oDirectBl] =
+            rec5 (uargs s) k (nn s - k) 0 oDirectBl := by
+          simp only [rec5, e.uargs_eq, r4, u_o 5 (by decide) (by decide), u_o 6 (by decide) (by decide),
+            u_o 7 (by decide) (by decide), hI.r5, hI.r6, hI.r7, List.length_nil]
+        rw [dm, ← hl]; exact hwin
+      · rw [dO 12 (by decide) (by decide) (by decide), hv.r12]; rfl
+      · exact (fut_direct (a := uargs s) g hgt (by show ((s.regs 1).toNat + k) % 4 = 0; rw [← hr5n]; exact hal)).symm.trans hf
   have hp5 : (w.regs 5).toNat = (s.regs 1).toNat + (k + 64) := by
     rw [hIw.r5, toNat_add_ofNat _ _ (by omega)]
   have hpcw : w.pc = base + BitVec.ofNat 32 oDirectBhi := by
@@ -272,8 +284,8 @@ theorem direct_loop {base : Word} {s : State} {st0 : SState} (e : UpdateEntry ba
     have := ih (nn s - (k + 64)) (by omega) _ (k + 64) _ rfl (by rw [sr_pc]) (hIw.setPc _) rfl hgt'
       (by rw [sr_ne _ _ _ _ (by decide), hp5]; omega)
     refine ReachS.monoQ this ?_
-    rintro v' ⟨hpc', k', st', hk1, hk2, hI', hl⟩
-    exact ⟨hpc', k', st', by omega, hk2, hI', hl⟩
+    rintro v' ⟨hpc', k', st', hk1, hk2, hI', hl, hnd⟩
+    exact ⟨hpc', k', st', by omega, hk2, hI', hl, hnd⟩
   · intro hc
     rw [cp8, dc, dz] at hc
     have hle : nn s - (k + 64) ≤ 64 := by
@@ -296,6 +308,6 @@ theorem direct_loop {base : Word} {s : State} {st0 : SState} (e : UpdateEntry ba
         simp at h5
         omega
     refine ReachS.done ⟨by rw [sr_pc, show oDirectBhi + 2 = oBuf by decide], k + 64, _, by omega, by omega,
-      hIw.setPc _, by simp⟩
+      hIw.setPc _, by simp, fun ⟨_, h2, _⟩ => by omega⟩
 
 end M0Crypto.Release.Blake2sUpdate

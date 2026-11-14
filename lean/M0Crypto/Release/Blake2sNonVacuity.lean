@@ -16,6 +16,9 @@ correctness theorem (`example`s below):
   block, compresses it and buffers the rest.
 * `final_pre_nonvacuous`: the digest of the buffered stream to an odd address.
 
+The `*_constant_time_nonvacuous` witnesses pair each call with a second valid call with equal
+public inputs and different secret memory (section "Constant time" below).
+
 The composed claims have `hash_correct_nonvacuous` (`HashCorrectHyp` at a concrete call) and
 `hash_constant_time_nonvacuous` (`HashConstantTimeHyp` for two executions that differ in their message bytes).
 The internal compression has its own entry witness (`compress_entry_nonvacuous`), as does
@@ -35,17 +38,24 @@ def ctxBase : Word := 0x20000000#32
 /-- The stream after absorbing three bytes into the empty stream. -/
 def bufStream : Spec.Blake2s.State := Spec.Blake2s.absorb Spec.Blake2s.State.init [1, 2, 3]
 
-/-- Its 112 context bytes: `h0`, `count = 0`, `buf` = 1 2 3 then zeros, `used = 3`, padding. -/
-def bufCtxBytes : List (BitVec 8) :=
-  (Spec.Blake2s.h0.toList.flatMap Spec.Blake2s.bytesOfWord) ++ List.replicate 8 0 ++ [1, 2, 3] ++
+/-- The 112 context bytes of the empty stream with three bytes `b` absorbed: `h0`,
+`count = 0`, `buf` = `b` then zeros, `used = 3`, padding. -/
+def ctxBytes3 (b : List (BitVec 8)) : List (BitVec 8) :=
+  (Spec.Blake2s.h0.toList.flatMap Spec.Blake2s.bytesOfWord) ++ List.replicate 8 0 ++ b ++
     List.replicate 61 0 ++ le32 3 ++ List.replicate 4 0
+
+/-- Its 112 context bytes: `h0`, `count = 0`, `buf` = 1 2 3 then zeros, `used = 3`, padding. -/
+def bufCtxBytes : List (BitVec 8) := ctxBytes3 [1, 2, 3]
 
 def bufMem : Mem := memOf [(ctxBase.toNat, bufCtxBytes)]
 
-theorem buf_holds : ContextHolds bufMem ctxBase bufStream := by
+local macro "holds_witness" : tactic => `(tactic| (
   refine ⟨⟨by decide +kernel, ?_, by decide +kernel, by decide +kernel, by decide +kernel,
     by decide +kernel, by decide +kernel⟩, by decide +kernel⟩
-  decide +kernel
+  decide +kernel))
+
+theorem buf_holds : ContextHolds bufMem ctxBase bufStream := by
+  holds_witness
 
 /-! ## Per-function witnesses -/
 
@@ -64,16 +74,18 @@ def fCtx : Blake2s.Final.Ctx :=
   ⟨0, BitVec.ofNat 32 sp0, ctxBase, 0x20000203#32, bufStream, bufMem,
    regsOf Artifacts.Release.blake2s_final 0x20000000 0x20000203 0 0⟩
 
-theorem init_pre_nonvacuous : Blake2s.Init.Pre iCtx (stOf bufMem iCtx.regs0) := by
+local macro "init_witness" : tactic => `(tactic| (
   refine ⟨⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, codeAt _⟩, ⟨rfl, rfl, ?_, ?_, ?_⟩, by decide,
     Region.not ret_out⟩
   all_goals first
     | decide +kernel
     | (simp only [Disj, Blake2s.Init.Ctx.fp, iCtx, Blake2s.initStackBytes, Blake2s.contextBytes,
         sp0, Artifacts.Release.size]; decide +kernel)
+    | (simp only [Disj]; decide +kernel)))
 
-theorem update_pre_nonvacuous : Blake2s.Update.Pre uCtx (stOf bufMem uCtx.regs0) := by
-  refine ⟨⟨?_, ?_, ?_, ?_, buf_holds, ?_, ?_, ?_, ?_, ?_, ?_, codeAt _⟩,
+/-- `h` proves that the call's context holds its stream. -/
+local macro "update_witness " h:term : tactic => `(tactic| (
+  refine ⟨⟨?_, ?_, ?_, ?_, $h, ?_, ?_, ?_, ?_, ?_, ?_, codeAt _⟩,
     ⟨rfl, rfl, ?_, ?_, ?_, ?_, ?_⟩, by decide, Region.not ret_out⟩
   all_goals first
     | decide +kernel
@@ -81,9 +93,11 @@ theorem update_pre_nonvacuous : Blake2s.Update.Pre uCtx (stOf bufMem uCtx.regs0)
         Blake2s.streamSavedBytes, Blake2s.streamPadBytes, Blake2s.compressFrameBytes,
         Blake2s.compressLocalsBytes, Blake2s.compressSavedBytes, Blake2s.contextBytes, sp0,
         Artifacts.Release.size]; decide +kernel)
+    | (simp only [Disj]; decide +kernel)))
 
-theorem final_pre_nonvacuous : Blake2s.Final.Pre fCtx (stOf bufMem fCtx.regs0) := by
-  refine ⟨⟨?_, ?_, ?_, ?_, buf_holds, ?_, ?_, ?_, ?_, ?_, ?_, ?_, codeAt _⟩,
+/-- `h` proves that the call's context holds its stream. -/
+local macro "final_witness " h:term : tactic => `(tactic| (
+  refine ⟨⟨?_, ?_, ?_, ?_, $h, ?_, ?_, ?_, ?_, ?_, ?_, ?_, codeAt _⟩,
     ⟨rfl, rfl, ?_, ?_, ?_, ?_⟩, by decide, Region.not ret_out⟩
   all_goals first
     | decide +kernel
@@ -91,10 +105,80 @@ theorem final_pre_nonvacuous : Blake2s.Final.Pre fCtx (stOf bufMem fCtx.regs0) :
         Blake2s.streamSavedBytes, Blake2s.streamPadBytes, Blake2s.compressFrameBytes,
         Blake2s.compressLocalsBytes, Blake2s.compressSavedBytes, Blake2s.contextBytes,
         Blake2s.digestBytes, sp0, Artifacts.Release.size]; decide +kernel)
+    | (simp only [Disj]; decide +kernel)))
+
+theorem init_pre_nonvacuous : Blake2s.Init.Pre iCtx (stOf bufMem iCtx.regs0) := by
+  init_witness
+
+theorem update_pre_nonvacuous : Blake2s.Update.Pre uCtx (stOf bufMem uCtx.regs0) := by
+  update_witness buf_holds
+
+theorem final_pre_nonvacuous : Blake2s.Final.Pre fCtx (stOf bufMem fCtx.regs0) := by
+  final_witness buf_holds
 
 example := Blake2s.Init.init_correct _ _ init_pre_nonvacuous
-example := Blake2s.Update.update_correct _ _ update_pre_nonvacuous
-example := Blake2s.Final.final_correct _ _ final_pre_nonvacuous
+example := Blake2s.Update.update_correct.choose_spec _ _ update_pre_nonvacuous
+example := Blake2s.Final.final_correct.choose_spec _ _ final_pre_nonvacuous
+
+/-! ## Constant time: two valid calls with equal public inputs and different secrets
+
+Each per-function constant-time theorem assumes two valid calls with equal `pub`. Each witness
+below pairs the call above with a second one that differs only in secret memory:
+
+* `init` has no secret argument and reads only the code and its stack: the second call runs
+  on a context of zero bytes instead of the buffered stream.
+* `update`: the second call's 100 input bytes are 0, 1, ..., 99 instead of zeros.
+* `final`: the second context holds the stream with the bytes 4 5 6 absorbed instead of 1 2 3
+  (the same number of pending bytes, which `pub` lists). -/
+
+def zeroCtxMem : Mem := memOf [(ctxBase.toNat, List.replicate 112 0)]
+
+/-- `iCtx` on a context of 112 zero bytes. -/
+def iCtx2 : Blake2s.Init.Ctx :=
+  ⟨0, BitVec.ofNat 32 sp0, ctxBase, zeroCtxMem,
+   regsOf Artifacts.Release.blake2s_init 0x20000000 0 0 0⟩
+
+theorem init_constant_time_nonvacuous :
+    Blake2s.Init.Pre iCtx (stOf bufMem iCtx.regs0) ∧
+      Blake2s.Init.Pre iCtx2 (stOf zeroCtxMem iCtx2.regs0) ∧ iCtx.pub = iCtx2.pub ∧
+      Blake2s.bytesAt iCtx.m0 iCtx.context Blake2s.contextBytes ≠
+        Blake2s.bytesAt iCtx2.m0 iCtx2.context Blake2s.contextBytes :=
+  ⟨init_pre_nonvacuous, by init_witness, by simp only [Blake2s.Init.Ctx.pub, iCtx, iCtx2],
+    by decide +kernel⟩
+
+/-- `bufMem` with the input bytes 0, 1, ..., 99 at the input address of `uCtx`. -/
+def uMem2 : Mem :=
+  memOf [(ctxBase.toNat, bufCtxBytes), (0x20000201, (List.range 100).map (BitVec.ofNat 8 ·))]
+
+def uCtx2 : Blake2s.Update.Ctx := { uCtx with m0 := uMem2 }
+
+theorem update_constant_time_nonvacuous :
+    Blake2s.Update.Pre uCtx (stOf bufMem uCtx.regs0) ∧
+      Blake2s.Update.Pre uCtx2 (stOf uMem2 uCtx2.regs0) ∧ uCtx.pub = uCtx2.pub ∧
+      uCtx.inputB ≠ uCtx2.inputB :=
+  ⟨update_pre_nonvacuous, by update_witness Blake2s.holds_congr buf_holds (by decide +kernel),
+    by simp only [Blake2s.Update.Ctx.pub, uCtx2], by decide +kernel⟩
+
+/-- The stream after absorbing 4 5 6 into the empty stream. -/
+def bufStream2 : Spec.Blake2s.State := Spec.Blake2s.absorb Spec.Blake2s.State.init [4, 5, 6]
+
+def bufMem2 : Mem := memOf [(ctxBase.toNat, ctxBytes3 [4, 5, 6])]
+
+theorem buf_holds2 : ContextHolds bufMem2 ctxBase bufStream2 := by
+  holds_witness
+
+def fCtx2 : Blake2s.Final.Ctx := { fCtx with stream := bufStream2, m0 := bufMem2 }
+
+theorem pending_length2 : bufStream.pending.length = bufStream2.pending.length := by
+  decide +kernel
+
+theorem final_constant_time_nonvacuous :
+    Blake2s.Final.Pre fCtx (stOf bufMem fCtx.regs0) ∧
+      Blake2s.Final.Pre fCtx2 (stOf bufMem2 fCtx2.regs0) ∧ fCtx.pub = fCtx2.pub ∧
+      fCtx.stream ≠ fCtx2.stream :=
+  ⟨final_pre_nonvacuous, by final_witness buf_holds2,
+    by simp only [Blake2s.Final.Ctx.pub, fCtx2, fCtx, pending_length2],
+    fun h => absurd (congrArg Spec.Blake2s.State.pending h) (by decide +kernel)⟩
 
 /-- The internal compression: `h` and `block` word aligned, `f0 = 0` at the stack top. -/
 theorem compress_entry_nonvacuous :
@@ -166,18 +250,6 @@ theorem withMsg_bytes (m : Mem) (msg : List (BitVec 8)) (hl : msg.length = 3) :
     simp only [e, h2, ↓reduceIte, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem h2]
     rfl
 
-/-- Code bytes carry over to any memory that agrees on the code range. -/
-theorem codeAt_of_agree {m m' : Mem} (h : Thumb.CodeAt m 0 B)
-    (hm : ∀ a : Word, a.toNat < Artifacts.Release.size → m' a = m a) : Thumb.CodeAt m' 0 B := by
-  intro i hi
-  have hi' : i < Artifacts.Release.size := by rw [B_len] at hi; exact hi
-  have e : (0 + BitVec.ofNat 32 i : Word).toNat = i := by
-    have h0 : (0 : Word).toNat = 0 := rfl
-    have : i < 2 ^ 32 := by unfold Artifacts.Release.size at hi'; omega
-    simp only [BitVec.toNat_add, BitVec.toNat_ofNat, h0]; omega
-  rw [hm _ (by rw [e]; exact hi')]
-  exact h i hi
-
 /-- A code address is in no region that starts at or above 0x20000000 and stays below 2^32. -/
 theorem code_not_region {a r : Word} {n : Nat} (ha : a.toNat < Artifacts.Release.size)
     (hr : 0x20000000 ≤ r.toNat) (hn : r.toNat + n ≤ 2 ^ 32) : ¬ Region r n a := by
@@ -231,7 +303,8 @@ theorem update_then_final {t0 : State} (msg : List (BitVec 8)) (hl : msg.length 
     ⟨rfl, fun st hst htot => uState_pre hl hcode st hst htot⟩
   have hP := hentry.2 _ (Blake2s.holds_congr hctx hagree) (by
     simp [uState, stOf, regsOf, hl, Spec.Blake2s.State.init])
-  obtain ⟨n, h⟩ := Blake2s.Update.update_correct _ _ hP
+  obtain ⟨_, hU⟩ := Blake2s.Update.update_correct
+  obtain ⟨n, h⟩ := hU _ _ hP
   obtain ⟨w, tr, hrun, R, -⟩ := h n (Nat.le_refl n)
   have hcodew : Thumb.CodeAt w.mem 0 B := by
     have hu : Thumb.CodeAt (uState t0.mem msg).mem 0 B := codeAt_of_agree hcode fun a ha =>

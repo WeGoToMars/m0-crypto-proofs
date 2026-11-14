@@ -87,6 +87,10 @@ structure CopyPost (s t : State) : Prop where
   copy : ∀ i < (s.regs 2).toNat, t.mem (s.regs 0 + BitVec.ofNat 32 i) = s.mem (s.regs 1 + BitVec.ofNat 32 i)
   mem : ∀ y, (∀ o < 20, y ≠ fr s + BitVec.ofNat 32 o) → (∀ o < (s.regs 2).toNat, y ≠ s.regs 0 + BitVec.ofNat 32 o) →
     t.mem y = s.mem y
+  r12 : t.regs 12 = s.regs 12
+  /-- The frame keeps the saved `r4`-`r7` and `lr`. -/
+  saved : ∀ i (hi : i < 5), read32 t.mem (fr s + BitVec.ofNat 32 (4 * i)) =
+    [s.regs 4, s.regs 5, s.regs 6, s.regs 7, s.regs 14][i]'(by simpa using hi)
 
 theorem ne_frame {a f : Word} {n : Nat} (hD : Disj a n f 20) {i : Nat} (hi : i < n) {j k : Nat}
     (hj : j < 5) (hk : k < 4) : a + BitVec.ofNat 32 i ≠ f + BitVec.ofNat 32 (4 * j) + BitVec.ofNat 32 k := by
@@ -170,7 +174,7 @@ theorem copy_reachR {base : Word} {s : State} (e : CopyEntry base s) :
     simp only [popL, Instr.accesses, wordAccesses, List.mem_map, List.mem_range] at ha
     obtain ⟨i, _, rfl⟩ := ha
     simp at hk
-  · refine ReachNR.done ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · refine ReachNR.done ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, fun i hi => by rw [sm]; exact key i hi⟩
     · rw [spc, U13, k4]
     · rw [s13', U13]; unfold fr; bv_omega
     · rw [s4, U13, k0]
@@ -189,6 +193,8 @@ theorem copy_reachR {base : Word} {s : State} (e : CopyEntry base s) :
       rw [sm, hciU.cp.2 y hy2, pm]
       refine storeWords_other _ _ _ _ (fun j k hj hk eq => ?_)
       exact hy1 (4 * j + k) (by simp at hj; omega) (by rw [eq, ofNat_add_assoc]; rfl)
+    · rw [so 12 (Or.inr ⟨by decide, by decide⟩), hciU.hi 12 (by decide) (by decide),
+        po 12 (by decide) (by decide) (by decide)]
 
 theorem copy_reach {base : Word} {s : State} (e : CopyEntry base s) :
     ReachN base (WrC s) s (CopyPost s) :=

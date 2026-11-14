@@ -56,10 +56,10 @@ theorem _root_.M0Crypto.Release.Aead.decrypt_constant_time : TraceSpec.AeadDecry
   replace hret₂ := Region.ne hret₂
   have hlr := pub_lr hpub
   have hbase := pub_base hpub
-  obtain ⟨n₁, hn₁⟩ := decrypt_correct c₁ s₁ ⟨hv₁, hb₁, he₁, hlr₁, Region.not hret₁⟩
+  obtain ⟨n₁, hn₁⟩ := decrypt_returns c₁ s₁ ⟨hv₁, hb₁, he₁, hlr₁, Region.not hret₁⟩
   obtain ⟨t₁, tr₁, ht₁, -, -⟩ := hn₁ n₁ (Nat.le_refl n₁)
   obtain ⟨states₁, hrun₁, -, -⟩ := runStates_of_runUntil ht₁
-  obtain ⟨n₂, hn₂⟩ := decrypt_correct c₂ s₂ ⟨hv₂, hb₂, he₂, hlr₂, Region.not hret₂⟩
+  obtain ⟨n₂, hn₂⟩ := decrypt_returns c₂ s₂ ⟨hv₂, hb₂, he₂, hlr₂, Region.not hret₂⟩
   obtain ⟨t₂, tr₂, ht₂, -, -⟩ := hn₂ n₂ (Nat.le_refl n₂)
   obtain ⟨states₂, hrun₂, -, -⟩ := runStates_of_runUntil ht₂
   obtain ⟨hdisj, hnowrap⟩ := decrypt_frame c₁ hv₁

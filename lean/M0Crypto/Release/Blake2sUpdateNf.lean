@@ -23,7 +23,7 @@ open M0Crypto.Release.Blake2sStreamCode
 open M0Crypto.Release.Blake2sStreamEff
 open M0Crypto.Release.Blake2s (regs_addReg regs_movImm mem_addReg mem_movImm regs_strSp mem_strSp wd arr8 arr16)
 open M0Crypto.Release.Blake2sFinal (add64 disj_sub code_w32 arr8_congr arr16_congr rd_w32_far)
-open M0Crypto.Release.Blake2sCompress (Entry Post WrOf fpOf Mw compress_reach compress_reachS compress_reachSR)
+open M0Crypto.Release.Blake2sCompress (Entry Post WrOf fpOf Mw compress_reach compress_reachS compress_reachSR savedRegC savedRegC_range)
 open M0Crypto.Release.Blake2sInit (disj_ne w32_other)
 open M0Crypto.Release.Blake2sCode (SiteAt)
 open M0Crypto.Release.Blake2sLd (ldAll)
@@ -58,6 +58,12 @@ structure BlPost (base : Word) (off : Nat) (u v : State) : Prop where
       ((u.regs 2).toNat + 2 ^ 32 * (u.regs 3).toNat) (decide (read32 u.mem (u.regs 13) ≠ 0#32)))[i]!
   mem : ∀ y, (∀ o < COMPRESS_FRAME, y ≠ u.regs 13 - COMPRESS_FRAME_W + BitVec.ofNat 32 o) →
     (∀ o < 32, y ≠ u.regs 0 + BitVec.ofNat 32 o) → v.mem y = u.mem y
+  r12 : v.regs 12 = 0#32
+  wipe : ∀ i < LOCALS_WORDS, read32 v.mem (slot (u.regs 13 - COMPRESS_FRAME_W) i) = 0#32
+  saved : ∀ i < 8, read32 v.mem (slot (u.regs 13 - COMPRESS_FRAME_W) (LOCALS_WORDS + i)) =
+    u.regs (savedRegC i)
+  savedLr : read32 v.mem (slot (u.regs 13 - COMPRESS_FRAME_W) (LOCALS_WORDS + 8)) =
+    (base + BitVec.ofNat 32 (off + 4)) ||| 1#32
 
 /-- The writes of a call to compress, seen from the state `u` before the `bl`: the frame and the
 chain window, and only the chain window at the compression's store sites. -/
@@ -101,7 +107,7 @@ theorem bl_compressS {base : Word} {W : Word → Word → Prop} {R : Word → Pr
       by rw [s1, fp]; exact blkF, by rw [scm, s13]; exact hf0⟩
   have hq : ∀ v, Post sc v → BlPost base off u v := by
     intro v hp
-    refine ⟨?_, ?_, ?_, ?_, ?_⟩
+    refine ⟨?_, ?_, ?_, ?_, ?_, hp.r12, fun i hi => by rw [← fp]; exact hp.wipe i hi, fun i hi => ?_, ?_⟩
     · have hbs := codeH.1
       rw [hp.pc, h14', M0Crypto.Release.lr_mask]
       rw [toNat_add_ofNat _ _ (by omega)]
@@ -132,6 +138,11 @@ theorem bl_compressS {base : Word} {W : Word → Word → Prop} {R : Word → Pr
       have := hp.mem y (by intro o ho; rw [fp]; exact hy1 o (by omega))
         (by intro o ho; rw [s0]; exact hy2 o ho)
       rw [this, scm]
+    · rw [← fp, hp.saved i (by omega)]
+      obtain ⟨h4, h11⟩ := savedRegC_range i hi
+      exact sr _ (fun h => by rw [h] at h11; exact absurd h11 (by decide)) (by omega)
+    · rw [← fp, hp.saved 8 (by omega)]
+      exact h14'
   refine (compress_reachSR e (BlPost base off u) hq).mono
     (fun _ ev hp => ⟨⟨fun y hy => hW _ _ ?_, hp.1.2⟩, fun hld y hy => hRc y ?_⟩) (fun _ h => h)
   · obtain ⟨hw, hs⟩ := hp.1.1 y hy
@@ -200,6 +211,14 @@ structure NfPost (base : Word) (off : Nat) (t v : State) : Prop where
     (read32 t.mem (t.regs 4 + 32#32)).toNat + 2 ^ 32 * (read32 t.mem (t.regs 4 + 36#32)).toNat + 64
   mem : ∀ y, (∀ o < STREAM_LOCALS, y ≠ t.regs 13 - COMPRESS_FRAME_W + BitVec.ofNat 32 o) →
     (∀ o < 40, y ≠ t.regs 4 + BitVec.ofNat 32 o) → v.mem y = t.mem y
+  r12 : v.regs 12 = 0#32
+  wipe : ∀ i < LOCALS_WORDS, read32 v.mem (slot (t.regs 13 - COMPRESS_FRAME_W) i) = 0#32
+  saved : ∀ i < 8, read32 v.mem (slot (t.regs 13 - COMPRESS_FRAME_W) (LOCALS_WORDS + i)) =
+    t.regs (savedRegC i)
+  savedLr : read32 v.mem (slot (t.regs 13 - COMPRESS_FRAME_W) (LOCALS_WORDS + 8)) =
+    (base + BitVec.ofNat 32 (off + 4)) ||| 1#32
+  /-- The stacked `f0` argument: zero. -/
+  pad : read32 v.mem (t.regs 13) = 0#32
 
 def nfPre : List Instr := nfBody.take 5
 def nfSt : List Instr := (nfBody.drop 5).take 2
@@ -378,7 +397,8 @@ theorem nf_reachS {base : Word} {W : Word → Word → Prop} {R : Word → Prop}
   have hT' : (u.regs 2).toNat + 2 ^ 32 * (u.regs 3).toNat =
       (read32 t.mem (t.regs 4 + 32#32)).toNat + 2 ^ 32 * (read32 t.mem (t.regs 4 + 36#32)).toNat + 64 := by
     rw [e2, e3]; exact hT
-  refine ReachS.done ⟨hv.pc, by rw [hv.sp, u13], fun r h4 h11 => ?_, fun i hi => ?_, ?_, fun y h1 h2 => ?_⟩
+  refine ReachS.done ⟨hv.pc, by rw [hv.sp, u13], fun r h4 h11 => ?_, fun i hi => ?_, ?_, fun y h1 h2 => ?_,
+    hv.r12, fun i hi => by rw [← u13]; exact hv.wipe i hi, fun i hi => ?_, by rw [← u13]; exact hv.savedLr, ?_⟩
   · rw [hv.keep r h4 h11, eo r h4 (by omega)]
   · have := hv.hout i hi
     rw [e0, e1, hT', hf0] at this
@@ -392,5 +412,20 @@ theorem nf_reachS {base : Word} {W : Word → Word → Prop} {R : Word → Prop}
   · rw [rdv 32 (by omega), rdv 36 (by omega), rA, rB]; exact hT
   · rw [hv.mem y (fun o ho => by rw [u13]; exact h1 o (by omega)) (fun o ho => by rw [e0]; exact h2 o (by omega))]
     exact memVT y h1 h2
+  · rw [← u13, hv.saved i hi, eo _ (savedRegC_range i hi).1 (by have := (savedRegC_range i hi).2; omega)]
+  · rw [← hf0, u13]
+    apply read32_congr
+    intro k hk
+    apply hv.mem
+    · intro o ho h
+      rw [u13] at h
+      have := congrArg BitVec.toNat h
+      rw [toNat_add_ofNat _ _ (by omega), toNat_add_ofNat _ _ (by omega)] at this
+      omega
+    · intro o ho h
+      rw [e0] at h
+      have := congrArg BitVec.toNat h
+      rw [toNat_add_ofNat _ _ (by omega), toNat_add_ofNat _ _ (by omega)] at this
+      omega
 
 end M0Crypto.Release.Blake2sUpdate

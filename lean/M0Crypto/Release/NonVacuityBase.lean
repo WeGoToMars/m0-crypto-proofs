@@ -40,6 +40,18 @@ theorem codeAt (rs : List (Nat × List (BitVec 8))) : Thumb.CodeAt (memOf rs) 0 
   simp only [e, hi', ↓reduceIte, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hi]
   rfl
 
+/-- Code bytes carry over to any memory that agrees on the code range. -/
+theorem codeAt_of_agree {m m' : Mem} (h : Thumb.CodeAt m 0 B)
+    (hm : ∀ a : Word, a.toNat < Artifacts.Release.size → m' a = m a) : Thumb.CodeAt m' 0 B := by
+  intro i hi
+  have hi' : i < Artifacts.Release.size := by rw [B_len] at hi; exact hi
+  have e : (0 + BitVec.ofNat 32 i : Word).toNat = i := by
+    have h0 : (0 : Word).toNat = 0 := rfl
+    have : i < 2 ^ 32 := by unfold Artifacts.Release.size at hi'; omega
+    simp only [BitVec.toNat_add, BitVec.toNat_ofNat, h0]; omega
+  rw [hm _ (by rw [e]; exact hi')]
+  exact h i hi
+
 /-- Entry SP of every witness call. -/
 def sp0 : Nat := 0x20001000
 

@@ -134,17 +134,29 @@ structure Pre (c : Ctx) (s : State) : Prop where
 /-- Outside the function's `chStackBytes` stack bytes. -/
 def OutS (c : Ctx) (y : Word) : Prop := ¬ Region c.fp chStackBytes y
 
+/-- Registers the prologue saves above the frame, in address order from
+`fp + 4 * chFrameWords`. -/
+def chSavedRegs : List Reg := [8, 9, 10, 11, 4, 5, 6, 7, 14]
+
 /-- The final state of a call. `ok` is the counter check of the C contract. -/
 structure Result (c : Ctx) (t : State) : Prop where
   pc : t.pc = c.regs0 14 &&& ~~~1#32
   sp : t.regs 13 = c.sp0
   callee : ∀ r : Reg, 4 ≤ r.val → r.val < 12 → t.regs r = c.regs0 r
   r0 : t.regs 0 = if M0Crypto.Spec.Aead.counterOk c.ctr.toNat c.len.toNat then 0 else ~~~0
+  /-- r1-r3 and r12: zero after an accepted non-empty call, else as at entry. -/
+  scratch : ∀ r : Reg, (1 ≤ r.val ∧ r.val < 4) ∨ r.val = 12 → t.regs r =
+    if M0Crypto.Spec.Aead.counterOk c.ctr.toNat c.len.toNat = true ∧ c.len ≠ 0 then 0 else c.regs0 r
   mem : ∀ y, OutS c y → t.mem y =
     if M0Crypto.Spec.Aead.counterOk c.ctr.toNat c.len.toNat ∧ Region c.out c.len.toNat y
     then c.outB (c.oidx y) else c.m0 y
-  wipe : M0Crypto.Spec.Aead.counterOk c.ctr.toNat c.len.toNat = true → c.len ≠ 0 →
-    ∀ i < chFrameWords, read32 t.mem (slot c.fp i) = 0
+  /-- The frame words: zero after an accepted non-empty call, else as at entry. -/
+  frame : ∀ i < chFrameWords, read32 t.mem (slot c.fp i) =
+    if M0Crypto.Spec.Aead.counterOk c.ctr.toNat c.len.toNat = true ∧ c.len ≠ 0 then 0
+    else read32 c.m0 (slot c.fp i)
+  /-- The words above the frame hold the caller's registers: word `i` is `chSavedRegs[i]`.
+  With `frame` this fixes every byte of the `chStackBytes` stack window. -/
+  saved : ∀ i < 9, read32 t.mem (slot c.fp (chFrameWords + i)) = c.regs0 chSavedRegs[i]!
 
 /-- Writes allowed to a call: its 176 stack bytes, and the output buffer only if the call is
 accepted. -/

@@ -6,7 +6,8 @@ import M0Crypto.Release.ChaCha20Contract
 Statement file: definitions only, no proofs (see `Contract.lean`). In reading order: the call
 (`ACall`), the entry state (`AEntry`), the preconditions (`AValid`, `ABuf`), the three bundled
 as the hypothesis of every top-level theorem (`APre`), the write regions, and what a returned
-call guarantees (`RetPost`, `EncryptResult`, `DecryptResult`). Compare with
+call guarantees (`RetPost`, `EncryptResult`, `DecryptResult`), bundled in the claims
+`EncryptCorrect` and `DecryptCorrect`. Compare with
 `include/m0crypto/chacha20poly1305.h`.
 -/
 
@@ -157,5 +158,29 @@ structure DecryptResult (c : ACall) (t : State) : Prop where
     t.regs 0=0xfffffffe#32 ∧ Ctx.bytesAt t.mem c.out c.len.toNat=Ctx.bytesAt c.m0 c.out c.len.toNat
   frame : ∀ y, ¬ DWr c y → t.mem y=c.m0 y
   zero : ∀ o<96, t.mem (c.A+BitVec.ofNat 32 (8+o))=0#8
+
+/-! ## Top-level claims -/
+
+/-- Every valid encryption returns, with `EncryptResult`, only writes in `AWr` and r12 zero. The
+320 bytes `[sp0 - 320, sp0)` at return are one function (`window`) of only the entry registers,
+the nonce pointer and these bytes at entry. -/
+def EncryptCorrect : Prop :=
+  ∃ window : (Reg → Word) → Word → List (BitVec 8) → List (BitVec 8),
+  ∀ c s, APre c encOff s →
+    ∃ n, ∀ fuel, n ≤ fuel → ∃ t tr, Thumb.runUntil c.ret fuel s = .ok (t, tr) ∧
+      EncryptResult c t ∧ WritesTo (AWr c) tr ∧ t.regs 12 = 0#32 ∧
+      Ctx.bytesAt t.mem (c.sp0 - 320#32) 320 =
+        window c.regs0 c.nonce (Ctx.bytesAt c.m0 (c.sp0 - 320#32) 320)
+
+/-- Every valid decryption returns, with `DecryptResult`, only writes in `DAllowed` and r12 zero.
+The 320 bytes `[sp0 - 320, sp0)` at return are one function (`window`) of only the entry
+registers, the nonce pointer, the verdict and these bytes at entry. -/
+def DecryptCorrect : Prop :=
+  ∃ window : (Reg → Word) → Word → Bool → List (BitVec 8) → List (BitVec 8),
+  ∀ c s, APre c decOff s →
+    ∃ n, ∀ fuel, n ≤ fuel → ∃ t tr, Thumb.runUntil c.ret fuel s = .ok (t, tr) ∧
+      DecryptResult c t ∧ WritesTo (DAllowed c) tr ∧ t.regs 12 = 0#32 ∧
+      Ctx.bytesAt t.mem (c.sp0 - 320#32) 320 =
+        window c.regs0 c.nonce (decide (c.expected = c.tagB)) (Ctx.bytesAt c.m0 (c.sp0 - 320#32) 320)
 
 end M0Crypto.Release.Aead

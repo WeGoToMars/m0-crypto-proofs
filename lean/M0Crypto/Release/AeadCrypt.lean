@@ -46,6 +46,14 @@ structure CryptPost (c : ACall) (off : Nat) (t u : State) : Prop where
   out : Ctx.bytesAt u.mem c.out c.len.toNat = chacha20 c.keyB 1 c.nonceB c.ptB
   keep : ∀ y, (∀ o < 176, y ≠ c.A - BitVec.ofNat 32 176 + BitVec.ofNat 32 o) →
     (∀ o < 4, y ≠ c.A + BitVec.ofNat 32 (4 + o)) → ¬ OutR c y → u.mem y = t.mem y
+  /-- Callee frame bytes that were zero stay zero. -/
+  low : ∀ o < 140, t.mem (c.A - 176#32 + BitVec.ofNat 32 o) = 0#8 →
+    u.mem (c.A - 176#32 + BitVec.ofNat 32 o) = 0#8
+  /-- The callee's saved registers: those of `t`, and the return address. -/
+  saved : ∀ i < 9, read32 u.mem (c.A - 176#32 + BitVec.ofNat 32 (140 + 4 * i)) =
+    if i = 8 then (c.base + BitVec.ofNat 32 (off + cryptEnd)) ||| 1#32 else t.regs ChaCha20Xor.chSavedRegs[i]!
+  ctr : read32 u.mem (c.A + 4#32) = 1#32
+  r12 : u.regs 12 = if c.len = 0 then t.regs 12 else 0#32
 
 /-- CRYPT writes no tag bytes: its trace uses only stack and output. -/
 def CryptWr (c : ACall) (y : Word) : Prop := SWr c.A y ∨ OutR c y
@@ -153,7 +161,23 @@ theorem crypt_reach_select_gen {Pn : Word → Prop} {P : State → Event → Pro
       have := c.len.isLt
       simp [M0Crypto.Spec.Aead.counterOk]; omega
     have outD := hv.win hb.outS 0 176 (c.A - BitVec.ofNat 32 176) (by omega) (by omega)
-    refine ⟨?_, hr.sp, ?_, ?_, ?_⟩
+    have hfp : xc.fp = c.A - 176#32 := by
+      show c.A - BitVec.ofNat 32 ChaCha20Layout.chStackBytes = _; rw [ChaCha20Layout.chStackBytes_eq]
+    have hset : off + cryptXorOff + 4 = off + cryptEnd := by have := cryptXorOff_ret; omega
+    have sSB := ChaCha20Layout.chStackBytes_eq
+    have outA : ∀ o' < 160, ¬ Region c.out c.len.toNat (c.A + BitVec.ofNat 32 o') := fun o' ho' h => by
+      have hd := hv.win hb.outS 176 160 c.A (by have := hv.A_lo; omega) (by decide)
+      exact ne_of_disj hd.2.1 hd.1 (Or.symm hd.2.2) ho' h (add_toNat_sub c.out _).symm
+    have hiS : ∀ o' < 160, ChaCha20Xor.OutS xc (c.A + BitVec.ofNat 32 o') := fun o' ho' => Region.not fun o ho =>
+      ne_of_disj (b := c.A - BitVec.ofNat 32 176) (by omega) (by rw [fp_toNat]; omega)
+        (.inr (by rw [fp_toNat]; omega)) ho' ho
+    have uLow : ∀ o < 140, u.mem (c.A - 176#32 + BitVec.ofNat 32 o) = t.mem (c.A - 176#32 + BitVec.ofNat 32 o) :=
+      fun o ho => by
+        rw [um, cm, write32_other' _ _ _ _ (fun q hq e => by
+          rw [ofNat_add_assoc] at e
+          exact ne_of_disj (a := c.A - 176#32) (b := c.A) (n := 140) (m := 8) (by omega) (by omega)
+            (.inl (by omega)) ho (show 4 + q < 8 by omega) e)]
+    refine ⟨?_, hr.sp, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
     · rw [vpc]; show u.regs 14 &&& ~~~1#32 = _
       have hset : off + cryptXorOff + 4 = off + cryptEnd := by have := cryptXorOff_ret; omega
       rw [u14, lr_mask _ (even_off c.base hv.base4 (off + cryptXorOff + 4)
@@ -183,6 +207,36 @@ theorem crypt_reach_select_gen {Pn : Word → Prop} {P : State → Event → Pro
       rw [hr.mem y (Region.not h1), if_neg (fun h => h3 h.2)]
       show u.mem y = _
       rw [um, cm, write32_other' _ _ _ _ (fun q hq e => h2 q hq (by rw [e, ofNat_add_assoc]))]
+    · intro o ho hz
+      have h := hr.frame_byte o (by rw [ChaCha20Layout.chFrameWords_eq]; omega)
+      rw [hfp] at h
+      rw [h]
+      split
+      · rfl
+      · show u.mem _ = _; rw [uLow o ho]; exact hz
+    · intro i hi
+      have h := hr.saved i hi
+      rw [hfp] at h
+      rw [show 140 + 4 * i = 4 * (ChaCha20Layout.chFrameWords + i) by rw [ChaCha20Layout.chFrameWords_eq]; omega]
+      refine h.trans ?_
+      show u.regs _ = _
+      by_cases h8 : i = 8
+      · subst h8
+        rw [if_pos rfl, show ChaCha20Xor.chSavedRegs[8]! = 14 from rfl, u14, hset]
+      · rw [if_neg h8]
+        obtain ⟨a, b⟩ := ChaCha20Xor.chSavedRegs_lt i (by omega)
+        rw [ur _ (by omega) (by omega), cr _ (by omega) (by omega) (by omega) (by omega) (by omega)]
+    · rw [← M0Crypto.Armv6M.read32_write32_same t.mem (c.A + 4#32) 1#32, ← cm, ← um]
+      apply read32_congr
+      intro k hk
+      rw [ofNat_add_assoc, hr.mem _ (hiS (4 + k) (by omega)), if_neg (fun h => outA (4 + k) (by omega) h.2)]
+    · rw [hr.scratch 12 (.inr rfl)]
+      have hok' : M0Crypto.Spec.Aead.counterOk xc.ctr.toNat xc.len.toNat = true := hok
+      by_cases hl : c.len = 0
+      · rw [if_neg (fun h => h.2 hl), if_pos hl]
+        show u.regs 12 = _
+        rw [ur 12 (by decide) (by decide), cr 12 (by decide) (by decide) (by decide) (by decide) (by decide)]
+      · rw [if_pos ⟨hok', hl⟩, if_neg hl]; rfl
   exact hselect xc u xv xe rfl rfl rfl rfl rfl rfl rfl rfl hrest
 
 /-- Expose the ChaCha call state while retaining its functional continuation. -/

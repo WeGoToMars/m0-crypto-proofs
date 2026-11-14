@@ -23,11 +23,11 @@ open M0Crypto.Release.Blake2sLd (ldAll)
 theorem buf_reach {base : Word} {s : State} {st0 : SState} (e : UpdateEntry base s st0)
     {t : State} {k : Nat} {st : SState}
     (hpc : t.pc = base + BitVec.ofNat 32 oBuf) (hI : Inv s st0 t k st) (hk : k < nn s)
-    (hlt : st.pending.length < 64) :
+    (hlt : st.pending.length < 64) (hnd : NoDir s k st.pending.length) :
     ReachS base (PNR ldAll (WU base s) (UR s)) t (BufPost base s st0 k) := by
-  refine ReachS.bind (ReachS.monoQ (take_reach e hpc hI hk hlt) ?_)
-  rintro v ⟨hpv, tk, h1, h2, h3, hr2, hIv⟩
-  exact have_reach e hpv hIv h1 h2 h3 hr2
+  refine ReachS.bind (ReachS.monoQ (take_reach e hpc hI hk hlt hnd) ?_)
+  rintro v ⟨hpv, tk, h1, h2, h3, hr2, hIv, hF⟩
+  exact have_reach e hpv hIv h1 h2 h3 hr2 hF
 
 /-- One pass through the loop body ends at `oNext` with more input consumed. -/
 theorem iter_reach {base : Word} {s : State} {st0 : SState} (e : UpdateEntry base s st0)
@@ -50,11 +50,11 @@ theorem iter_reach {base : Word} {s : State} {st0 : SState} (e : UpdateEntry bas
       st1.pending.length < 64 → ReachS base (PNR ldAll (WU base s) (UR s)) w (BufPost base s st0 k) := by
     intro w hpw st1 hI2 hlt
     refine ReachS.bind (ReachS.monoQ (dt_reach e hpw hI2 hk hlt) ?_)
-    rintro v (⟨hpv, st2, hI3, hl3⟩ | ⟨hpv, st2, hI3, hp0, hgt, hal⟩)
-    · exact buf_reach e hpv hI3 hk hl3
+    rintro v (⟨hpv, st2, hI3, hl3, hnd3⟩ | ⟨hpv, st2, hI3, hp0, hgt, hal⟩)
+    · exact buf_reach e hpv hI3 hk hl3 hnd3
     · refine ReachS.bind (ReachS.monoQ (direct_loop e _ v k st2 rfl hpv hI3 hp0 hgt hal) ?_)
-      rintro x ⟨hpx, k', st', hk1, hk2, hI4, hl4⟩
-      refine ReachS.monoQ (buf_reach e hpx hI4 hk2 hl4) ?_
+      rintro x ⟨hpx, k', st', hk1, hk2, hI4, hl4, hnd4⟩
+      refine ReachS.monoQ (buf_reach e hpx hI4 hk2 hl4 hnd4) ?_
       rintro z ⟨hpz, k'', st'', hk3, hk4, hI5⟩
       exact ⟨hpz, k'', st'', by omega, hk4, hI5⟩
   apply ReachS.bcondPcNR hb2 oLoopBne oDT 1 (brImm8 oLoopBne oDT) hp1 (by decide +kernel) loopBne_at

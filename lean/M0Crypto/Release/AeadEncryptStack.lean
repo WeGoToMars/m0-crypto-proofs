@@ -190,7 +190,7 @@ theorem encrypt_certAt_states (c : ACall) (hv : AValid c) (hb : ABuf c) (s : Sta
 theorem _root_.M0Crypto.Release.Aead.encrypt_stack : TraceSpec.AeadEncryptStack := by
   intro c s ⟨hv, hb, he, hlr, hret⟩
   replace hret := Region.ne hret
-  obtain ⟨n, hcorrect⟩ := encrypt_correct c s ⟨hv, hb, he, hlr, Region.not hret⟩
+  obtain ⟨n, hcorrect⟩ := encrypt_returns c s ⟨hv, hb, he, hlr, Region.not hret⟩
   refine ⟨n, fun fuel hf => ?_⟩
   obtain ⟨t, tr, ht, -, -⟩ := hcorrect fuel hf
   obtain ⟨states, hrun, -, -⟩ := runStates_of_runUntil ht

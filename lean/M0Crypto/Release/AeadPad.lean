@@ -143,12 +143,18 @@ theorem macD_sp : SpBlock macD (fun q => q.1 = .read ∨ ∀ k < 4, 72 ≤ q.2 +
 theorem macD_al : SpBlock macD (fun q => q.2 % 4 = 0) :=
   (spBlock_of_B (ok := fun q => q.2 % 4 == 0) (by decide)).mono (fun q hq => by simpa using hq)
 
+/-- Registers `MAC_PADDED` over the `n` bytes at `d` leaves: r4 at the final partial block (`d` when
+there is none), r5 = `n`, r6 = `n % 16`. -/
+def MacRegs (d n : Word) (t : State) : Prop :=
+  t.regs 4 = (if n.toNat % 16 = 0 then d else d + BitVec.ofNat 32 (16 * (n.toNat / 16))) ∧
+  t.regs 5 = n ∧ t.regs 6 = BitVec.ofNat 32 (n.toNat % 16)
+
 /-- **Partial block.** From `m + macCOff` to `m + macSize`. -/
 theorem mac_tail {Pc : Word → Prop} (base A d n : Word) (M : Mem) (m : Nat) (i1 i2 : BitVec 25) (hat : MacAt m i1 i2)
     (hm : m % 2 = 0) (hmx : m + macSize ≤ Artifacts.Release.size) (hrg : InRegion Pc base m macSize)
     (hblk : ∀ pc, Poly1305Blocks.BlkPc base pc → Pc pc) (he : MacEnv base A d n M) (s t : State)
     (ht : MacMid base A d n M m s t) (hk : keyAtOK M (A + 8#32)) :
-    ReachW base Pc (MacWr A) t (MacPost base A d n M m s) := by
+    ReachW base Pc (MacWr A) t (fun u => MacPost base A d n M m s u ∧ MacRegs d n u) := by
   obtain ⟨-, -, -, -, sC, bC, sD, sL, bL, sE, bl2, -, t2⟩ := hat
   have hb2 : base.toNat % 2 = 0 := by have := he.base4; omega
   have hN := n.isLt
@@ -176,13 +182,16 @@ theorem mac_tail {Pc : Word → Prop} (base A d n : Word) (M : Mem) (m : Nat) (i
     have hr : n.toNat % 16 = 0 := by
       have := congrArg BitVec.toNat hz'; simp at this; omega
     apply ReachS.done
-    refine ⟨by rw [M0Crypto.Armv6M.State.pc, setReg_eq],
+    refine ⟨⟨by rw [M0Crypto.Armv6M.State.pc, setReg_eq],
       by rw [setReg_ne _ _ _ _ (by decide), cr _ (by decide) (by decide), ht.sp],
       fun r a b => by
         rw [setReg_ne _ _ _ _ (by rintro rfl; exact absurd b (by decide)), cr _ (by omega) (by omega), ht.hi r a b],
-      fun y hy => by rw [setReg_mem, cm, ht.frame y hy], ?_, ?_⟩
+      fun y hy => by rw [setReg_mem, cm, ht.frame y hy], ?_, ?_⟩, ?_, ?_, ?_⟩
     · rw [setReg_mem, cm, pad_zero M d _ hr]; exact ht.acc
     · rw [setReg_mem, cm]; exact ht.bound
+    · rw [setReg_ne _ _ _ _ (by decide), cr 4 (by decide) (by decide), ht.r4, if_pos hr]
+    · rw [setReg_ne _ _ _ _ (by decide), cr 5 (by decide) (by decide), ht.r5]
+    · rw [setReg_ne _ _ _ _ (by decide), c6]
   · intro hz
     have hz' : BitVec.ofNat 32 (n.toNat % 16) ≠ 0#32 := by simpa [condPassed, cz] using hz
     have hr0 : n.toNat % 16 ≠ 0 := by
@@ -226,10 +235,10 @@ theorem mac_tail {Pc : Word → Prop} (base A d n : Word) (M : Mem) (m : Nat) (i
       rw [dr q (by omega) (by omega) (by omega) (by omega) (by omega), r2 q (by omega),
         cr q (by omega) (by omega), ht.hi q a b]
     apply ReachS.bind
-    apply (mac_loop base A dq s3.mem s.regs m rem sL bL he.base4 hm hmx hr16 hrg
+    apply (mac_loop base A dq s3.mem s3.regs m rem sL bL he.base4 hm hmx hr16 hrg
       (fun j hj => outBlk_of (src_out j hj)) rem 0 (by omega) (by omega) s3 p3 d1 d2 h4
       (by rw [dr 6 (by decide) (by decide) (by decide) (by decide) (by decide), r2 6 (by decide), c6])
-      (by rw [dr 13 (by decide) (by decide) (by decide) (by decide) (by decide), s213]) hR3
+      (by rw [dr 13 (by decide) (by decide) (by decide) (by decide) (by decide), s213]) (fun _ _ _ => rfl)
       (fun j hj => by simp only [Nat.not_lt_zero, if_false]; rw [dm]; exact z0 j hj)
       (fun y _ => rfl)).mono (fun _ _ h => h)
     rintro v ⟨vpc, v1, v13, vR, vblk, vout⟩
@@ -291,14 +300,16 @@ theorem mac_tail {Pc : Word → Prop} (base A d n : Word) (M : Mem) (m : Nat) (i
       (he.keyOk xM hk)
       (by show accAt x.mem (A + 8#32) < _; rw [xacc]; exact ht.bound)
       (by show (1#32 : Word).toNat ≤ 1; decide)
-    refine ⟨?_, ht'.sp, ?_, ?_, ?_, bound⟩
+    have uR : ∀ r : Reg, 4 ≤ r.val → r.val < 12 → t'.regs r = s3.regs r := fun r a b => by
+      rw [ht'.regs r (by omega) b]
+      show x.regs r = _
+      rw [xr r (by omega) (by omega), er r (by omega) (by omega) (by omega) (by omega), vR r a b]
+    refine ⟨⟨?_, ht'.sp, ?_, ?_, ?_, bound⟩, ?_, ?_, ?_⟩
     · rw [ht'.pc]; show x.regs 14 &&& ~~~1#32 = _
       rw [x14, lr_mask _ (even_off base he.base4 (m + macBl2Off + 4) (by have := macBl2Off_even; omega)),
         show m + macBl2Off + 4 = m + macSize by have := macBl2Off_end; omega]
     · intro r a b
-      rw [ht'.regs r (by omega) b]
-      show x.regs r = _
-      rw [xr r (by omega) (by omega), er r (by omega) (by omega) (by omega) (by omega), vR r a b]
+      rw [uR r (by omega) b, hR3 r a b]
     · intro y hy
       rw [Poly1305Blocks.result_frame c hv x t' hen hlr ht' y (fun h => hy (bwr_mac A c rfl rfl y h))]
       exact xM y hy
@@ -307,6 +318,11 @@ theorem mac_tail {Pc : Word → Prop} (base A d n : Word) (M : Mem) (m : Nat) (i
       rw [he.key_eq xM, xacc, ht.acc, xm, vblk'] at acc'
       rw [acc', pad_split M d _ (by omega), hrem,
         Poly1305Spec.polyBlocks_append _ _ _ (n.toNat / 16) _ _ (bytesAt_length _ _ _)]
+    · rw [uR 4 (by decide) (by decide), h4, if_neg (by rw [hrem]; exact hr0)]
+    · rw [uR 5 (by decide) (by decide), dr 5 (by decide) (by decide) (by decide) (by decide) (by decide),
+        r2 5 (by decide), cr 5 (by decide) (by decide), ht.r5]
+    · rw [uR 6 (by decide) (by decide), dr 6 (by decide) (by decide) (by decide) (by decide) (by decide),
+        r2 6 (by decide), c6, hrem]
 
 /-- **`MAC_PADDED`.** From `m` to `m + macSize`: the accumulator absorbs `msg ++ pad16 msg`
 for the `n` bytes at `d`, with pad 1, writing only `MacWr A`. Region-tracking form. -/
@@ -318,6 +334,21 @@ theorem mac_padded_w {Pc : Word → Prop} (base A d n : Word) (M : Mem) (m : Nat
     (h5 : s.regs 5 = n) (hmem : s.mem = M)
     (hk : keyAtOK M (A + 8#32)) (hh : accAt M (A + 8#32) < 5 * 2 ^ 128) :
     ReachW base Pc (MacWr A) s (MacPost base A d n M m s) := by
+  apply ReachS.bind
+  apply (mac_head base A d n M m i1 i2 hat hm hmx hrg hblk he s hpc h13 h4 h5 hmem hk hh).mono
+    (fun _ _ h => h)
+  intro t ht
+  exact (mac_tail base A d n M m i1 i2 hat hm hmx hrg hblk he s t ht hk).mono (fun _ _ h => h) (fun _ h => h.1)
+
+/-- `mac_padded_w` with the registers it leaves (`MacRegs`). -/
+theorem mac_padded_regs_w {Pc : Word → Prop} (base A d n : Word) (M : Mem) (m : Nat) (i1 i2 : BitVec 25)
+    (hat : MacAt m i1 i2)
+    (hm : m % 2 = 0) (hmx : m + macSize ≤ Artifacts.Release.size) (hrg : InRegion Pc base m macSize)
+    (hblk : ∀ pc, Poly1305Blocks.BlkPc base pc → Pc pc) (he : MacEnv base A d n M) (s : State)
+    (hpc : s.pc = base + BitVec.ofNat 32 m) (h13 : s.regs 13 = A) (h4 : s.regs 4 = d)
+    (h5 : s.regs 5 = n) (hmem : s.mem = M)
+    (hk : keyAtOK M (A + 8#32)) (hh : accAt M (A + 8#32) < 5 * 2 ^ 128) :
+    ReachW base Pc (MacWr A) s (fun u => MacPost base A d n M m s u ∧ MacRegs d n u) := by
   apply ReachS.bind
   apply (mac_head base A d n M m i1 i2 hat hm hmx hrg hblk he s hpc h13 h4 h5 hmem hk hh).mono
     (fun _ _ h => h)

@@ -160,7 +160,7 @@ variable {base : Word} {W : Word → Word → Prop} {Rd : Word → Prop} {R : Re
 theorem padB_loop (hb2 : base.toNat % 2 = 0) (hbuf : buf.toNat + 64 ≤ 2 ^ 32)
     (hW : ∀ i < 64, W (base + BitVec.ofNat 32 oPadBBody) (buf + BitVec.ofNat 32 i)) {Q : State → Prop}
     (K : ∀ (k : Nat) (t : State), t.pc = base + BitVec.ofNat 32 oPadW → PI R m1 buf u k t →
-      k % 4 = 0 → ReachS base (PNR ldAll W Rd) t Q) :
+      k % 4 = 0 → t.regs 7 = 0#32 → ReachS base (PNR ldAll W Rd) t Q) :
     ∀ (k : Nat) (t : State), t.pc = base + BitVec.ofNat 32 oPadB → PI R m1 buf u k t → ReachS base (PNR ldAll W Rd) t Q
   | k, t, hpc, hpi => by
     refine ReachS.symBlockWNR (Ld := ldAll) hb2 [] [] [] tstW oPadB hpc (by decide) tstW_at (by decide) (by simp) (by simp)
@@ -173,7 +173,13 @@ theorem padB_loop (hb2 : base.toNat % 2 = 0) (hbuf : buf.toNat + 64 ≤ 2 ^ 32)
       (by decide +kernel) (by decide +kernel)
     · intro hc
       rw [cp0, hz] at hc
-      exact K k _ (by rw [sr_pc]) (hpi'.setPc _) (by simpa using hc)
+      have h7 : (execAll tstW t).regs 7 = 0#32 := by
+        have e1 : execAll tstW t = (Instr.lslImm 7 6 30).next t := rfl
+        have hzz := z_lsl t 7 6 30
+        rw [← e1, hz, hc] at hzz
+        rw [e1, regs_lsl _ _ _ _ _ (by decide)]
+        exact (if_pos (by decide)).trans (beq_iff_eq.mp hzz.symm)
+      exact K k _ (by rw [sr_pc]) (hpi'.setPc _) (by simpa using hc) (by rw [sr_ne _ _ _ _ (by decide)]; exact h7)
     · intro hc
       rw [cp0, hz] at hc
       have hk4 : ¬ k % 4 = 0 := by simpa using hc
@@ -257,11 +263,12 @@ theorem pi_bodyW {R m1 buf u k t} (h : PI R m1 buf u k t) (hk : k + 4 ≤ 64) :
 
 /-- The word padding loop: zero words until the buffer is full. -/
 theorem padW_loop (hb2 : base.toNat % 2 = 0) (hbuf : buf.toNat + 64 ≤ 2 ^ 32) (hbuf4 : buf.toNat % 4 = 0)
-    (hW : ∀ i < 64, W (base + BitVec.ofNat 32 oPadWBody) (buf + BitVec.ofNat 32 i)) {Q : State → Prop}
-    (K : ∀ (t : State), t.pc = base + BitVec.ofNat 32 oFComp → PI R m1 buf u 64 t → ReachS base (PNR ldAll W Rd) t Q) :
+    (hW : ∀ i < 64, W (base + BitVec.ofNat 32 oPadWBody) (buf + BitVec.ofNat 32 i)) {Q : State → Prop} {v7 : Word}
+    (K : ∀ (t : State), t.pc = base + BitVec.ofNat 32 oFComp → PI R m1 buf u 64 t → t.regs 7 = v7 →
+      ReachS base (PNR ldAll W Rd) t Q) :
     ∀ (k : Nat) (t : State), t.pc = base + BitVec.ofNat 32 oPadW → PI R m1 buf u k t → k % 4 = 0 →
-      ReachS base (PNR ldAll W Rd) t Q
-  | k, t, hpc, hpi, hk4 => by
+      t.regs 7 = v7 → ReachS base (PNR ldAll W Rd) t Q
+  | k, t, hpc, hpi, hk4, h7 => by
     refine ReachS.symBlockWNR (Ld := ldAll) hb2 [] [] [] cmp64 oPadW hpc (by decide) cmp64_at (by decide) (by simp) (by simp)
       (by simp) (by decide +kernel) (by decide +kernel) ?_
     have hpi' := pi_cmp hpi
@@ -274,7 +281,10 @@ theorem padW_loop (hb2 : base.toNat % 2 = 0) (hbuf : buf.toNat + 64 ≤ 2 ^ 32) 
       rw [cp0, hz] at hc
       have : k = 64 := by simpa using hc
       subst this
-      exact K _ (by rw [sr_pc]) (hpi'.setPc _)
+      exact K _ (by rw [sr_pc]) (hpi'.setPc _) (by
+        rw [sr_ne _ _ _ _ (by decide), show execAll cmp64 t = (Instr.cmpImm 6 0x40).next t from rfl,
+          regs_cmpImm _ _ _ _ (by decide)]
+        exact h7)
     · intro hc
       rw [cp0, hz] at hc
       have hk64' : ¬ k = 64 := by simpa using hc
@@ -314,7 +324,14 @@ theorem padW_loop (hb2 : base.toNat % 2 = 0) (hbuf : buf.toNat + 64 ≤ 2 ^ 32) 
             rw [pc_next _ f2, hp2, ofNat_add_assoc, show oPadWBody + 2 + (Instr.addImm8 6 4).size = oPadWBack by decide]
           apply ReachS.bPcNR hb2 oPadWBack oPadW (brImm11 oPadWBack oPadW) hp3 (by decide +kernel) padWBack_at
             (by decide +kernel) (by decide +kernel)
+          have h7' : ((Instr.addImm8 6 4).next ((Instr.memReg .str 0 1 6).next t1)).regs 7 = v7 := by
+            rw [regs_addImm8 _ _ _ _ (by decide)]
+            refine (if_neg (by decide)).trans ?_
+            rw [regs_memReg_st _ _ _ _ _ (Or.inl rfl) _ (by decide), ht1, sr_ne _ _ _ _ (by decide),
+              show execAll cmp64 t = (Instr.cmpImm 6 0x40).next t from rfl, regs_cmpImm _ _ _ _ (by decide)]
+            exact h7
           exact padW_loop hb2 hbuf hbuf4 hW K (k + 4) _ (by rw [sr_pc]) ((pi_bodyW hq hk64).setPc _) (by omega)
+            (by rw [sr_ne _ _ _ _ (by decide)]; exact h7')
   termination_by k => 64 - k
   decreasing_by all_goals (simp_wf; omega)
 

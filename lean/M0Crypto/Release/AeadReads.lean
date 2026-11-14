@@ -42,10 +42,10 @@ theorem readOk_decryptRd (c : ACall) {y : Word}
     (h : ReadOk ⟨c.base, c.sp0, c.regs0 14, Artifacts.Release.bytes.length⟩ decryptEnv y) :
     TraceSpec.AeadDecryptReadRegion c y := by
   rcases h with ⟨o, ho, e⟩ | ⟨o, ho, e⟩
-  · refine .enc (.stack (o := o) ?_ ?_)
+  · refine .common (.stack (o := o) ?_ ?_)
     · simp [decryptEnv, TraceSpec.aeadStackBytes_eq, aeadArgWords] at ho; have := TraceSpec.aeadStackBytes_eq; omega
     · simpa [decryptEnv, TraceSpec.aeadStackBytes] using e
-  · exact .enc (.code (by simpa [decryptEnv, Artifacts.Release.bytes_length] using ho) e)
+  · exact .common (.code (by simpa [decryptEnv, Artifacts.Release.bytes_length] using ho) e)
 
 /-- **The read bound of a recorded run.** At every visited state the certificate relates the state
 to itself. A load through a non-stack address is at a read site (`certLoadFailure`), where the read
@@ -128,7 +128,7 @@ theorem encrypt_rd_recorded (c : ACall) (hv : AValid c) (hb : ABuf c) (s : State
 theorem _root_.M0Crypto.Release.Aead.encrypt_reads : TraceSpec.AeadEncryptReads := by
   intro c s ⟨hv, hb, he, hlr, hret⟩
   replace hret := Region.ne hret
-  obtain ⟨n, hcorrect⟩ := encrypt_correct c s ⟨hv, hb, he, hlr, Region.not hret⟩
+  obtain ⟨n, hcorrect⟩ := encrypt_returns c s ⟨hv, hb, he, hlr, Region.not hret⟩
   refine ⟨n, fun fuel hf => ?_⟩
   obtain ⟨t, tr, ht, -, -⟩ := hcorrect fuel hf
   refine ⟨t, tr, ht, ?_⟩
@@ -170,7 +170,7 @@ theorem decrypt_rd_recorded (c : ACall) (hv : AValid c) (hb : ABuf c) (s : State
 theorem _root_.M0Crypto.Release.Aead.decrypt_reads : TraceSpec.AeadDecryptReads := by
   intro c s ⟨hv, hb, he, hlr, hret⟩
   replace hret := Region.ne hret
-  obtain ⟨n, hcorrect⟩ := decrypt_correct c s ⟨hv, hb, he, hlr, Region.not hret⟩
+  obtain ⟨n, hcorrect⟩ := decrypt_returns c s ⟨hv, hb, he, hlr, Region.not hret⟩
   refine ⟨n, fun fuel hf => ?_⟩
   obtain ⟨t, tr, ht, -, -⟩ := hcorrect fuel hf
   refine ⟨t, tr, ht, ?_⟩

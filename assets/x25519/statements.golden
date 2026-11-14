@@ -4,6 +4,13 @@ M0Crypto.Release.X25519.x25519_reads : M0Crypto.Release.TraceSpec.X25519Reads
 M0Crypto.Release.X25519.x25519_stack : M0Crypto.Release.TraceSpec.X25519Stack
 M0Crypto.Release.NonVacuity.x25519_pre_nonvacuous : M0Crypto.Release.X25519.Pre M0Crypto.Release.NonVacuity.xCtx
   (M0Crypto.Release.NonVacuity.stOf M0Crypto.Release.NonVacuity.xMem M0Crypto.Release.NonVacuity.xCtx.regs0)
+M0Crypto.Release.NonVacuity.x25519_constant_time_nonvacuous : M0Crypto.Release.X25519.Pre
+    M0Crypto.Release.NonVacuity.xCtx
+    (M0Crypto.Release.NonVacuity.stOf M0Crypto.Release.NonVacuity.xMem M0Crypto.Release.NonVacuity.xCtx.regs0) ∧
+  M0Crypto.Release.X25519.Pre M0Crypto.Release.NonVacuity.xCtx2
+      (M0Crypto.Release.NonVacuity.stOf M0Crypto.Release.NonVacuity.xMem2 M0Crypto.Release.NonVacuity.xCtx2.regs0) ∧
+    M0Crypto.Release.NonVacuity.xCtx.pub = M0Crypto.Release.NonVacuity.xCtx2.pub ∧
+      M0Crypto.Release.NonVacuity.xCtx.scalarB ≠ M0Crypto.Release.NonVacuity.xCtx2.scalarB
 def M0Crypto.Armv6M.Mem : Type :=
   M0Crypto.Armv6M.Word → BitVec 8
 def M0Crypto.Armv6M.read32 : M0Crypto.Armv6M.Mem → M0Crypto.Armv6M.Word → M0Crypto.Armv6M.Word :=
@@ -95,6 +102,8 @@ def M0Crypto.Release.X25519.stackBytes : Nat :=
   516
 def M0Crypto.Release.X25519.wipeBytes : Nat :=
   480
+def M0Crypto.Release.X25519.savedRegs : List M0Crypto.Armv6M.Reg :=
+  [8, 9, 10, 11, 4, 5, 6, 7, 14]
 inductive M0Crypto.Release.X25519.Ctx : Type
   | M0Crypto.Release.X25519.Ctx.mk : M0Crypto.Armv6M.Word →
   M0Crypto.Armv6M.Word →
@@ -153,7 +162,12 @@ inductive M0Crypto.Release.X25519.Result : M0Crypto.Release.X25519.Ctx → M0Cry
                         t.mem y = if M0Crypto.Release.Region c.out 32 y then c.outB (c.oidx y) else c.m0 y) →
                     (∀ (y : M0Crypto.Armv6M.Word),
                         M0Crypto.Release.Region c.fp M0Crypto.Release.X25519.wipeBytes y → t.mem y = 0) →
-                      M0Crypto.Release.X25519.Result c t
+                      (∀ (i : Nat),
+                          i < 9 →
+                            M0Crypto.Armv6M.read32 t.mem
+                                (c.fp + BitVec.ofNat 32 (M0Crypto.Release.X25519.wipeBytes + 4 * i)) =
+                              c.regs0 M0Crypto.Release.X25519.savedRegs[i]!) →
+                        M0Crypto.Release.X25519.Result c t
 def M0Crypto.Release.X25519.WrOk : M0Crypto.Release.X25519.Ctx → M0Crypto.Armv6M.Word → Prop :=
   fun c y => M0Crypto.Release.Region c.fp M0Crypto.Release.X25519.stackBytes y ∨ M0Crypto.Release.Region c.out 32 y
 def M0Crypto.Release.X25519.Correct : Prop :=

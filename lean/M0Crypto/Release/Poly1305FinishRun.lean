@@ -134,6 +134,14 @@ structure FResult (c : FCtx) (s t : State) : Prop where
   cleared : ∀ r : Reg, r.val < 4 ∨ r.val = 12 → t.regs r = 0#32
   mem : t.mem = tagMem (tagState s)
 
+/-- The five words `finish` pushes stay at `fp` after it returns. -/
+theorem result_saved (c : FCtx) (hv : FValid c) (s t : State) (he : FEntry c s) (ht : FResult c s t)
+    (j : Nat) (hj : j < 5) : read32 t.mem (slot c.fp j) =
+      [c.regs0 4, c.regs0 5, c.regs0 6, c.regs0 7, c.regs0 14].getD j 0#32 := by
+  obtain ⟨hm, -, h12, -⟩ := header_effect c s he
+  rw [ht.mem, show tagMem (tagState s) = (middle (execAll header s)).mem by rw [middle_mem]; rfl]
+  exact middle_saved c hv _ hm h12 j hj
+
 theorem header_falls : header.all Instr.falls = true := by decide
 attribute [local irreducible] header arithmetic emit clear middle tagState
 

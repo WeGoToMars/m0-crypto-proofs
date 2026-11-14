@@ -32,6 +32,8 @@ cd assets/chacha20poly1305
 
 It pauses the newest Lean processes when the build would exceed its budget (half of physical memory, or `M0C_BUILD_MEM_GB`) and resumes them as others finish. It kills nothing and does not change what Lake builds. `tools/check.sh` calls `lake build` directly.
 
+`tools/kernel_replay.sh` runs `lake env leanchecker --fresh M0Crypto.Assets.ASSET` for one asset at a time (up to about 6 GB each). Run `leanchecker` only in that form: without `--fresh`, on a prefix such as `M0Crypto`, it replays every module in parallel, each in its own environment, and used 55 GB on this tree.
+
 ## Clean-build profiling
 
 For a clean-build profile, run these commands in an isolated source copy with no existing `.lake/build`, preserving the working checkout's incremental cache:

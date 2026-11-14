@@ -162,7 +162,9 @@ theorem block_eff {base : Word} {s : State} (e : InitEntry base s) :
     (execAll iA s).regs 13 = s.regs 13 - 4#32 ∧
     (∀ r : Reg, 4 ≤ r.val → r.val ≠ 13 → r.val ≠ 15 → (execAll iA s).regs r = s.regs r) ∧
     (execAll iA s).pc = base + BitVec.ofNat 32 (iStart + 30) ∧
-    (execAll iA s).mem = memB s := by
+    (execAll iA s).mem = memB s ∧
+    ((execAll iA s).regs 0 = s.regs 0 + 36#32 ∧ (execAll iA s).regs 1 = M0Crypto.Spec.Blake2s.h0[6]! ∧
+      (execAll iA s).regs 2 = M0Crypto.Spec.Blake2s.h0[7]! ∧ (execAll iA s).regs 3 = 0#32) := by
   have hb4 := e.base4
   have hbase : base.toNat + Artifacts.Release.size ≤ 2 ^ 32 := e.codeC.1
   have F : ∀ i : Instr, i.falls = true → i.falls = true := fun _ h => h
@@ -315,7 +317,7 @@ theorem block_eff {base : Word} {s : State} (e : InitEntry base s) :
     rw [R15 r n15, R14 r n15, zo r n0 n15, r12, o11 r (by exact n2) n15, o10 r (by exact n1) n15,
       yo r n0 n15, o8 r (by exact n3) n15, o7 r (by exact n2) n15, o6 r (by exact n1) n15,
       xo r n0 n15, o4 r (by exact n3) n15, o3 r (by exact n2) n15, o2 r (by exact n1) n15]
-  refine ⟨?_, ?_, ?_, ?_⟩
+  refine ⟨?_, ?_, ?_, ?_, ⟨?_, ?_, ?_, ?_⟩⟩
   · rw [hx, hq 13 (by decide) (by decide), r13_1]
   · intro r h4 h13 h15
     rw [hx, hq r h4 h15, ro1 r (fun h => h13 (by rw [h]; rfl)) (fun h => h15 (by rw [h]; rfl))]
@@ -337,6 +339,10 @@ theorem block_eff {base : Word} {s : State} (e : InitEntry base s) :
       rw [BitVec.add_assoc]; rfl
     rw [h104, h36, storeWords_append _ _ [0#32]]
     simp only [storeWords, List.length_append, List.length_cons, List.length_nil]
+  · rw [hx, R15 0 (by decide), r0_14]
+  · rw [hx, R15 1 (by decide), R14 1 (by decide), zo 1 (by decide) (by decide), r1_12]
+  · rw [hx, R15 2 (by decide), R14 2 (by decide), zo 2 (by decide) (by decide), r2_12]
+  · rw [hx, R15 3 (by decide), r3_14]
 
 open M0Crypto.Release.Blake2sStream (Ctx CtxNU bytesAt)
 open M0Crypto.Release.Frame (Disj read32_congr toNat_add_ofNat read32_storeWords_same)
@@ -411,6 +417,13 @@ structure InitPost (s t : State) : Prop where
   ctx : Ctx t.mem (s.regs 0) M0Crypto.Spec.Blake2s.State.init
   mem : ∀ y, (∀ o < 4, y ≠ s.regs 13 - 4#32 + BitVec.ofNat 32 o) →
     (∀ o < 112, y ≠ s.regs 0 + BitVec.ofNat 32 o) → t.mem y = s.mem y
+  /-- The frame word holds the pushed `lr`. -/
+  frame : read32 t.mem (s.regs 13 - 4#32) = s.regs 14
+  r0 : t.regs 0 = s.regs 0 + 36#32
+  r1 : t.regs 1 = M0Crypto.Spec.Blake2s.h0[6]!
+  r2 : t.regs 2 = M0Crypto.Spec.Blake2s.h0[7]!
+  r3 : t.regs 3 = 0#32
+  r12 : t.regs 12 = s.regs 12
 
 theorem memB_other {s : State} (y : Word)
     (h1 : ∀ o < 4, y ≠ s.regs 13 - 4#32 + BitVec.ofNat 32 o)
@@ -450,10 +463,31 @@ theorem rd_frame {base : Word} {s : State} (e : InitEntry base s) :
     rw [toNat_add_ofNat _ _ (by omega), toNat_add_ofNat _ _ (by omega)] at this
     omega
 
+/-- The state after the final `pop {pc}`. -/
+theorem initPost_pop {base : Word} {s : State} (e : InitEntry base s) {s1 : State}
+    (sm : s1.mem = (execAll iA s).mem) (s13' : s1.regs 13 = (execAll iA s).regs 13 + 4#32)
+    (so : ∀ r : Reg, r.val ≠ 13 → r.val ≠ 15 → s1.regs r = (execAll iA s).regs r)
+    (spc : s1.pc = read32 (execAll iA s).mem ((execAll iA s).regs 13) &&& ~~~1#32) : InitPost s s1 := by
+  obtain ⟨b13, bo, -, bm, b0, b1, b2, b3⟩ := block_eff e
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · rw [spc, b13, bm, rd_frame e]
+  · rw [s13', b13]; bv_omega
+  · intro r h4 h11
+    rw [so r (by omega) (by omega), bo r h4 (by omega) (by omega)]
+  · rw [sm, bm]; exact ctx_memB e
+  · intro y h1 h2
+    rw [sm, bm]; exact memB_other y h1 h2
+  · rw [sm, bm]; exact rd_frame e
+  · rw [so 0 (by decide) (by decide), b0]
+  · rw [so 1 (by decide) (by decide), b1]
+  · rw [so 2 (by decide) (by decide), b2]
+  · rw [so 3 (by decide) (by decide), b3]
+  · rw [so 12 (by decide) (by decide), bo 12 (by decide) (by decide) (by decide)]
+
 theorem init_reach {base : Word} {s : State} (e : InitEntry base s) :
     Reach base (WrI s) s (InitPost s) := by
   have hb2 : base.toNat % 2 = 0 := by have := e.base4; omega
-  obtain ⟨b13, bo, bpc, bm⟩ := block_eff e
+  obtain ⟨b13, bo, bpc, bm, -⟩ := block_eff e
   refine Reach.symBlock hb2 [((13 : Reg), 4), ((0 : Reg), 4)] [((13 : Reg), (0#32 - 4#32), 4), ((0 : Reg), 0#32, 40), ((0 : Reg), 104#32, 4)]
     iA iStart e.pc (by decide) iA_at (by decide) ?_ ?_ (by decide +kernel) (by decide +kernel) ?_
   · intro p hp
@@ -490,13 +524,6 @@ theorem init_reach {base : Word} {s : State} (e : InitEntry base s) :
       simp only [iPop, Instr.accesses, wordAccesses, List.mem_map, List.mem_range] at ha
       obtain ⟨i, _, rfl⟩ := ha
       simp at hk
-    · refine Reach.done ⟨?_, ?_, ?_, ?_, ?_⟩
-      · rw [spc, b13, bm, rd_frame e]
-      · rw [s13', b13]; bv_omega
-      · intro r h4 h11
-        rw [so r (by omega) (by omega), bo r h4 (by omega) (by omega)]
-      · rw [sm, bm]; exact ctx_memB e
-      · intro y h1 h2
-        rw [sm, bm]; exact memB_other y h1 h2
+    · exact Reach.done (initPost_pop e sm s13' so spc)
 
 end M0Crypto.Release.Blake2sInit

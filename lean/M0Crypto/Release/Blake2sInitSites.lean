@@ -59,7 +59,7 @@ theorem init_reachS {base : Word} {s : State} (e : InitEntry base s) :
     ReachS base (PcWr (WI base s)) s (InitPost s) := by
   have hb2 : base.toNat % 2 = 0 := by have := e.base4; omega
   have hbase : base.toNat + Artifacts.Release.size ≤ 2 ^ 32 := e.codeC.1
-  obtain ⟨b13, bo, bpc, bm⟩ := block_eff e
+  obtain ⟨b13, bo, bpc, bm, -⟩ := block_eff e
   obtain ⟨p0, ppc⟩ := push_state s
   have hs : execAll iA s = execAll iRest (execAll iPush s) := by
     rw [iA_split, execAll_append]
@@ -114,14 +114,6 @@ theorem init_reachS {base : Word} {s : State} (e : InitEntry base s) :
         simp only [iPop, Instr.accesses, wordAccesses, List.mem_map, List.mem_range] at ha
         obtain ⟨i, _, rfl⟩ := ha
         simp at hk
-      · refine ReachS.done ?_
-        refine ⟨?_, ?_, ?_, ?_, ?_⟩
-        · rw [spc, b13, bm, rd_frame e]
-        · rw [s13', b13]; bv_omega
-        · intro r h4 h11
-          rw [so r (by omega) (by omega), bo r h4 (by omega) (by omega)]
-        · rw [sm, bm]; exact ctx_memB e
-        · intro y h1 h2
-          rw [sm, bm]; exact memB_other y h1 h2
+      · exact ReachS.done (initPost_pop e sm s13' so spc)
 
 end M0Crypto.Release.Blake2sInit

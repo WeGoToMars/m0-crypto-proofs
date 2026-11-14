@@ -263,17 +263,19 @@ theorem Inv.keep {s : State} {st0 : SState} {t u : State} {k : Nat} {st : SState
    by rw [hr 6 (by decide) (by decide)]; exact h.r6, by rw [hr 7 (by decide) (by decide)]; exact h.r7,
    by rw [hr 13 (by decide) (by decide)]; exact h.r13,
    fun r h8 h11 => by rw [hr r (by omega) (by omega)]; exact h.hi r h8 h11, h.kn,
-   by rw [hm]; exact h.ctx, Ag.of_mem h.ag hm, h.tot, h.ab⟩
+   by rw [hm]; exact h.ctx, Ag.of_mem h.ag hm, h.tot, h.ab, h.gh.of (hr 12 (by decide) (by decide)) hm⟩
 
 /-- After choosing the chunk length: at `oHave` with `r2 = take`. -/
 def TakePost (base : Word) (s : State) (st0 : SState) (k : Nat) (st : SState) (v : State) : Prop :=
   v.pc = base + BitVec.ofNat 32 oHave ∧ ∃ tk, 1 ≤ tk ∧ tk ≤ nn s - k ∧ st.pending.length + tk ≤ 64 ∧
-    v.regs 2 = BitVec.ofNat 32 tk ∧ Inv s st0 v k st
+    v.regs 2 = BitVec.ofNat 32 tk ∧ Inv s st0 v k st ∧
+    ∀ g, Fut (uargs s) k st.pending.length g =
+      Fut (uargs s) (k + tk) (st.pending.length + tk) (TakeStep (uargs s) k st.pending.length tk g)
 
 theorem take_reach {base : Word} {s : State} {st0 : SState} (e : UpdateEntry base s st0)
     {t : State} {k : Nat} {st : SState}
     (hpc : t.pc = base + BitVec.ofNat 32 oBuf) (hI : Inv s st0 t k st) (hk : k < nn s)
-    (hlt : st.pending.length < 64) :
+    (hlt : st.pending.length < 64) (hnd : NoDir s k st.pending.length) :
     ReachS base (PNR ldAll (WU base s) (UR s)) t (TakePost base s st0 k st) := by
   have hb2 : base.toNat % 2 = 0 := by have := e.base4; omega
   have hn : nn s = (s.regs 2).toNat := rfl
@@ -328,7 +330,8 @@ theorem take_reach {base : Word} {s : State} {st0 : SState} (e : UpdateEntry bas
       have h2 : decide (64 - st.pending.length = nn s - k) = false := by simp; omega
       rw [h1, h2] at hc
       simp at hc
-    refine ReachS.done ⟨by rw [sr_pc], 64 - st.pending.length, by omega, hle, by omega, ?_, hI1.setPc _⟩
+    refine ReachS.done ⟨by rw [sr_pc], 64 - st.pending.length, by omega, hle, by omega, ?_, hI1.setPc _,
+      fun g => fut_take (a := uargs s) g hlt hk hnd (by omega) hle (by omega) (Or.inr (by omega))⟩
     rw [sr_ne _ _ _ _ (by decide)]; exact ar2'
   · intro hc
     rw [cp9, ccz.1, ccz.2] at hc
@@ -351,7 +354,8 @@ theorem take_reach {base : Word} {s : State} {st0 : SState} (e : UpdateEntry bas
     refine ReachS.symBlockWNR hb2 [] [] [] takeB oTakeB hpy (by decide) takeB_at (by decide) (by simp) (by simp)
       (by simp) (by decide +kernel) (by decide +kernel) ?_
     obtain ⟨d2, do_, dm⟩ := takeB_eff y
-    refine ReachS.done ⟨?_, nn s - k, by omega, Nat.le_refl _, by omega, ?_, ?_⟩
+    refine ReachS.done ⟨?_, nn s - k, by omega, Nat.le_refl _, by omega, ?_, ?_,
+      fun g => fut_take (a := uargs s) g hlt hk hnd (by omega) (Nat.le_refl _) (by omega) (Or.inl rfl)⟩
     · rw [execAll_pc _ _ (by decide), hpy, ofNat_add_assoc]; rfl
     · rw [d2, hIy.r6]
     · exact hIy.keep (fun r h4 h15 => do_ r (by omega) h15) dm
@@ -370,6 +374,10 @@ structure BufFin (base : Word) (s t x : State) (k tk : Nat) (u : Nat) : Prop whe
   hcp : ∀ i < tk, x.mem (s.regs 0 + BitVec.ofNat 32 (40 + u + i)) = t.mem (s.regs 1 + BitVec.ofNat 32 (k + i))
   hout : ∀ y, (∀ i < tk, y ≠ s.regs 0 + BitVec.ofNat 32 (40 + u + i)) →
     (∀ o < 20, y ≠ fb s + BitVec.ofNat 32 (SAVED_4 + o)) → x.mem y = t.mem y
+  r12 : x.regs 12 = t.regs 12
+  /-- The window: `copy` (8 bytes or more) leaves its five saved words. -/
+  win : ∀ g, WinSem s 0#32 t.mem g → WinSem s 0#32 x.mem
+    (if 8 ≤ tk then { g with last := some [x.regs 4, x.regs 5, x.regs 6, x.regs 7, retAt base oCopyBl] } else g)
 
 /-- After the append: at `oNext` with more input consumed. -/
 def BufPost (base : Word) (s : State) (st0 : SState) (k : Nat) (v : State) : Prop :=
@@ -378,23 +386,26 @@ def BufPost (base : Word) (s : State) (st0 : SState) (k : Nat) (v : State) : Pro
 theorem buf_post {base : Word} {s t x : State} {st0 : SState} (e : UpdateEntry base s st0)
     {k : Nat} {st : SState} (hI : Inv s st0 t k st) (tk : Nat) (h1 : 1 ≤ tk)
     (hk : k + tk ≤ nn s) (hu : st.pending.length + tk ≤ 64)
-    (hF : BufFin base s t x k tk st.pending.length) : BufPost base s st0 k x := by
+    (hF : BufFin base s t x k tk st.pending.length)
+    (hfut : ∀ g, Fut (uargs s) k st.pending.length g =
+      Fut (uargs s) (k + tk) (st.pending.length + tk) (TakeStep (uargs s) k st.pending.length tk g)) :
+    BufPost base s st0 k x := by
   obtain ⟨hmc, hmag⟩ := buf_mem e hI tk hu hk hF.hcp hF.hout
   have hMlen : (((LL s).drop k).take tk).length = tk := by
     simp only [List.length_take, List.length_drop, LL, bytesAt_length]; omega
   have hn32 := (s.regs 2).isLt
   have hnn : nn s = (s.regs 2).toNat := rfl
-  refine ⟨hF.pc, k + tk, ⟨st.h, st.count, st.pending ++ (((LL s).drop k).take tk)⟩, by omega, hk, ?_⟩
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, by omega, hmc, hmag, ?_, ?_⟩
-  · rw [hF.r4, hI.r4]
-  · rw [hF.r5, hI.r5, ofNat_add_assoc]
-  · rw [hF.r6, hI.r6]
+  have x4 : x.regs 4 = s.regs 0 := by rw [hF.r4, hI.r4]
+  have x5 : x.regs 5 = s.regs 1 + BitVec.ofNat 32 (k + tk) := by rw [hF.r5, hI.r5, ofNat_add_assoc]
+  have x6 : x.regs 6 = BitVec.ofNat 32 (nn s - (k + tk)) := by
+    rw [hF.r6, hI.r6]
     apply BitVec.eq_of_toNat_eq
     simp only [BitVec.toNat_sub, BitVec.toNat_ofNat]
     omega
-  · rw [hF.r7, hI.r7]
-    simp only [List.length_append, hMlen]
-    rw [BitVec.ofNat_add]
+  have x7 : x.regs 7 = BitVec.ofNat 32 (st.pending.length + tk) := by rw [hF.r7, hI.r7, BitVec.ofNat_add]
+  refine ⟨hF.pc, k + tk, ⟨st.h, st.count, st.pending ++ (((LL s).drop k).take tk)⟩, by omega, hk, ?_⟩
+  refine ⟨x4, x5, x6, ?_, ?_, ?_, by omega, hmc, hmag, ?_, ?_, ?_⟩
+  · simp only [List.length_append, hMlen]; exact x7
   · rw [hF.r13, hI.r13]
   · intro r h8 h11
     rw [hF.hi r h8 h11, hI.hi r h8 h11]
@@ -406,6 +417,18 @@ theorem buf_post {base : Word} {s t x : State} {st0 : SState} (e : UpdateEntry b
       rw [← absorb_append, List.take_append_drop]
     rw [e1, absorb_fit _ st (by omega)]
     simp only [List.drop_drop]
+  · obtain ⟨g, hw, h12, hf⟩ := hI.gh
+    refine ⟨TakeStep (uargs s) k st.pending.length tk g, ?_, ?_, ?_⟩
+    · have hl : [x.regs 4, x.regs 5, x.regs 6, x.regs 7, retAt base oCopyBl] =
+          rec5 (uargs s) (k + tk) (nn s - (k + tk)) (st.pending.length + tk) oCopyBl := by
+        simp only [rec5, e.uargs_eq, x4, x5, x6, x7]
+      have := hF.win g hw
+      rw [hl] at this
+      unfold TakeStep
+      exact this
+    · rw [hF.r12, h12, TakeStep.cmp]
+    · simp only [List.length_append, hMlen]
+      exact (hfut g).symm.trans hf
 
 /-! ## The append at `oHave` (byte loop or `m0c_blake2s_copy`) -/
 
@@ -429,7 +452,9 @@ theorem wu_of_wcu {base : Word} {s u : State} {pc y : Word} (c : Nat)
 theorem have_reach {base : Word} {s : State} {st0 : SState} (e : UpdateEntry base s st0)
     {t : State} {k : Nat} {st : SState} {tk : Nat}
     (hpc : t.pc = base + BitVec.ofNat 32 oHave) (hI : Inv s st0 t k st) (h1 : 1 ≤ tk)
-    (h2 : tk ≤ nn s - k) (h3 : st.pending.length + tk ≤ 64) (hr2 : t.regs 2 = BitVec.ofNat 32 tk) :
+    (h2 : tk ≤ nn s - k) (h3 : st.pending.length + tk ≤ 64) (hr2 : t.regs 2 = BitVec.ofNat 32 tk)
+    (hfut : ∀ g, Fut (uargs s) k st.pending.length g =
+      Fut (uargs s) (k + tk) (st.pending.length + tk) (TakeStep (uargs s) k st.pending.length tk g)) :
     ReachS base (PNR ldAll (WU base s) (UR s)) t (BufPost base s st0 k) := by
   have hb2 : base.toNat % 2 = 0 := by have := e.base4; omega
   have hn : nn s = (s.regs 2).toNat := rfl
@@ -503,7 +528,7 @@ theorem have_reach {base : Word} {s : State} {st0 : SState} (e : UpdateEntry bas
       (fun i hi => UR.data_at (c := k) hy1 (by omega)))
       (P' := PNR ldAll (WU base s) (UR s)) (fun _ _ h => ⟨⟨fun y hy => wu_of_ctxR (h.1.1 y hy), h.1.2⟩, h.2⟩) (fun _ h => h)) ?_
     rintro x ⟨hxpc, bi⟩
-    refine buf_post e hI tk h1 hk h3 ⟨hxpc, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+    refine buf_post e hI tk h1 hk h3 ⟨hxpc, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ hfut
     · rw [bi.hi 4 (by decide) (by decide), yr 4 (by decide), w4]
     · rw [bi.hi 5 (by decide) (by decide), yr 5 (by decide), wr5]
     · rw [bi.hi 6 (by decide) (by decide), yr 6 (by decide), wr6]
@@ -518,6 +543,15 @@ theorem have_reach {base : Word} {s : State} {st0 : SState} (e : UpdateEntry bas
     · intro y' hy1' hy2'
       have := bi.cp.2 y' (fun i hi he => hy1' i hi (by rw [hy0, ofNat_add_assoc] at he; exact he))
       rw [this, ym]
+    · rw [bi.hi 12 (by decide) (by decide), yr 12 (by decide),
+        wo 12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
+    · intro g hw
+      rw [if_neg (by omega)]
+      apply win_congr hw
+      intro o ho
+      rw [bi.cp.2 _ (fun i hi he => ?_), ym]
+      rw [hy0, ofNat_add_assoc] at he
+      exact fb_ne_ctx e (by omega) (by omega) he
   · intro hc
     rw [cp3, wc] at hc
     have hge8 : 8 ≤ tk := by
@@ -570,7 +604,7 @@ theorem have_reach {base : Word} {s : State} {st0 : SState} (e : UpdateEntry bas
     have xr : ∀ r : Reg, r.val ≠ 15 → x'.regs r = x.regs r := fun r h15 => by
       rw [hx', sr_ne _ _ _ _ (by rintro rfl; exact h15 rfl)]
     have xm : x'.mem = x.mem := by rw [hx']; rfl
-    refine ReachS.done (buf_post e hI tk h1 hk h3 ⟨by rw [hx', sr_pc], ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩)
+    refine ReachS.done (buf_post e hI tk h1 hk h3 ⟨by rw [hx', sr_pc], ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ hfut)
     · rw [xr 4 (by decide), bp.keep 4 (by decide) (by decide), yr 4 (by decide), w4]
     · rw [xr 5 (by decide), bp.keep 5 (by decide) (by decide), yr 5 (by decide), wr5]
     · rw [xr 6 (by decide), bp.keep 6 (by decide) (by decide), yr 6 (by decide), wr6]
@@ -586,5 +620,27 @@ theorem have_reach {base : Word} {s : State} {st0 : SState} (e : UpdateEntry bas
       have := bp.mem y' (fun o ho he => hy2' o ho (by rw [hFr, show (SAVED_4_W : Word) = BitVec.ofNat 32 SAVED_4 from rfl, ofNat_add_assoc] at he; exact he))
         (fun o ho he => hy1' o (by omega) (by rw [hy0, ofNat_add_assoc] at he; exact he))
       rw [xm, this, ym]
+    · rw [xr 12 (by decide), bp.r12, yr 12 (by decide),
+        wo 12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
+    · intro g hw
+      rw [if_pos hge8]
+      have hl : [x'.regs 4, x'.regs 5, x'.regs 6, x'.regs 7, retAt base oCopyBl] =
+          [y.regs 4, y.regs 5, y.regs 6, y.regs 7, (base + BitVec.ofNat 32 (oCopyBl + 4)) ||| 1#32] := by
+        rw [xr 4 (by decide), bp.keep 4 (by decide) (by decide), xr 5 (by decide), bp.keep 5 (by decide) (by decide),
+          xr 6 (by decide), bp.keep 6 (by decide) (by decide), xr 7 (by decide), bp.keep 7 (by decide) (by decide)]
+        rfl
+      rw [hl]
+      apply win_last hw
+      · intro o ho hr
+        rw [xm, bp.mem _ (fun o2 ho2 he => ?_) (fun o2 ho2 he => ?_), ym]
+        · rw [hFr, ofNat_add_assoc] at he
+          have := fb_inj e (by omega) (by omega) he
+          omega
+        · rw [hy0, ofNat_add_assoc] at he
+          exact fb_ne_ctx e (by omega) (by omega) he
+      · intro i hi
+        have hadr : fb s + BitVec.ofNat 32 (4 * (LOCALS_WORDS + 4 + i)) = y.regs 13 - 20#32 + BitVec.ofNat 32 (4 * i) := by
+          rw [hFr, ofNat_add_assoc, show SAVED_4 + 4 * i = 4 * (LOCALS_WORDS + 4 + i) by omega]
+        rw [xm, hadr, bp.saved i hi, getElem!_pos _ i (by simp; omega)]
 
 end M0Crypto.Release.Blake2sUpdate

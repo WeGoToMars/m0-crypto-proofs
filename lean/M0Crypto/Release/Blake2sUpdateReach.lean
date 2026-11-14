@@ -70,9 +70,18 @@ theorem update_reachSR {base : Word} {s : State} {st0 : SState} (e : UpdateEntry
   rw [← hx] at r13 r4 r5 r6 r7 rhi rmem ⊢
   have hpx : x.pc = base + BitVec.ofNat 32 oUCmp0 := by
     rw [hx, execAll_pc _ _ (by decide), e.pc, ofNat_add_assoc]; rfl
+  have hgh : GI s st0.pending.length x 0 st0.pending.length := by
+    refine ⟨UG.init, fun i hi => ?_, ?_, rfl⟩
+    · have : winW (s.regs 8) (s.regs 9) (s.regs 10) (s.regs 11) 0#32 UG.init i = none := by
+        simp [winW, UG.init]
+      rw [this]
+      simp only [SlotOK]
+      intro j hj
+      rw [rmem, pm_low s e.spLo _ (by omega)]
+    · rw [rhi 12 (by decide) (by decide)]; rfl
   have hI0 : Inv s st0 x 0 st0 :=
-    ⟨r4, by rw [r5]; bv_omega, by rw [r6]; simp [nn], r7, r13, rhi, Nat.zero_le _,
-     by rw [rmem]; exact ctxNU_pm e, by intro y _ _; show x.mem y = pm s y; rw [rmem], by omega, by simp⟩
+    ⟨r4, by rw [r5]; bv_omega, by rw [r6]; simp [nn], r7, r13, fun r h8 h11 => rhi r h8 (by omega), Nat.zero_le _,
+     by rw [rmem]; exact ctxNU_pm e, by intro y _ _; show x.mem y = pm s y; rw [rmem], by omega, by simp, hgh⟩
   refine ReachS.symBlockWNR hb2 [] [] [] cmpN0 oUCmp0 hpx (by decide) cmpN0_at (by decide) (by simp) (by simp)
     (by simp) (by decide +kernel) (by decide +kernel) ?_
   obtain ⟨ac, az, am, ar⟩ := cmp_eff 6 0 x

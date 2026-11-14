@@ -97,7 +97,7 @@ theorem decrypt_tail_r {Rd : Word → Prop} (c : ACall) (hv : AValid c) (hb : AB
       (fun j hj => not_siteRd (by have := (by decide : decCryptAt + seqSize crypt < 2 ^ 32); omega)
         (no_readSite (by decide +kernel : firstReadSite decCryptAt (seqSize crypt) = none) j hj))
       (pt_ns (by decide +kernel) (by decide))
-      (not_pcBetween (by decide) (by decide) (Or.inr (by decide))) (fun y h => hsub y (.enc h))
+      (not_pcBetween (by decide) (by decide) (Or.inr (by decide))) (fun y h => hsub y (.common h))
     apply ReachS.bind
     apply reach.mono (fun _ _ h => h)
     intro w hw
@@ -131,7 +131,7 @@ theorem decrypt_compare_entry_r {Rd : Word → Prop} (c : ACall) (hv : AValid c)
       y.pc = c.base + BitVec.ofNat 32 decCmpAAt ∧ Body c (SWr c.A) y ∧
       Ctx.bytesAt y.mem c.tag 16 = c.tagB ∧
       Ctx.bytesAt y.mem (c.A + 72#32) 16 = c.expected) := by
-  have hsubE : ∀ y, TraceSpec.AeadEncryptReadRegion c y → Rd y := fun y h => hsub y (.enc h)
+  have hsubE : ∀ y, AeadCommonReadRegion c y → Rd y := fun y h => hsub y (.common h)
   have hblk := rd_blk c hsubE
   obtain ⟨tx, ti', tl, tf, tc⟩ := dec_calls
   obtain ⟨_, _, _, _, _, mad, _, mct, _⟩ := dec_at
@@ -200,7 +200,7 @@ theorem decrypt_reach_r {Rd : Word → Prop} (c : ACall) (hv : AValid c) (hb : A
   rintro y ⟨ypc, yb, tagY, tag⟩
   apply ReachS.bind
   apply (compare_reach_r (Rd := Rd) c hv y ypc yb.sp yb.high (region_ns (by decide +kernel) (by decide)) (pt_ns (by decide +kernel) (by decide))
-    (fun j hj => hsub _ (.tag hj rfl)) (rd_blk c (fun y h => hsub y (.enc h)))).mono
+    (fun j hj => hsub _ (.tag hj rfl)) (rd_blk c (fun y h => hsub y (.common h)))).mono
     (fun _ _ h => h)
   rintro z ⟨zp, zm, zr, zeq⟩
   have zb := yb.same zm (zr 13 (by decide) (by decide)) (fun r a b => zr r (by omega) (by omega))

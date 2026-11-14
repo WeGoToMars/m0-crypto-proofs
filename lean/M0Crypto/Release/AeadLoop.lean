@@ -56,10 +56,10 @@ theorem mac_loop {Pc : Word → Prop} (base A dq : Word) (M0 : Mem) (R : Reg →
     ∀ r k, k + r = rem → k < rem → ∀ u : State,
       u.pc = base + BitVec.ofNat 32 (m + macLOff) → u.regs 1 = A + 72#32 → u.regs 2 = BitVec.ofNat 32 k →
       u.regs 4 = dq → u.regs 6 = BitVec.ofNat 32 rem → u.regs 13 = A →
-      (∀ q : Reg, 7 ≤ q.val → q.val < 12 → u.regs q = R q) →
+      (∀ q : Reg, 4 ≤ q.val → q.val < 12 → u.regs q = R q) →
       BlkHas A dq M0 k u.mem → (∀ y, OutBlk A y → u.mem y = M0 y) →
       ReachW base Pc (MacWr A) u (fun v => v.pc = base + BitVec.ofNat 32 (m + macEOff) ∧ v.regs 1 = A + 72#32 ∧
-        v.regs 13 = A ∧ (∀ q : Reg, 7 ≤ q.val → q.val < 12 → v.regs q = R q) ∧
+        v.regs 13 = A ∧ (∀ q : Reg, 4 ≤ q.val → q.val < 12 → v.regs q = R q) ∧
         BlkHas A dq M0 rem v.mem ∧ (∀ y, OutBlk A y → v.mem y = M0 y))
   | 0, k, h, hk, _, _, _, _, _, _, _, _, _, _ => absurd hk (by omega)
   | r + 1, k, h, hk, u, hpc, h1, h2, h4, h6, h13, hR, hblk, hout => by
