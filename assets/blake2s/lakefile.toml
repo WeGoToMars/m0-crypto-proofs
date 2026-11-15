@@ -23,6 +23,13 @@ name = "Asset"
 srcDir = "../../lean"
 roots = ["M0Crypto.Assets.Blake2s"]
 
+# The claims of Audit.lean as `sorry` statements over the statement files only: the challenge that
+# tools/comparator.sh judges the asset root against. Not a default target.
+[[lean_lib]]
+name = "Challenge"
+srcDir = "challenge"
+roots = ["Challenge"]
+
 # Native build of the executable release checks, for the mutation script. The proofs build
 # does not use it: the asset root runs the same checks in Lean's interpreter.
 [[lean_exe]]

@@ -484,9 +484,8 @@ theorem decrypt_correct : DecryptCorrect :=
     ⟨n, fun fuel hf => let ⟨t, tr, h1, ⟨h2, h3, h4⟩, h5⟩ := hn fuel hf; ⟨t, tr, h1, h2, h5, h3, h4⟩⟩⟩
 
 /-- Rejected calls write only the AEAD stack, including exact in-place calls. -/
-theorem rejected_writes (c : ACall) (tr : List Event)
-    (h : decrypt c.keyB c.nonceB c.aadB c.ptB c.tagB=none)
-    (hw : WritesTo (DAllowed c) tr) : WritesTo (SWr c.A) tr := by
+theorem rejected_writes : RejectedWrites := by
+  intro c tr h hw
   refine WritesTo.mono (Wr' := SWr c.A) hw ?_
   rintro y (hs | ⟨ha, _⟩)
   · exact hs

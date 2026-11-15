@@ -7,8 +7,8 @@ Statement file: definitions only, no proofs (see `Contract.lean`). In reading or
 (`ACall`), the entry state (`AEntry`), the preconditions (`AValid`, `ABuf`), the three bundled
 as the hypothesis of every top-level theorem (`APre`), the write regions, and what a returned
 call guarantees (`RetPost`, `EncryptResult`, `DecryptResult`), bundled in the claims
-`EncryptCorrect` and `DecryptCorrect`. Compare with
-`include/m0crypto/chacha20poly1305.h`.
+`EncryptCorrect` and `DecryptCorrect`, and the write bound of a rejected call (`RejectedWrites`).
+Compare with `include/m0crypto/chacha20poly1305.h`.
 -/
 
 namespace M0Crypto.Release.Aead
@@ -182,5 +182,11 @@ def DecryptCorrect : Prop :=
       DecryptResult c t ∧ WritesTo (DAllowed c) tr ∧ t.regs 12 = 0#32 ∧
       Ctx.bytesAt t.mem (c.sp0 - 320#32) 320 =
         window c.regs0 c.nonce (decide (c.expected = c.tagB)) (Ctx.bytesAt c.m0 (c.sp0 - 320#32) 320)
+
+/-- A rejected decryption (`decrypt` returns `none`) whose writes lie in `DAllowed` writes only its
+stack, including exact in-place calls. -/
+def RejectedWrites : Prop :=
+  ∀ (c : ACall) (tr : List Event), decrypt c.keyB c.nonceB c.aadB c.ptB c.tagB = none →
+    WritesTo (DAllowed c) tr → WritesTo (SWr c.A) tr
 
 end M0Crypto.Release.Aead

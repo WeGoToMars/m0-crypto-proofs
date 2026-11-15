@@ -619,9 +619,8 @@ outside the 176 stack bytes unchanged, the 140-byte frame zeroed after an accept
 and unchanged otherwise, the 36 bytes above it holding the caller's r4-r11 and LR; and every write
 lies in the 176 stack bytes or, only if the call is accepted, the output buffer (`WrOk`). Reads
 and intermediate SP values are not bounded here. -/
-theorem xor_correct (c : Ctx) (s : State) (hp : Pre c s) :
-    ∃ n, ∀ fuel, n ≤ fuel → ∃ s' tr, Thumb.runUntil c.ret fuel s = .ok (s', tr) ∧
-      Result c s' ∧ WritesTo (WrOk c) tr := by
+theorem xor_correct : Correct := by
+  intro c s hp
   obtain ⟨hv, h, hlr, hret⟩ := hp
   replace hret := Region.ne hret
   have sSB := ChaCha20Layout.chStackBytes_eq

@@ -7,7 +7,8 @@ import M0Crypto.Spec.Aead
 Statement file: definitions only, no proofs (see `Contract.lean`). In reading order: the stack
 sizes, the call (`Ctx`), its preconditions (`Valid`), the entry state (`Entry`), the two
 bundled as the hypothesis of every top-level theorem (`Pre`), and what a returned call
-guarantees (`Result`, `WrOk`). Compare with `include/m0crypto/chacha20.h`.
+guarantees (`Result`, `WrOk`), bundled in the claim `Correct`. Compare with
+`include/m0crypto/chacha20.h`.
 -/
 
 namespace M0Crypto.Release.ChaCha20Layout
@@ -163,5 +164,13 @@ accepted. -/
 def WrOk (c : Ctx) (y : Word) : Prop :=
   Region c.fp chStackBytes y ∨
     (M0Crypto.Spec.Aead.counterOk c.ctr.toNat c.len.toNat = true ∧ Region c.out c.len.toNat y)
+
+/-! ## Functional statement -/
+
+/-- Every valid call returns, with `Result` and only allowed writes. -/
+def Correct : Prop :=
+  ∀ c s, Pre c s →
+    ∃ n, ∀ fuel, n ≤ fuel → ∃ s' tr, Thumb.runUntil c.ret fuel s = .ok (s', tr) ∧
+      Result c s' ∧ WritesTo (WrOk c) tr
 
 end M0Crypto.Release.ChaCha20Xor
