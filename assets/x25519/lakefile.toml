@@ -3,23 +3,26 @@
 # tools/extract_release.py from the library's m0crypto_x25519.o) and builds only the
 # asset root M0Crypto.Assets.X25519 and its imports.
 name = "m0crypto_x25519"
-version = "0.3.1"
+version = "0.3.2"
 defaultTargets = ["Asset"]
 
 # Makes every module under ../../lean local to this workspace (built here, not looked up).
 [[lean_lib]]
 name = "M0Crypto"
+leanOptions = { warningAsError = true }
 srcDir = "../../lean"
 globs = ["M0Crypto.+"]
 
 # Lake takes a module from the last library that matches it: the artifact comes from here.
 [[lean_lib]]
 name = "Artifact"
+leanOptions = { warningAsError = true }
 srcDir = "artifact"
 roots = ["M0Crypto.Artifacts.Release"]
 
 [[lean_lib]]
 name = "Asset"
+leanOptions = { warningAsError = true }
 srcDir = "../../lean"
 roots = ["M0Crypto.Assets.X25519"]
 
@@ -34,5 +37,6 @@ roots = ["Challenge"]
 # does not use it: the asset root runs the same checks in Lean's interpreter.
 [[lean_exe]]
 name = "release_check"
+leanOptions = { warningAsError = true }
 srcDir = "../../lean"
 root = "M0Crypto.Thumb.ReleaseCheck.X25519Main"
