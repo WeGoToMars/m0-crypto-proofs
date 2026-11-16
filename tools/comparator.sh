@@ -1,6 +1,6 @@
 #!/bin/sh
-# Judge each asset root against its challenge with the pinned toolchain's `lake comparator`, run on
-# request and not by check.sh. assets/ASSET/challenge/Challenge.lean states every claim of
+# Judge each asset root against its challenge with the pinned toolchain's `lake comparator`, run by
+# the library's CI on every push and not by check.sh. assets/ASSET/challenge/Challenge.lean states every claim of
 # assets/ASSET/Audit.lean except the non-vacuity witnesses, under the same name, over the statement
 # files only, with `sorry`. `lake comparator` builds and exports the challenge and the asset root and
 # accepts only if each claim of the asset root states the same term as the challenge, every
@@ -9,6 +9,8 @@
 # everything they use, Lean core included, in an empty environment. `lake check` then does the same
 # kernel replay for every declaration the asset root reaches, the witnesses included. Both run in a
 # bwrap sandbox where bwrap is available (Linux), and otherwise with --inadvisably-no-sandbox.
+# The sandbox hides /home, /root and /tmp, and the asset workspaces read ../../lean, so under
+# bwrap the proofs tree has to lie outside those directories.
 # One asset at a time: 5 to 11 minutes and up to about 5 GB each.
 #
 # Usage: tools/comparator.sh [ASSET...]     (default: chacha20poly1305 blake2s x25519)
