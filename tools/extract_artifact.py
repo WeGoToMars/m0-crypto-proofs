@@ -2,8 +2,9 @@
 """Extract a linked Thumb symbol's exact bytes from an ELF into a Lean artifact file.
 
 The generated Lean file is checked in so proofs build without the ARM toolchain.
-`--check` regenerates in memory and fails if the checked-in file differs, which
-ties the proofs to the bytes produced by tools/build.sh.
+`--check` compares the linked address, symbol, section and exact fragment bytes.
+The source ELF hash records the original extraction, but is not a build invariant:
+ELF metadata such as the linker identification differs between toolchain builds.
 
 Standard library only. Supports little-endian ELF32 ARM executables only.
 
@@ -11,6 +12,7 @@ Usage:
   extract_artifact.py ELF SYMBOL LEAN_MODULE OUT.lean [--check]
 """
 import hashlib
+import re
 import struct
 import sys
 
@@ -96,7 +98,8 @@ def find_symbol(data, sections, cstr, name):
 
 
 def extract(elf_path, symbol):
-    data = open(elf_path, "rb").read()
+    with open(elf_path, "rb") as source:
+        data = source.read()
     sections, cstr = parse_elf(data)
     addr, size, sec = find_symbol(data, sections, cstr, symbol)
     if sec["type"] != 1 or not sec["flags"] & 0x4:  # SHT_PROGBITS, SHF_EXECINSTR
@@ -153,9 +156,14 @@ def main(argv):
             current = open(out).read()
         except FileNotFoundError:
             fail(f"{out} missing")
-        if current != text:
+        # Keep the original container hash as provenance. In particular, Homebrew
+        # and upstream LLD put different identification strings in .comment.
+        # Every other generated field must still match the rebuilt fragment.
+        recorded = re.search(r'^def elfSha256 : String := "([0-9a-f]{64})"$', current, re.M)
+        if recorded is None or current != render(
+                module, symbol, addr, code, recorded.group(1), section):
             fail(f"{out} is stale relative to {elf}; rerun without --check")
-        print(f"ok: {out} matches {elf} ({len(code)} bytes, elf sha256 {elf_sha})")
+        print(f"ok: {out} matches {elf} ({len(code)} bytes, rebuilt elf sha256 {elf_sha})")
     else:
         open(out, "w").write(text)
         print(f"wrote {out} ({len(code)} bytes)")

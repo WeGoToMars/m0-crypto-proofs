@@ -33,6 +33,7 @@ echo "== 1. pinned build (ChaCha20 kernel fixtures)"
 tools/build.sh
 
 echo "== 2. checked-in Lean artifacts match the linked ELFs"
+python3 -I tools/test_extract_artifact.py
 echo "$KERNELS" | while read -r stem symbol module; do
     python3 -I tools/extract_artifact.py "build/$stem.elf" "$symbol" "$module" \
         "$(artifact_path "$module")" --check
