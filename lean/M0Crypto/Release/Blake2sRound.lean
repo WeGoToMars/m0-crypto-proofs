@@ -124,12 +124,12 @@ theorem step (s : State) (sp : Word) (v m : Nat → Word) (c : Option Nat)
     intro r h15 h0 h1 h3 h4 h8
     by_cases h1' : r.val = creg.val
     · have : r = creg.toReg := Fin.ext h1'
-      rw [if_pos h1', this]; simpa [State.reg] using ec
-    · rw [if_neg h1']
+      rw [ite_eq_left h1', this]; simpa [State.reg] using ec
+    · rw [ite_eq_right h1']
       by_cases h2 : r.val = dreg.val
       · have : r = dreg := Fin.ext h2
-        rw [if_pos h2, this]; exact ed
-      · rw [if_neg h2]; exact hne r h15 h0 h1 h3 h4 h8 h1' h2
+        rw [ite_eq_left h2, this]; exact ed
+      · rw [ite_eq_right h2]; exact hne r h15 h0 h1 h3 h4 h8 h1' h2
   have hm : s'.mem = write32 (if keepA = true ∨ a = 0 then s.mem else write32 s.mem (slot sp a)
       (G (v a) (v b) (v ic) (v id) (m x) (m y)).1) (slot sp b) (G (v a) (v b) (v ic) (v id) (m x) (m y)).2.1 := by
     rw [emem, spv]
@@ -176,10 +176,10 @@ theorem step (s : State) (sp : Word) (v m : Nat → Word) (c : Option Nat)
     intro i h1 h8 hci
     rw [hm, read32_write32_slot' _ _ _ b i (by omega) (by omega)]
     by_cases hbi : b = i
-    · rw [if_pos hbi, ← hbi, mixF_b _ _ _ _ _ _ _ (by omega) (by omega)]
-    · rw [if_neg hbi]
+    · rw [ite_eq_left hbi, ← hbi, mixF_b _ _ _ _ _ _ _ (by omega) (by omega)]
+    · rw [ite_eq_right hbi]
       by_cases hka : keepA = true ∨ a = 0
-      · rw [if_pos hka]
+      · rw [ite_eq_left hka]
         have hia : i ≠ a := by
           intro h
           rcases hka with hk' | h0
@@ -190,10 +190,10 @@ theorem step (s : State) (sp : Word) (v m : Nat → Word) (c : Option Nat)
           · simp
           · simp; omega
         rw [hI.memV i h1 h8 hcne, mixF_o _ _ _ _ _ _ _ i (by omega) (by omega) (by omega) hia]
-      · rw [if_neg hka, read32_write32_slot' _ _ _ a i (by omega) (by omega)]
+      · rw [ite_eq_right hka, read32_write32_slot' _ _ _ a i (by omega) (by omega)]
         by_cases hai : a = i
-        · rw [if_pos hai, ← hai, mixF_a _ _ _ _ _ _ _ (by omega) (by omega) (by omega)]
-        · rw [if_neg hai]
+        · rw [ite_eq_left hai, ← hai, mixF_a _ _ _ _ _ _ _ (by omega) (by omega) (by omega)]
+        · rw [ite_eq_right hai]
           have hcne : c ≠ some i := by
             rcases hcc with h | h <;> rw [h]
             · simp
@@ -217,17 +217,17 @@ theorem step (s : State) (sp : Word) (v m : Nat → Word) (c : Option Nat)
   · exact regField 12 (by omega) (by omega) (by omega) (by decide) (by decide) (by omega) (by omega) 15 (by omega) hI.r12
   · -- memM
     intro i hi
-    rw [hm, read32_write32_slot' _ _ _ b (8 + i) (by omega) (by omega), if_neg (by omega)]
+    rw [hm, read32_write32_slot' _ _ _ b (8 + i) (by omega) (by omega), ite_eq_right (by omega)]
     by_cases hka : keepA = true ∨ a = 0
-    · rw [if_pos hka]; exact hI.memM i hi
-    · rw [if_neg hka, read32_write32_slot' _ _ _ a (8 + i) (by omega) (by omega), if_neg (by omega)]
+    · rw [ite_eq_left hka]; exact hI.memM i hi
+    · rw [ite_eq_right hka, read32_write32_slot' _ _ _ a (8 + i) (by omega) (by omega), ite_eq_right (by omega)]
       exact hI.memM i hi
   · -- MW
     rw [hm]
     refine MW.store b _ hb1 hb ?_
     by_cases hka : keepA = true ∨ a = 0
-    · rw [if_pos hka]; exact MW.refl _
-    · rw [if_neg hka]
+    · rw [ite_eq_left hka]; exact MW.refl _
+    · rw [ite_eq_right hka]
       exact MW.store a _ (by omega) ha (MW.refl _)
 
 

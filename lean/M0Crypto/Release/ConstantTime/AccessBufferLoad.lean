@@ -87,9 +87,9 @@ theorem certPoint_memImm_buffer_load_paired {env : Env} {bytes : List (BitVec 8)
       st.set t.val (if env.pubLoads.contains off = true then .lo else .hi))], [.load]⟩ := by
     by_cases hpb : env.pubLoads.contains off = true
     · have hpb' : off ∈ env.pubLoads := by simpa using hpb
-      rw [if_pos hpb]; simpa [xfer, xferCore, hw, hb.2.1, hop, haccess, hn, hpb'] using hx.symm
+      rw [ite_eq_left hpb]; simpa [xfer, xferCore, hw, hb.2.1, hop, haccess, hn, hpb'] using hx.symm
     · have hpb' : off ∉ env.pubLoads := by simpa using hpb
-      rw [if_neg hpb]; simpa [xfer, xferCore, hw, hb.2.1, hop, haccess, hn, hpb'] using hx.symm
+      rw [ite_eq_right hpb]; simpa [xfer, xferCore, hw, hb.2.1, hop, haccess, hn, hpb'] using hx.symm
   have hpoint := BlockPoint.next hp hx (congrArg Out.succs hout)
   have hacc := memImm_accesses_eq op t n imm hx hrel
   have ⟨_, _, _, _, _, _, _, _, _, _, _, hc₁, hc₂⟩ := hrel
@@ -97,8 +97,8 @@ theorem certPoint_memImm_buffer_load_paired {env : Env} {bytes : List (BitVec 8)
       (loadMem op s₁.mem (s₁.reg n + BitVec.ofNat 32 (imm.toNat * op.width)))
       (loadMem op s₂.mem (s₂.reg n + BitVec.ofNat 32 (imm.toNat * op.width))) := by
     by_cases hpb : env.pubLoads.contains off = true
-    · rw [if_pos hpb]; exact hpl hpb
-    · rw [if_neg hpb]; trivial
+    · rw [ite_eq_left hpb]; exact hpl hpb
+    · rw [ite_eq_right hpb]; trivial
   by_cases hal : ((Instr.memImm op t n imm).accesses s₁).all Access.aligned = true
   · have hal₂ : ((Instr.memImm op t n imm).accesses s₂).all Access.aligned = true := by
       simpa [hacc] using hal

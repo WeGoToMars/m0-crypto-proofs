@@ -15,7 +15,7 @@ open M0Crypto.Spec.Blake2s (rotr)
 /-- Half of `B2_G`: `a += b + m; d = (d ^ a) >>> kd; c += d; b = (b ^ c) >>> kb`, with the message word
 in r4, the rotation counts loaded into r4. -/
 def half (rb rt creg : LowReg) (kd kb : Nat) : List Instr :=
-  [ .addReg 0 0 rb, .addReg 0 0 4, .dp .eors rt 0, .movImm 4 (BitVec.ofNat 8 kd), .dp .rors rt 4,
+  [.addReg 0 0 rb, .addReg 0 0 4, .dp .eors rt 0, .movImm 4 (BitVec.ofNat 8 kd), .dp .rors rt 4,
     .addReg creg creg rt, .dp .eors rb creg, .movImm 4 (BitVec.ofNat 8 kb), .dp .rors rb 4 ]
 
 /-- The register-only half-step of `G` (RFC 7693 section 3.1, one of its two halves). -/
@@ -228,7 +228,7 @@ theorem gPre_regs (s : State) (rb rt : LowReg) (a b x : Nat) (dreg : Reg) (haveA
 
 theorem gPost_effect (s : State) (rb rt : LowReg) (a b : Nat) (dreg : Reg) (keepA : Bool)
     (ha : a < 8) (hb : b < 8) (hd : DReg dreg)
-    (b0 : rb.val ≠ 0) (t0 : rt.val ≠ 0) (bt : rb.val ≠ rt.val) :
+    (_b0 : rb.val ≠ 0) (_t0 : rt.val ≠ 0) (_bt : rb.val ≠ rt.val) :
     let s' := execAll (gPost rb rt a b dreg keepA) s
     s'.mem = write32 (if keepA ∨ a = 0 then s.mem else
         write32 s.mem (slot (s.regs 13) a) (s.regs 0)) (slot (s.regs 13) b) (s.reg rb) ∧
@@ -259,7 +259,7 @@ theorem gPost_effect (s : State) (rb rt : LowReg) (a b : Nat) (dreg : Reg) (keep
       M0Crypto.Armv6M.State.sp, M0Crypto.Armv6M.State.reg, vSlot,
       sp_off _ _ (by omega : a < 64), sp_off _ _ (by omega : b < 64),
       sp_off' _ _ (by omega : a < 64), sp_off' _ _ (by omega : b < 64), h0, toReg_0, f' 8 (by simp; omega),
-      e8 rb, e8' rb, toReg_ne15 rb, ne_lit rb 0 b0, ne_lit' rb 0 b0]
+      e8 rb, e8' rb, toReg_ne15 rb, ne_lit rb 0 _b0, ne_lit' rb 0 _b0]
   · cases keepA <;> by_cases h0 : a = 0 <;>
     simp (config := {decide := true}) [s', gPost, storeA, execAll, regs_strSp, regs_movHi, d15, h0, toReg_0,
       f 8 (by simp; omega), f' 8 (by simp; omega), f' 0 (by simp; omega), f 0 (by simp; omega),

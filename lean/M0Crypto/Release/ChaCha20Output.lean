@@ -101,12 +101,12 @@ theorem memOk_write8 (c : Ctx) (hv : Valid c) {P : Nat} {m : Mem} (h : c.MemOk P
   intro y hy
   unfold write8
   by_cases e : y = c.out + BitVec.ofNat 32 P
-  · rw [if_pos e, e, oidx_out c hv P hP, if_pos (by omega), hb]
-  · rw [if_neg e, h y hy]
+  · rw [ite_eq_left e, e, oidx_out c hv P hP, ite_eq_left (by omega), hb]
+  · rw [ite_eq_right e, h y hy]
     have := oidx_ne c e
     by_cases hl : c.oidx y < P
-    · rw [if_pos hl, if_pos (by omega)]
-    · rw [if_neg hl, if_neg (by omega)]
+    · rw [ite_eq_left hl, ite_eq_left (by omega)]
+    · rw [ite_eq_right hl, ite_eq_right (by omega)]
 
 /-- A word store of four expected bytes at the prefix extends the prefix by 4. -/
 theorem memOk_write32 (c : Ctx) (hv : Valid c) {P : Nat} {m : Mem} (h : c.MemOk P m)
@@ -117,24 +117,24 @@ theorem memOk_write32 (c : Ctx) (hv : Valid c) {P : Nat} {m : Mem} (h : c.MemOk 
     fun q => ofNat_add_assoc _ _ _
   unfold write32
   by_cases e0 : y = c.out + BitVec.ofNat 32 P
-  · rw [if_pos e0, e0, oidx_out c hv P (by omega), if_pos (by omega)]; exact hb 0 (by omega)
-  rw [if_neg e0]
+  · rw [ite_eq_left e0, e0, oidx_out c hv P (by omega), ite_eq_left (by omega)]; exact hb 0 (by omega)
+  rw [ite_eq_right e0]
   by_cases e1 : y = c.out + BitVec.ofNat 32 P + 1#32
-  · rw [if_pos e1, e1, ad 1, oidx_out c hv _ (by omega), if_pos (by omega)]; exact hb 1 (by omega)
-  rw [if_neg e1]
+  · rw [ite_eq_left e1, e1, ad 1, oidx_out c hv _ (by omega), ite_eq_left (by omega)]; exact hb 1 (by omega)
+  rw [ite_eq_right e1]
   by_cases e2 : y = c.out + BitVec.ofNat 32 P + 2#32
-  · rw [if_pos e2, e2, ad 2, oidx_out c hv _ (by omega), if_pos (by omega)]; exact hb 2 (by omega)
-  rw [if_neg e2]
+  · rw [ite_eq_left e2, e2, ad 2, oidx_out c hv _ (by omega), ite_eq_left (by omega)]; exact hb 2 (by omega)
+  rw [ite_eq_right e2]
   by_cases e3 : y = c.out + BitVec.ofNat 32 P + 3#32
-  · rw [if_pos e3, e3, ad 3, oidx_out c hv _ (by omega), if_pos (by omega)]; exact hb 3 (by omega)
-  rw [if_neg e3, h y hy]
+  · rw [ite_eq_left e3, e3, ad 3, oidx_out c hv _ (by omega), ite_eq_left (by omega)]; exact hb 3 (by omega)
+  rw [ite_eq_right e3, h y hy]
   have n0 := oidx_ne c e0
   have n1 := oidx_ne c (i := P + 1) (by rw [← ad 1]; exact e1)
   have n2 := oidx_ne c (i := P + 2) (by rw [← ad 2]; exact e2)
   have n3 := oidx_ne c (i := P + 3) (by rw [← ad 3]; exact e3)
   by_cases hl : c.oidx y < P
-  · rw [if_pos hl, if_pos (by omega)]
-  · rw [if_neg hl, if_neg (by omega)]
+  · rw [ite_eq_left hl, ite_eq_left (by omega)]
+  · rw [ite_eq_right hl, ite_eq_right (by omega)]
 
 /-- Output stores leave the frame words alone. -/
 theorem out_ne_slot (c : Ctx) (hv : Valid c) (i j q : Nat) (hi : i < c.len.toNat) (hj : j < ChaCha20Layout.chCallWords) (hq : q < 4) :
@@ -148,7 +148,7 @@ theorem read32_write8_out (c : Ctx) (hv : Valid c) (m : Mem) (i j : Nat) (v : Wo
   apply read32_congr
   intro q hq
   simp only [write8]
-  rw [if_neg (out_ne_slot c hv i j q hi hj hq)]
+  rw [ite_eq_right (out_ne_slot c hv i j q hi hj hq)]
 
 theorem read32_write32_out (c : Ctx) (hv : Valid c) (m : Mem) (i j : Nat) (v : Word) (hi : i + 4 ≤ c.len.toNat)
     (hj : j < ChaCha20Layout.chCallWords) : read32 (write32 m (c.out + BitVec.ofNat 32 i) v) (slot c.fp j) = read32 m (slot c.fp j) := by
@@ -228,7 +228,7 @@ theorem bpost_S {Pc : Word → Prop} (c : Ctx) (hv : Valid c) (hPc : ∀ pc, Cha
   have vf : ∀ j, 16 ≤ j → j < 64 → c.fw (execAll post v) j = c.fw t j := fun j h1 h2 => by
     rw [← vfw j (by omega) h2]
     show read32 _ _ = _
-    rw [rd j h2, if_neg (by omega), if_neg (by omega), if_neg (by omega), if_neg (by omega), if_neg (by omega)]; rfl
+    rw [rd j h2, ite_eq_right (by omega), ite_eq_right (by omega), ite_eq_right (by omega), ite_eq_right (by omega), ite_eq_right (by omega)]; rfl
   have vw : ∀ i, (i < 16) → c.fw (execAll post v) i = ChaCha20Loop.iter innerBlockF 10 (c.J k) i := by
     intro i hi
     rw [← vview]
@@ -236,11 +236,11 @@ theorem bpost_S {Pc : Word → Prop} (c : Ctx) (hv : Valid c) (hPc : ∀ pc, Cha
     rw [rd i (by omega)]
     unfold ChaCha20Round.view
     by_cases h12 : i < 12
-    · rw [if_pos h12, if_neg (by omega), if_neg (by omega), if_neg (by omega), if_neg (by omega)]
+    · rw [ite_eq_left h12, ite_eq_right (by omega), ite_eq_right (by omega), ite_eq_right (by omega), ite_eq_right (by omega)]
       by_cases h2 : i = 2
       · subst h2; rfl
-      · rw [if_neg (Ne.symm h2), if_neg (fun e => h2 (Option.some.inj e).symm), vsp]
-    · rw [if_neg h12, if_pos hi]
+      · rw [ite_eq_right (Ne.symm h2), ite_eq_right (fun e => h2 (Option.some.inj e).symm), vsp]
+    · rw [ite_eq_right h12, ite_eq_left hi]
       have : i = 12 ∨ i = 13 ∨ i = 14 ∨ i = 15 := by omega
       rcases this with rfl | rfl | rfl | rfl <;> rfl
   apply cont
@@ -636,17 +636,17 @@ theorem bsum_S {Pc : Word → Prop} (c : Ctx) (hv : Valid c) (hPc : ∀ pc, ChaC
     apply bsum_S c hv hPc k allowed haccess Q n (i + 1) (by omega) _
       (by rw [execAll_pc _ _ (by simp [bch, Instr.falls]), hpc, ofNat_add_assoc, bch_size, off_step])
       (by rw [er 13 (by decide) (by decide) (by decide), h13])
-      (fun j h1 h2 => by rw [fw1 j (by omega), fw1 (slotJ + j) (by omega), if_neg (by omega), if_neg (by omega)];
+      (fun j h1 h2 => by rw [fw1 j (by omega), fw1 (slotJ + j) (by omega), ite_eq_right (by omega), ite_eq_right (by omega)];
                          exact hx j (by omega) h2)
       (fun j hj => by
         rw [fw1 j (by omega)]
         by_cases e : i = j
-        · rw [if_pos e, e]
-        · rw [if_neg e]; exact hd j (by omega))
+        · rw [ite_eq_left e, e]
+        · rw [ite_eq_right e]; exact hd j (by omega))
       (by rw [em, h13]; exact c.memOk_write_slot hm i (by omega) _)
     intro t2 pc2 r2 x2 f2 m2
     exact cont t2 pc2 (fun r a b d => (r2 r a b d).trans (er r a b d)) x2
-      (fun j h1 h2 => by rw [f2 j h1 h2, fw1 j h2, if_neg (by omega)]) m2
+      (fun j h1 h2 => by rw [f2 j h1 h2, fw1 j h2, ite_eq_right (by omega)]) m2
 
 
 theorem bsum_w {Pc : Word → Prop} (c : Ctx) (hv : Valid c) (hPc : ∀ pc, ChaCha20Policy.ChaPc c.base pc → Pc pc) (k : Nat) (Q : State → Prop) :

@@ -41,11 +41,11 @@ theorem mask_runs {Wr : Word → Prop} (u : State)
     exact ⟨X25519Block.aligned_word hal, fun h => nomatch h⟩
   · simp [Instr.accesses]
   · refine ⟨?_, ?_, ?_⟩
-    · simp [execAll, X25519LadderBit.regs_rsbs, X25519Mem.regs_ldrSp, State.reg,
+    · simp [execAll, X25519LadderBit.regs_rsbs, X25519Mem.regs_ldrSp,
         X25519Mem.toReg7]
     · simp [execAll, X25519LadderBit.mem_dp, X25519Mem.mem_ldrSp]
     · simp [execAll, X25519LadderBit.regs_rsbs, X25519Mem.regs_ldrSp, X25519LadderBit.rsbs_val,
-        X25519LadderBit.mem_dp, X25519Mem.mem_ldrSp, X25519Mem.c_ldrSp, State.reg, State.sp,
+           State.reg, State.sp,
         lvSwap, X25519Mem.toReg7]
 
 /-! ## Final swap -/
@@ -242,12 +242,11 @@ theorem dbl_iter {Q : State → Prop} {j : Nat} (hj : j + 1 ≤ 3) {x z : Int} {
   have keep : KeepT c s u2 := fun y h1 h2 h3 => by rw [keepT y h1 h2 h3, hK1 y h1 h2]
   -- values
   have V := opsEff_val hv 0#32 E1 (by decide) (nonsel_of (by decide))
-  simp only [OpsVal, dblOps, Op.step, add, sub, mul, sqr, mulc, Fn.rel, Option.getD_some,
-    Option.getD_none] at V
+  simp only [OpsVal, dblOps, Op.step, add, sub, mul, sqr, mulc, Fn.rel, Option.getD_some] at V
   obtain ⟨τ1, ⟨r1, k1⟩, τ2, ⟨r2, k2⟩, τ3, ⟨r3, k3⟩, τ4, ⟨r4, k4⟩, τ5, ⟨r5, k5⟩,
     τ6, ⟨r6, k6⟩, τ7, ⟨r7, k7⟩, τ8, ⟨r8, k8⟩, e1⟩ := V
   subst e1
-  simp (disch := decide) only [k1, k2, k3, k4, k5, k6, k7, k8] at r1 r2 r3 r4 r5 r6 r7 r8
+  simp (disch := decide) only [k1, k2, k3, k4, k5, k6, k7] at r1 r2 r3 r4 r5 r6 r7 r8
   have hd := X25519Ladder.dbl_congr hx hz r1 r2 r3 r4 r5 r6 r7 r8
   have vx : ModP (env c u2.mem sX2) (dbl x z).1 := by
     rw [envT _ (by decide)]

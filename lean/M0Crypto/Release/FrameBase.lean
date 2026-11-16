@@ -155,7 +155,7 @@ theorem and_not3_toNat (a : Word) : (a &&& ~~~3#32).toNat = a.toNat - a.toNat % 
 
 /-- Literal-pool address of `ldr rt, [pc, #imm*4]` at offset `off`. -/
 theorem lit_addr (base : Word) (hb : base.toNat % 4 = 0) (off imm : Nat)
-    (h : base.toNat + off + 4 + imm * 4 < 2 ^ 32) :
+    (_h : base.toNat + off + 4 + imm * 4 < 2 ^ 32) :
     ((base + BitVec.ofNat 32 off + 4#32) &&& ~~~3#32) + BitVec.ofNat 32 (imm * 4) =
       base + BitVec.ofNat 32 ((off + 4) / 4 * 4 + imm * 4) := by
   apply BitVec.eq_of_toNat_eq

@@ -96,33 +96,33 @@ theorem setupC7_eff (t : State) :
   have n15 : ∀ r : Reg, r.val ≠ 15 → r ≠ 15 := fun r h h' => h (by rw [h']; rfl)
   -- frame facts
   have f1 : ∀ r : Reg, r.val ≠ 0 → r.val ≠ 15 → a1.regs r = t.regs r := fun r h0 h15 => by
-    rw [h1, regs_movImm _ _ _ _ (n15 r h15)]; exact if_neg (fun h => h0 (by rw [h]; rfl))
+    rw [h1, regs_movImm _ _ _ _ (n15 r h15)]; exact ite_eq_right (fun h => h0 (by rw [h]; rfl))
   have f2 : ∀ r : Reg, r.val ≠ 0 → r.val ≠ 15 → a2.regs r = a1.regs r := fun r h0 h15 => by
-    rw [h2, regs_addReg _ _ _ _ _ (n15 r h15)]; exact if_neg (fun h => h0 (by rw [h]; rfl))
+    rw [h2, regs_addReg _ _ _ _ _ (n15 r h15)]; exact ite_eq_right (fun h => h0 (by rw [h]; rfl))
   have f3 : ∀ r : Reg, r.val ≠ 0 → r.val ≠ 15 → a3.regs r = a2.regs r := fun r h0 h15 => by
-    rw [h3, regs_addReg _ _ _ _ _ (n15 r h15)]; exact if_neg (fun h => h0 (by rw [h]; rfl))
+    rw [h3, regs_addReg _ _ _ _ _ (n15 r h15)]; exact ite_eq_right (fun h => h0 (by rw [h]; rfl))
   have f4 : ∀ r : Reg, r.val ≠ 1 → r.val ≠ 15 → a4.regs r = a3.regs r := fun r h0 h15 => by
-    rw [h4, regs_lsl _ _ _ _ _ (n15 r h15)]; exact if_neg (fun h => h0 (by rw [h]; rfl))
+    rw [h4, regs_lsl _ _ _ _ _ (n15 r h15)]; exact ite_eq_right (fun h => h0 (by rw [h]; rfl))
   have f5 : ∀ r : Reg, r.val ≠ 7 → r.val ≠ 15 → a5.regs r = a4.regs r := fun r h0 h15 => by
-    rw [h5, regs_addReg _ _ _ _ _ (n15 r h15)]; exact if_neg (fun h => h0 (by rw [h]; rfl))
+    rw [h5, regs_addReg _ _ _ _ _ (n15 r h15)]; exact ite_eq_right (fun h => h0 (by rw [h]; rfl))
   have f6 : ∀ r : Reg, r.val ≠ 5 → r.val ≠ 15 → a6.regs r = a5.regs r := fun r h0 h15 => by
-    rw [h6, regs_addReg _ _ _ _ _ (n15 r h15)]; exact if_neg (fun h => h0 (by rw [h]; rfl))
+    rw [h6, regs_addReg _ _ _ _ _ (n15 r h15)]; exact ite_eq_right (fun h => h0 (by rw [h]; rfl))
   have f7 : ∀ r : Reg, r.val ≠ 6 → r.val ≠ 15 → a7.regs r = a6.regs r := fun r h0 h15 => by
-    rw [h7, regs_subReg _ _ _ _ _ (n15 r h15)]; exact if_neg (fun h => h0 (by rw [h]; rfl))
+    rw [h7, regs_subReg _ _ _ _ _ (n15 r h15)]; exact ite_eq_right (fun h => h0 (by rw [h]; rfl))
   have s1 : a1.regs 0 = 40#32 := by
-    rw [h1, regs_movImm _ _ _ _ (by decide)]; exact (if_pos rfl).trans rfl
+    rw [h1, regs_movImm _ _ _ _ (by decide)]; exact (ite_eq_left rfl).trans rfl
   have s2 : a2.regs 0 = a1.regs 0 + a1.regs 4 := by
-    rw [h2, regs_addReg _ _ _ _ _ (by decide)]; exact (if_pos rfl).trans rfl
+    rw [h2, regs_addReg _ _ _ _ _ (by decide)]; exact (ite_eq_left rfl).trans rfl
   have s3 : a3.regs 0 = a2.regs 0 + a2.regs 7 := by
-    rw [h3, regs_addReg _ _ _ _ _ (by decide)]; exact (if_pos rfl).trans rfl
+    rw [h3, regs_addReg _ _ _ _ _ (by decide)]; exact (ite_eq_left rfl).trans rfl
   have s4 : a4.regs 1 = a3.regs 5 := by
-    rw [h4, regs_lsl _ _ _ _ _ (by decide)]; exact (if_pos rfl).trans (lsl0_fst _ _)
+    rw [h4, regs_lsl _ _ _ _ _ (by decide)]; exact (ite_eq_left rfl).trans (lsl0_fst _ _)
   have s5 : a5.regs 7 = a4.regs 7 + a4.regs 2 := by
-    rw [h5, regs_addReg _ _ _ _ _ (by decide)]; exact (if_pos rfl).trans rfl
+    rw [h5, regs_addReg _ _ _ _ _ (by decide)]; exact (ite_eq_left rfl).trans rfl
   have s6 : a6.regs 5 = a5.regs 5 + a5.regs 2 := by
-    rw [h6, regs_addReg _ _ _ _ _ (by decide)]; exact (if_pos rfl).trans rfl
+    rw [h6, regs_addReg _ _ _ _ _ (by decide)]; exact (ite_eq_left rfl).trans rfl
   have s7 : a7.regs 6 = a6.regs 6 - a6.regs 2 := by
-    rw [h7, regs_subReg _ _ _ _ _ (by decide)]; exact (if_pos rfl).trans rfl
+    rw [h7, regs_subReg _ _ _ _ _ (by decide)]; exact (ite_eq_left rfl).trans rfl
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · rw [f7 0 (by decide) (by decide), f6 0 (by decide) (by decide), f5 0 (by decide) (by decide), f4 0 (by decide) (by decide), s3, s2, s1, f2 7 (by decide) (by decide), f1 7 (by decide) (by decide), f1 4 (by decide) (by decide)]
   · rw [f7 1 (by decide) (by decide), f6 1 (by decide) (by decide), f5 1 (by decide) (by decide), s4, f3 5 (by decide) (by decide), f2 5 (by decide) (by decide), f1 5 (by decide) (by decide)]
@@ -153,13 +153,13 @@ theorem takeA2_eff (t : State) :
   rw [hx]
   have n15 : ∀ r : Reg, r.val ≠ 15 → r ≠ 15 := fun r h h' => h (by rw [h']; rfl)
   have f1 : ∀ r : Reg, r.val ≠ 2 → r.val ≠ 15 → a1.regs r = t.regs r := fun r h0 h15 => by
-    rw [h1, regs_movImm _ _ _ _ (n15 r h15)]; exact if_neg (fun h => h0 (by rw [h]; rfl))
+    rw [h1, regs_movImm _ _ _ _ (n15 r h15)]; exact ite_eq_right (fun h => h0 (by rw [h]; rfl))
   have f2 : ∀ r : Reg, r.val ≠ 2 → r.val ≠ 15 → a2.regs r = a1.regs r := fun r h0 h15 => by
-    rw [h2, regs_subReg _ _ _ _ _ (n15 r h15)]; exact if_neg (fun h => h0 (by rw [h]; rfl))
+    rw [h2, regs_subReg _ _ _ _ _ (n15 r h15)]; exact ite_eq_right (fun h => h0 (by rw [h]; rfl))
   have s1 : a1.regs 2 = 64#32 := by
-    rw [h1, regs_movImm _ _ _ _ (by decide)]; exact (if_pos rfl).trans rfl
+    rw [h1, regs_movImm _ _ _ _ (by decide)]; exact (ite_eq_left rfl).trans rfl
   have s2 : a2.regs 2 = a1.regs 2 - a1.regs 7 := by
-    rw [h2, regs_subReg _ _ _ _ _ (by decide)]; exact (if_pos rfl).trans rfl
+    rw [h2, regs_subReg _ _ _ _ _ (by decide)]; exact (ite_eq_left rfl).trans rfl
   refine ⟨?_, fun r h2' h15 => ?_, ?_⟩
   · rw [s2, s1, f1 7 (by decide) (by decide)]
   · rw [f2 r h2' h15, f1 r h2' h15]
@@ -172,9 +172,9 @@ theorem takeB_eff (t : State) :
   have e : execAll takeB t = (Instr.lslImm 2 6 0).next t := rfl
   refine ⟨?_, fun r h2' h15 => ?_, ?_⟩
   · rw [e, regs_lsl _ _ _ _ _ (by decide)]
-    exact (if_pos rfl).trans (lsl0_fst _ _)
+    exact (ite_eq_left rfl).trans (lsl0_fst _ _)
   · rw [e, regs_lsl _ _ _ _ _ (fun h => h15 (by rw [h]; rfl))]
-    exact if_neg (fun h => h2' (by rw [h]; rfl))
+    exact ite_eq_right (fun h => h2' (by rw [h]; rfl))
   · rw [e, mem_lsl]
 
 /-! ## Frame memory -/
@@ -546,7 +546,7 @@ theorem have_reach {base : Word} {s : State} {st0 : SState} (e : UpdateEntry bas
     · rw [bi.hi 12 (by decide) (by decide), yr 12 (by decide),
         wo 12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
     · intro g hw
-      rw [if_neg (by omega)]
+      rw [ite_eq_right (by omega)]
       apply win_congr hw
       intro o ho
       rw [bi.cp.2 _ (fun i hi he => ?_), ym]
@@ -623,7 +623,7 @@ theorem have_reach {base : Word} {s : State} {st0 : SState} (e : UpdateEntry bas
     · rw [xr 12 (by decide), bp.r12, yr 12 (by decide),
         wo 12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
     · intro g hw
-      rw [if_pos hge8]
+      rw [ite_eq_left hge8]
       have hl : [x'.regs 4, x'.regs 5, x'.regs 6, x'.regs 7, retAt base oCopyBl] =
           [y.regs 4, y.regs 5, y.regs 6, y.regs 7, (base + BitVec.ofNat 32 (oCopyBl + 4)) ||| 1#32] := by
         rw [xr 4 (by decide), bp.keep 4 (by decide) (by decide), xr 5 (by decide), bp.keep 5 (by decide) (by decide),

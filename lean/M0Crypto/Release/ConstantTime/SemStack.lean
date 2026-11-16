@@ -14,7 +14,7 @@ private theorem lookup_filter_ne (s : Stk) (t : Int) :
   | cons a s ih =>
     rcases a with ⟨k, w⟩
     by_cases hkt : k = t
-    · simp [List.lookup_cons, hkt, ih]
+    · simp [hkt, ih]
     · have hbeq : (t == k) = false := by simp [Ne.symm hkt]
       simp [List.lookup_cons, hkt, hbeq, ih]
 
@@ -33,7 +33,7 @@ private theorem stkGet_set_of_ne (s : Stk) (o t : Int) (v : AbsVal) (h : o ≠ t
       · simp [List.lookup_cons, ih, hkt]
   simp only [stkSet, stkGet]
   have hne : (o == t) = false := by simp [h]
-  cases hp : v.pub <;> simp [hp, List.lookup_cons, hne, hfilter]
+  cases hp : v.pub <;> simp [List.lookup_cons, hne, hfilter]
 
 /-- A strong stack update is sound after a memory write when every other
 tracked slot is unchanged and the new word has the assigned label. The frame

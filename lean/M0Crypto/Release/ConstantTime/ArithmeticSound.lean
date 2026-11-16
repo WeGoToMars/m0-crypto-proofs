@@ -43,7 +43,7 @@ private theorem addRes_cmp_none (a b v : AbsVal) (c : AbsFlags) :
     (addRes a b c v).2.cmp = none := by
   unfold addRes
   split <;> simp_all [AFl.all]
-  split <;> simp_all [AFl.all]
+  split <;> simp_all
 
 /-- Register addition preserves the relational state, including all NZCV flags. -/
 theorem addReg_sound {p : Params} {bytes : List (BitVec 8)} {off : Nat}

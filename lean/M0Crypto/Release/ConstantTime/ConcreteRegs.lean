@@ -60,7 +60,7 @@ theorem cmpSem_setReg {c : Cmp} {s : State} {r : Nat} (hr : r < 16) (v : Word)
         simpa [ho] using huses.2
       have hjok : regIndexOk j := by simpa [ho, opndIndexOk] using hc.2
       have hj16 : j < 16 := by have := hjok.1; simp [numRegs] at this; omega
-      simp [operand, ho, regAt_setReg_ne s r j hr hj16 hj]
+      simp [operand, regAt_setReg_ne s r j hr hj16 hj]
   simp only [CmpSem, regAt_setReg_ne s r c.a hr hi16 hn, hop]
   rfl
 

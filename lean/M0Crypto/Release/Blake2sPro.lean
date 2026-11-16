@@ -155,7 +155,7 @@ theorem FS_write {fp : Word} {F : Nat → Option Word} {m : Mem} (k : Nat) (v : 
   by_cases hjk : j = k
   · subst hjk; simp at hw ⊢; exact hw
   · simp [hjk] at hw
-    rw [if_neg (fun e => hjk e.symm)]
+    rw [ite_eq_right (fun e => hjk e.symm)]
     exact h j hj w hw
 
 theorem Out_write {fp : Word} {m0 m : Mem} (k : Nat) (v : Word) (hk : k < SLOTW_9) (h : Out fp m0 m) :
@@ -210,7 +210,7 @@ theorem Out_stw {fp : Word} {m0 : Mem} : ∀ (vs : List Word) (k : Nat) (m : Mem
 
 /-! ## Stages of the prologue -/
 
-def pA : List Instr := [ .push 0xF0 true, .movHi 4 8, .movHi 5 9, .movHi 6 10, .movHi 7 11, .push 0xF0 false,
+def pA : List Instr := [.push 0xF0 true, .movHi 4 8, .movHi 5 9, .movHi 6 10, .movHi 7 11, .push 0xF0 false,
     .subSp LOCALS_WORDS, .strSp 0 HPTR_WORDS ]
 
 theorem regs_strSp' (s : State) (t : LowReg) (i : BitVec 8) (r : Reg) (hr : r ≠ 15) :

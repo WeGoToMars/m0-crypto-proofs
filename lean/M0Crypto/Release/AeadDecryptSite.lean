@@ -86,8 +86,8 @@ theorem decrypt_tail_p {Pc : Word → Prop} (c : ACall) (hv : AValid c) (hb : AB
       (fun r a b => wr r (by omega) (by omega))
     refine ReachW.toPol (decrypt_return_w c hv hb w wp ?_ hlr hE) hfreeO hEc (fun _ h => h)
     refine ⟨wb.sp, wb.high, wb.hi, ?_, ?_, ?_⟩
-    · simpa [if_neg hbad] using w4
-    · simp only [decrypt_eq, if_neg hbad]
+    · simpa [ite_eq_right hbad] using w4
+    · simp only [decrypt_eq, ite_eq_right hbad]
       exact bytesAt_congr (fun j hj => wb.frame _ (hv.not_swr hb.outStack hj))
     · intro y hy; exact wb.frame y (fun hw => hy (.inl hw))
   · intro heq
@@ -126,8 +126,8 @@ theorem decrypt_tail_p {Pc : Word → Prop} (c : ACall) (hv : AValid c) (hb : AB
     · rw [ym]; exact wb.high
     · intro r a b
       rw [←hy, setReg_ne _ _ _ _ (by rintro rfl; omega), xr r (by omega) (by omega), wb.hi r a b]
-    · rw [←hy, setReg_ne _ _ _ _ (by decide), x4, if_pos hok]; rfl
-    · simp only [decrypt_eq, if_pos hok]
+    · rw [←hy, setReg_ne _ _ _ _ (by decide), x4, ite_eq_left hok]; rfl
+    · simp only [decrypt_eq, ite_eq_left hok]
       rw [ym]; exact hw.out
     · intro a ha; rw [ym]; exact wf a ha
 

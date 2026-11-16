@@ -90,7 +90,7 @@ theorem ldrSp_run {Wr : Word → Prop} (s : State) (d : LowReg) {k : Nat} (hk : 
   · simp only [execAll]
     refine ⟨X25519Mem.mem_ldrSp _ _ _, ?_, fun r h15 hd => ?_⟩
     · rw [X25519Mem.regs_ldrSp _ _ _ _ (InstrNext.toReg_ne15 d), ite_eq_left_of_eq_true _ _ (eq_true rfl), sl_slot _ hk]
-    · rw [X25519Mem.regs_ldrSp _ _ _ _ h15, if_neg hd]
+    · rw [X25519Mem.regs_ldrSp _ _ _ _ h15, ite_eq_right hd]
 
 /-! ### The frame -/
 
@@ -127,13 +127,13 @@ theorem slotOut {fp : Word} {n : Nat} {m0 : Mem} {F : Nat → Word} {m m' : Mem}
   rw [sl_slot _ hk'] at hs
   obtain ⟨s0, s1, sc, so⟩ := hs
   refine ⟨_, refresh h hk fun y hy => so y hy, fun i hi => ?_, ?_, ?_, fun j hj => ?_⟩
-  · rw [if_neg (by omega)]
-  · rw [if_pos (by omega), ← s0]; unfold ld; rw [slot_add, Nat.add_zero]
-  · rw [if_pos (by omega), ← s1]; unfold ld; rw [slot_add]
+  · rw [ite_eq_right (by omega)]
+  · rw [ite_eq_left (by omega), ← s0]; unfold ld; rw [slot_add, Nat.add_zero]
+  · rw [ite_eq_left (by omega), ← s1]; unfold ld; rw [slot_add]
   · have hl := X25519Comb.cregs_length direct t
     have hc : coff direct = 4 * (coff direct / 4) ∧ coff direct / 4 + (cregs direct t).length = 8 := by
       cases direct <;> simp [coff, cregs]
-    rw [if_pos (by omega), ← sc j hj]; unfold ld
+    rw [ite_eq_left (by omega), ← sc j hj]; unfold ld
     rw [hc.1, slot_add, slot_add, Nat.add_assoc]
     cases direct <;> simp [coff, Nat.add_assoc]
 
@@ -248,7 +248,7 @@ theorem upd_out (F : Nat → Word) {k i : Nat} (vs : List Word) (h : i < k ∨ k
 
 theorem upd_in (F : Nat → Word) (k : Nat) (vs : List Word) (j : Nat) (hj : j < vs.length) :
     upd F k vs (k + j) = vs[j] := by
-  simp only [upd, if_pos (show k ≤ k + j ∧ k + j < k + vs.length by omega), Nat.add_sub_cancel_left]
+  simp only [upd, ite_eq_left (show k ≤ k + j ∧ k + j < k + vs.length by omega), Nat.add_sub_cancel_left]
   simp [hj]
 
 /-- Eight frame slots from `k` as one 256-bit value. -/
@@ -297,7 +297,7 @@ theorem read_store_disj (m : Mem) {a b : Word} {ws : List Word} (hd : Disj a 4 b
   simpa using this
 
 /-- A byte outside `[b, b + 32)` is not written by an 8-word store at `b`. -/
-theorem store8_out (m : Mem) {b y : Word} {ws : List Word} (hl : ws.length = 8) (hb : b.toNat + 32 ≤ 2 ^ 32)
+theorem store8_out (m : Mem) {b y : Word} {ws : List Word} (hl : ws.length = 8) (_hb : b.toNat + 32 ≤ 2 ^ 32)
     (hy : ¬ Region b 32 y) : storeWords m b ws y = m y := by
   apply storeWords_other
   intro i q hi hq e

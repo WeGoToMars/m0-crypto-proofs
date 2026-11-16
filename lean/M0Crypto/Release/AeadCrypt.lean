@@ -194,7 +194,7 @@ theorem crypt_reach_select_gen {Pn : Word → Prop} {P : State → Event → Pro
       · rw [Frame.bytesAt_get _ _ _ _ hj]
         have hS : ChaCha20Xor.OutS xc (c.out + BitVec.ofNat 32 j) := Region.not fun o ho =>
           ne_of_disj outD.1 outD.2.1 outD.2.2 hj ho
-        rw [hr.mem _ hS, if_pos ⟨hok, Region.mk hj rfl⟩, Ctx.oidx, show xc.out = c.out from rfl,
+        rw [hr.mem _ hS, ite_eq_left ⟨hok, Region.mk hj rfl⟩, Ctx.oidx, show xc.out = c.out from rfl,
           sub_off _ _ (by have := c.len.isLt; omega)]
         show some ((chacha20 xc.keyB (1#32 : Word).toNat xc.nonceB xc.msg)[j]!) = _
         rw [kB, nB, mB, show (1#32 : Word).toNat = 1 from rfl]
@@ -204,7 +204,7 @@ theorem crypt_reach_select_gen {Pn : Word → Prop} {P : State → Event → Pro
       · rw [List.getElem?_eq_none (by rw [bytesAt_length]; omega), List.getElem?_eq_none (by
           rw [ChaCha20Spec.chacha20_length, ACall.ptB, bytesAt_length]; omega)]
     · intro y h1 h2 h3
-      rw [hr.mem y (Region.not h1), if_neg (fun h => h3 h.2)]
+      rw [hr.mem y (Region.not h1), ite_eq_right (fun h => h3 h.2)]
       show u.mem y = _
       rw [um, cm, write32_other' _ _ _ _ (fun q hq e => h2 q hq (by rw [e, ofNat_add_assoc]))]
     · intro o ho hz
@@ -222,21 +222,21 @@ theorem crypt_reach_select_gen {Pn : Word → Prop} {P : State → Event → Pro
       show u.regs _ = _
       by_cases h8 : i = 8
       · subst h8
-        rw [if_pos rfl, show ChaCha20Xor.chSavedRegs[8]! = 14 from rfl, u14, hset]
-      · rw [if_neg h8]
+        rw [ite_eq_left rfl, show ChaCha20Xor.chSavedRegs[8]! = 14 from rfl, u14, hset]
+      · rw [ite_eq_right h8]
         obtain ⟨a, b⟩ := ChaCha20Xor.chSavedRegs_lt i (by omega)
         rw [ur _ (by omega) (by omega), cr _ (by omega) (by omega) (by omega) (by omega) (by omega)]
     · rw [← M0Crypto.Armv6M.read32_write32_same t.mem (c.A + 4#32) 1#32, ← cm, ← um]
       apply read32_congr
       intro k hk
-      rw [ofNat_add_assoc, hr.mem _ (hiS (4 + k) (by omega)), if_neg (fun h => outA (4 + k) (by omega) h.2)]
+      rw [ofNat_add_assoc, hr.mem _ (hiS (4 + k) (by omega)), ite_eq_right (fun h => outA (4 + k) (by omega) h.2)]
     · rw [hr.scratch 12 (.inr rfl)]
       have hok' : M0Crypto.Spec.Aead.counterOk xc.ctr.toNat xc.len.toNat = true := hok
       by_cases hl : c.len = 0
-      · rw [if_neg (fun h => h.2 hl), if_pos hl]
+      · rw [ite_eq_right (fun h => h.2 hl), ite_eq_left hl]
         show u.regs 12 = _
         rw [ur 12 (by decide) (by decide), cr 12 (by decide) (by decide) (by decide) (by decide) (by decide)]
-      · rw [if_pos ⟨hok', hl⟩, if_neg hl]; rfl
+      · rw [ite_eq_left ⟨hok', hl⟩, ite_eq_right hl]; rfl
   exact hselect xc u xv xe rfl rfl rfl rfl rfl rfl rfl rfl hrest
 
 /-- Expose the ChaCha call state while retaining its functional continuation. -/

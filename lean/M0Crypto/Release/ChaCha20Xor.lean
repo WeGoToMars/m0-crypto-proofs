@@ -177,19 +177,19 @@ theorem lnext_select_S {Pc : Word → Prop} (c : Ctx) (hv : Valid c) (hPc : ∀ 
     · rw [fwv _ (by omega), rd _ (by omega)]
       by_cases h12 : i = 12
       · subst h12
-        rw [if_pos (show slotCtr = slotJ + 12 by decide), show slotCtr = slotJ + 12 by decide, hjs 12 (by decide), J_succ12]
-      · rw [if_neg (by omega), if_neg (by omega), if_neg (by omega), if_neg (by omega), hjs i hi,
+        rw [ite_eq_left (show slotCtr = slotJ + 12 by decide), show slotCtr = slotJ + 12 by decide, hjs 12 (by decide), J_succ12]
+      · rw [ite_eq_right (by omega), ite_eq_right (by omega), ite_eq_right (by omega), ite_eq_right (by omega), hjs i hi,
           J_succ c k i hi h12]
     · rw [fwv _ (by omega), rd _ (by omega)]
-      rw [if_neg (show ¬ (slotCtr = slotLen) by decide), if_neg (show ¬ (slotOutp = slotLen) by decide),
-        if_neg (show ¬ (slotInp = slotLen) by decide), if_pos (show slotLen = slotLen from rfl)]
+      rw [ite_eq_right (show ¬ (slotCtr = slotLen) by decide), ite_eq_right (show ¬ (slotOutp = slotLen) by decide),
+        ite_eq_right (show ¬ (slotInp = slotLen) by decide), ite_eq_left (show slotLen = slotLen from rfl)]
       rw [u4, sub64]
     · rw [fwv _ (by omega), rd _ (by omega)]
-      rw [if_neg (show ¬ (slotCtr = slotOutp) by decide), if_pos (show slotOutp = slotOutp from rfl)]
+      rw [ite_eq_right (show ¬ (slotCtr = slotOutp) by decide), ite_eq_left (show slotOutp = slotOutp from rfl)]
       rw [ur 3 (by decide) (by decide), h.r3, add64]
     · rw [fwv _ (by omega), rd _ (by omega)]
-      rw [if_neg (show ¬ (slotCtr = slotInp) by decide), if_neg (show ¬ (slotOutp = slotInp) by decide),
-        if_pos (show slotInp = slotInp from rfl)]
+      rw [ite_eq_right (show ¬ (slotCtr = slotInp) by decide), ite_eq_right (show ¬ (slotOutp = slotInp) by decide),
+        ite_eq_left (show slotInp = slotInp from rfl)]
       rw [ur 2 (by decide) (by decide), h.r2, add64]
     · simp only [M0Crypto.Armv6M.State.setReg]
       rw [nm, um]
@@ -354,7 +354,7 @@ theorem outS_outF {c : Ctx} {y : Word} (h : OutS c y) : c.OutF y := by
   have sFB := ChaCha20Layout.chFrameBytes_eq
   exact fun o ho => Region.ne h o (by omega)
 
-theorem mP_outS (c : Ctx) (hv : Valid c) {y : Word} (h : OutS c y) : c.mP y = c.m0 y := by
+theorem mP_outS (c : Ctx) (_hv : Valid c) {y : Word} (h : OutS c y) : c.mP y = c.m0 y := by
   apply ChaCha20Return.mP_other
   intro k hk e
   have sFB := ChaCha20Layout.chFrameBytes_eq
@@ -384,7 +384,7 @@ theorem saved_memOk (c : Ctx) (hv : Valid c) {P : Nat} {m : Mem} (h : c.MemOk P 
     have := congrArg BitVec.toNat e
     rw [toNat_add_ofNat _ _ (by have := c.sp0.isLt; omega), toNat_add_ofNat _ _ (by have := c.sp0.isLt; omega)] at this
     omega
-  rw [h _ hF, if_neg]
+  rw [h _ hF, ite_eq_right]
   intro hlt
   obtain ⟨h1, h2, h3⟩ := hv.outF
   exact ne_of_disj (i := c.oidx (c.fp + BitVec.ofNat 32 (chFrameBytes + 4 * i + q))) (j := chFrameBytes + 4 * i + q) h1 h2 h3
@@ -493,9 +493,9 @@ theorem xor_reach_w {Pc : Word → Prop} (c : Ctx) (hv : Valid c) (hPc : ∀ pc,
     rintro u ⟨upc, usp, ucal, um, u0, ur⟩
     refine ⟨upc, upc, usp, ucal, by rw [u0, hok]; rfl, fun r hr' => ?_, fun y hy => ?_, fun i hi => ?_,
       saved_result c (by rw [um, mem]; exact mP_saved' c hv)⟩
-    · rw [if_neg (fun h' => h'.2 hz), ur r hr', hr r (by omega)]
-    · rw [um, mem, if_neg (by rw [hz]; simp), mP_outS c hv hy]
-    · rw [if_neg (fun h' => h'.2 hz), um, mem]; exact frame_mP c hv i hi
+    · rw [ite_eq_right (fun h' => h'.2 hz), ur r hr', hr r (by omega)]
+    · rw [um, mem, ite_eq_right (by rw [hz]; simp), mP_outS c hv hy]
+    · rw [ite_eq_right (fun h' => h'.2 hz), um, mem]; exact frame_mP c hv i hi
   · -- counter overflow
     intro t pc sp mem _ hok hr
     apply ReachW.block hb2 [.movImm 0 0, .dp .mvns 0 0] errOff pc (by decide) err_at (by decide)
@@ -528,10 +528,10 @@ theorem xor_reach_w {Pc : Word → Prop} (c : Ctx) (hv : Valid c) (hPc : ∀ pc,
     refine ⟨upc, upc, usp, ucal, ?_, fun r hr' => ?_, fun y hy => ?_, fun i hi => ?_,
       saved_result c (by rw [umem]; exact mP_saved' c hv)⟩
     · rw [ulow 0 (.inl (by decide)), ChaCha20Setup.setReg15_regs _ _ 0 (by decide), s0, hok]; rfl
-    · rw [if_neg hk, ulow r (by omega), ChaCha20Setup.setReg15_regs _ _ _ (by omega), sr r (by omega) (by omega),
+    · rw [ite_eq_right hk, ulow r (by omega), ChaCha20Setup.setReg15_regs _ _ _ (by omega), sr r (by omega) (by omega),
         hr r (by omega)]
-    · rw [umem, hok]; simp only [Bool.false_eq_true, false_and, if_false]; exact mP_outS c hv hy
-    · rw [if_neg hk, umem]; exact frame_mP c hv i hi
+    · rw [umem, hok]; simp only [Bool.false_eq_true, false_and, ite_false]; exact mP_outS c hv hy
+    · rw [ite_eq_right hk, umem]; exact frame_mP c hv i hi
   · -- accepted
     intro t hacc
     apply ReachW.monoW (Wr := c.Wr) _ (fun y hy => by
@@ -567,7 +567,7 @@ theorem xor_reach_w {Pc : Word → Prop} (c : Ctx) (hv : Valid c) (hPc : ∀ pc,
     have hk : M0Crypto.Spec.Aead.counterOk c.ctr.toNat c.len.toNat = true ∧ c.len ≠ 0 := ⟨hacc.ok, hacc.ne⟩
     refine ⟨wpc, wpc, wsp, wcal, by rw [w0, hacc.ok]; rfl, fun r hr => ?_, fun y hy => ?_, fun i hi => ?_,
       saved_result c (by rw [wm]; exact saved_memOk c hv vmem (Nat.le_refl _))⟩
-    · rw [if_pos hk, wr r hr]
+    · rw [ite_eq_left hk, wr r hr]
       have hr' : r = 1 ∨ r = 2 ∨ r = 3 ∨ r = 12 := by
         rcases hr with ⟨h1, h4⟩ | h12
         · have : r.val = 1 ∨ r.val = 2 ∨ r.val = 3 := by omega
@@ -583,9 +583,9 @@ theorem xor_reach_w {Pc : Word → Prop} (c : Ctx) (hv : Valid c) (hPc : ∀ pc,
       · exact v12
     · rw [wm, vmem y (outS_outF hy), hacc.ok]
       by_cases hl : c.oidx y < c.len.toNat
-      · rw [if_pos hl, if_pos ⟨rfl, hl⟩]
-      · rw [if_neg hl, if_neg (fun e => hl e.2), mP_outS c hv hy]
-    · rw [if_pos hk, wm, ← usp]; exact vz i hi
+      · rw [ite_eq_left hl, ite_eq_left ⟨rfl, hl⟩]
+      · rw [ite_eq_right hl, ite_eq_right (fun e => hl e.2), mP_outS c hv hy]
+    · rw [ite_eq_left hk, wm, ← usp]; exact vz i hi
 
 /-- Byte `o` of the frame at return. -/
 theorem Result.frame_byte {c : Ctx} {t : State} (h : Result c t) (o : Nat) (ho : o < 4 * chFrameWords) :
@@ -654,7 +654,7 @@ theorem result_output (c : Ctx) (hv : Valid c) {t : State} (h : Result c t)
       have sSB := ChaCha20Layout.chStackBytes_eq
       obtain ⟨h1, h2, h3⟩ := hv.outF
       exact ne_of_disj h1 h2 h3 hi (by omega)
-    rw [h.mem _ hy, ChaCha20Output.oidx_out c hv i hi, if_pos ⟨hok, Region.mk hi rfl⟩, Ctx.outB, getElem!_pos _ i (by rw [hl]; exact hi)]
+    rw [h.mem _ hy, ChaCha20Output.oidx_out c hv i hi, ite_eq_left ⟨hok, Region.mk hi rfl⟩, Ctx.outB, getElem!_pos _ i (by rw [hl]; exact hi)]
   · rw [List.getElem?_eq_none (by rw [bytesAt_length]; omega), List.getElem?_eq_none (by rw [hl]; omega)]
 
 end M0Crypto.Release.ChaCha20Xor

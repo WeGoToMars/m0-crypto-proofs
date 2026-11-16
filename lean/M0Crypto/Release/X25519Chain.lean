@@ -110,10 +110,10 @@ theorem run_pow (x : Int) :
       intro t ht
       by_cases h' : t = d
       · subst h'
-        simp only [CStep.exp, upd, if_pos rfl]
+        simp only [CStep.exp, upd]
         exact hD.trans ((ModP.pow (hf a hw.1) _).trans (ModP.of_eq (pow_pow_two x _ _)))
-      · simp only [CStep.defs, upd, if_neg h'] at ht
-        simp only [CStep.exp, upd, if_neg h', ho t h']
+      · simp only [CStep.defs, upd, ite_eq_right h'] at ht
+        simp only [CStep.exp, upd, ite_eq_right h', ho t h']
         exact hf t ht
     | mul d a b =>
       simp only [readsDefined, Bool.and_eq_true] at hw
@@ -122,11 +122,11 @@ theorem run_pow (x : Int) :
       intro t ht
       by_cases h' : t = d
       · subst h'
-        simp only [CStep.exp, upd, if_pos rfl]
+        simp only [CStep.exp, upd]
         exact hD.trans ((ModP.mul (hf a hw.1.1) (hf b hw.1.2)).trans
           (ModP.of_eq (Int.pow_add x _ _).symm))
-      · simp only [CStep.defs, upd, if_neg h'] at ht
-        simp only [CStep.exp, upd, if_neg h', ho t h']
+      · simp only [CStep.defs, upd, ite_eq_right h'] at ht
+        simp only [CStep.exp, upd, ite_eq_right h', ho t h']
         exact hf t ht
 
 /-- Only the input slot is read before it is written, and the output is written. -/

@@ -142,7 +142,7 @@ theorem encrypt_hbuffer (c : ACall) (hv : AValid c) (hb : ABuf c) (s : State)
     intro hu
     rcases untracked_cases encrypt_counter hm hp hu with ⟨hsite, hcnt⟩ | hf
     · left
-      have hc1 := counter_of_stack (x := x) (y := y) hlow.stack (by simpa using hcnt)
+      have hc1 := counter_of_stack (_x := x) (_y := y) hlow.stack (by simpa using hcnt)
       have hc2 : read32 x.mem (c.A + 4#32) = 1#32 := by
         rw [← counter_eq c]; exact hc1
       have hsite' : OutputStorePC c.base e.pc := by

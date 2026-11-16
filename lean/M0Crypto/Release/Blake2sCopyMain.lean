@@ -34,15 +34,15 @@ theorem pro_eff (s : State) :
   have hx : execAll proL s = (Instr.movImm 4 3).next ((Instr.push 240 true).next s) := rfl
   refine ⟨?_, ?_, ?_, ?_⟩
   · rw [hx, M0Crypto.Release.Blake2s.regs_movImm _ _ _ _ (by decide)]
-    rw [show LowReg.toReg 4 = (4 : Reg) from rfl, if_neg (by decide), e13]
+    rw [show LowReg.toReg 4 = (4 : Reg) from rfl, ite_eq_right (by decide), e13]
   · rw [hx, M0Crypto.Release.Blake2s.regs_movImm _ _ _ _ (by decide)]
-    rw [show LowReg.toReg 4 = (4 : Reg) from rfl, if_pos rfl]; rfl
+    rw [show LowReg.toReg 4 = (4 : Reg) from rfl, ite_eq_left rfl]; rfl
   · intro r h4 h13 h15
     have h4' : r ≠ 4 := fun e => h4 (by rw [e]; rfl)
     have h13' : r ≠ 13 := fun e => h13 (by rw [e]; rfl)
     have h15' : r ≠ 15 := fun e => h15 (by rw [e]; rfl)
     rw [hx, M0Crypto.Release.Blake2s.regs_movImm _ _ _ _ h15']
-    rw [show LowReg.toReg 4 = (4 : Reg) from rfl, if_neg h4', eo r h13' h15']
+    rw [show LowReg.toReg 4 = (4 : Reg) from rfl, ite_eq_right h4', eo r h13' h15']
   · rw [hx, M0Crypto.Release.Blake2s.mem_movImm, em]
 
 

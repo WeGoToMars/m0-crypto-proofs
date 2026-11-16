@@ -31,7 +31,7 @@ theorem AValid.macEnv {c : ACall} (hv : AValid c) {d n : Word} {M : Mem}
   code := hc
 
 theorem Hi.mac {c : ACall} {M M' : Mem} {d n : Word} (h : Hi c M)
-    (he : MacEnv c.base c.A d n M) (hf : ∀ y, ¬ MacWr c.A y → M' y = M y) : Hi c M' :=
+    (_he : MacEnv c.base c.A d n M) (hf : ∀ y, ¬ MacWr c.A y → M' y = M y) : Hi c M' :=
   h.congr fun o h1 h2 => hf _ (by
     intro hw
     obtain ⟨q, hq, eq⟩ := macWr_W hw

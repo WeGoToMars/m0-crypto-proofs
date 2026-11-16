@@ -27,7 +27,7 @@ theorem branch_checked_step {env : Env} {p : Params} {bytes : List (BitVec 8)}
   cases ht : relTarget off (bDisp imm) with
   | none => simp [ht] at hx'
   | some target =>
-    simp only [ht, if_true, Except.ok.injEq] at hx'
+    simp only [ht, ite_true, Except.ok.injEq] at hx'
     subst out
     have htarget := relTarget_address p.base off target (bDisp imm) ht
     have hdisp : BitVec.ofInt 32 (bDisp imm) = (imm ++ 0#1).signExtend 32 := by

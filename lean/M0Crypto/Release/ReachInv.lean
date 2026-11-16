@@ -62,7 +62,7 @@ theorem StepsOk.add_inv {P : State → Event → Prop} {Inv : State → Prop}
     (hstep : ∀ s e s1, stepH B base s = .ok (s1, e) → P s e → Inv s → Inv s1) :
     ∀ {n : Nat} {s : State}, StepsOk base P n s → Inv s → StepsOk base (fun x e => P x e ∧ Inv x) n s
   | 0, _, _, _ => trivial
-  | n + 1, s, h, h0 => fun s1 e hs =>
+  | _n + 1, s, h, h0 => fun s1 e hs =>
     ⟨⟨(h s1 e hs).1, h0⟩, StepsOk.add_inv hstep (h s1 e hs).2 (hstep s e s1 hs (h s1 e hs).1 h0)⟩
 
 theorem ReachS.add_inv {P : State → Event → Prop} {Inv : State → Prop} {s : State}
@@ -122,7 +122,7 @@ theorem StepsOk.and {P1 P2 : State → Event → Prop} :
     ∀ {m : Nat} {s : State}, StepsOk base P1 m s → StepsOk base P2 m s →
       StepsOk base (fun x e => P1 x e ∧ P2 x e) m s
   | 0, _, _, _ => trivial
-  | m + 1, s, h1, h2 => fun s1 e hs =>
+  | _m + 1, _s, h1, h2 => fun s1 e hs =>
     ⟨⟨(h1 s1 e hs).1, (h2 s1 e hs).1⟩, StepsOk.and (h1 s1 e hs).2 (h2 s1 e hs).2⟩
 
 /-- Two judgments about one start state hold of one run when the first never steps from the stop
@@ -180,7 +180,7 @@ theorem runStates_of_runH_pol {stop : Word} {P : State → Event → Prop} :
 theorem BlockOk.mono {P Q : State → Event → Prop} (hPQ : ∀ x e, P x e → Q x e) :
     ∀ (is : List Instr) (s : State), BlockOk P is s → BlockOk Q is s
   | [], _, _ => trivial
-  | i :: is, s, h => ⟨hPQ _ _ h.1, BlockOk.mono hPQ is _ h.2⟩
+  | _i :: is, _s, h => ⟨hPQ _ _ h.1, BlockOk.mono hPQ is _ h.2⟩
 
 /-- `ReachW.block`, for any step condition implied by region membership and the write bound. -/
 theorem ReachS.blockW {Pn Wr : Word → Prop} {P : State → Event → Prop} {s : State}

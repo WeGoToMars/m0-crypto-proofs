@@ -167,10 +167,10 @@ theorem w4_read (m : Mem) (sp : Word) (a b j : Nat) (hb : b + 4 ≤ 64) (hj : j 
     read32_write32_slot' _ _ _ _ _ (hs _ (by omega)) (hs _ hj),
     read32_write32_slot' _ _ _ _ _ (hs _ (by omega)) (hs _ hj)]
   by_cases hj' : b ≤ j ∧ j < b + 4
-  · rw [if_pos hj']
+  · rw [ite_eq_left hj']
     have : j = b ∨ j = b + 1 ∨ j = b + 2 ∨ j = b + 3 := by omega
     rcases this with rfl | rfl | rfl | rfl <;> simp
-  · rw [if_neg hj', if_neg (by omega), if_neg (by omega), if_neg (by omega), if_neg (by omega)]
+  · rw [ite_eq_right hj', ite_eq_right (by omega), ite_eq_right (by omega), ite_eq_right (by omega), ite_eq_right (by omega)]
 
 theorem w4_memOk (c : Ctx) {P : Nat} {m : Mem} (h : c.MemOk P m) (a b : Nat) (hb : b + 4 ≤ chFrameWords) :
     c.MemOk P (w4 m c.fp a b) := by
@@ -183,7 +183,7 @@ theorem w4_memOk (c : Ctx) {P : Nat} {m : Mem} (h : c.MemOk P m) (a b : Nat) (hb
 theorem pair_block_S {Pc : Word → Prop} (c : Ctx) (hv : Valid c) (hPc : ∀ pc, ChaCha20Policy.ChaPc c.base pc → Pc pc)
     (t : State) (off a b : Nat) (ho : off % 2 = 0)
     (hpc : t.pc = c.base + BitVec.ofNat 32 off) (hseq : seqAt B off ptr = true)
-    (h4 : t.regs 4 = slot c.fp a) (h5 : t.regs 5 = slot c.fp b) (hb : b + 4 ≤ chFrameWords)
+    (h4 : t.regs 4 = slot c.fp a) (h5 : t.regs 5 = slot c.fp b) (_hb : b + 4 ≤ chFrameWords)
     (hlt : off + seqSize ptr ≤ ChaCha20Policy.chaEnd)
     (allowed : Word → Kind → Word → Prop) (hacc : EventAccessesTo allowed (traceAll ptr t)) (Q : State → Prop)
     (cont : ∀ t', t'.pc = c.base + BitVec.ofNat 32 (off + 4) → t'.regs 4 = slot c.fp (a + 4) →
@@ -265,27 +265,27 @@ theorem bsetup_S {Pc : Word → Prop} (c : Ctx) (hv : Valid c) (k : Nat) (t : St
   · funext i
     unfold ChaCha20Round.view
     by_cases hi : i < 12
-    · rw [if_pos hi]
+    · rw [ite_eq_left hi]
       split
-      · rename_i h2; cases h2; rw [u0, rd (slotX + 2) (by decide), if_pos (by decide)]; exact h.j 2 (by decide)
-      · rw [u13, um, rd i (by omega), if_pos hi]; exact h.j i (by omega)
-    · rw [if_neg hi]
+      · rename_i h2; cases h2; rw [u0, rd (slotX + 2) (by decide), ite_eq_left (by decide)]; exact h.j 2 (by decide)
+      · rw [u13, um, rd i (by omega), ite_eq_left hi]; exact h.j i (by omega)
+    · rw [ite_eq_right hi]
       by_cases hi' : i < 16
-      · rw [if_pos hi']
+      · rw [ite_eq_left hi']
         have : i = 12 ∨ i = 13 ∨ i = 14 ∨ i = 15 := by omega
         rcases this with rfl | rfl | rfl | rfl
         · show (execAll btail t3).regs 8 = _
-          rw [u8, rd slotCtr (by decide), if_neg (by decide)]; exact h.j 12 (by decide)
+          rw [u8, rd slotCtr (by decide), ite_eq_right (by decide)]; exact h.j 12 (by decide)
         · show (execAll btail t3).regs 9 = _
-          rw [u9, rd slotNon (by decide), if_neg (by decide)]; exact h.j 13 (by decide)
+          rw [u9, rd slotNon (by decide), ite_eq_right (by decide)]; exact h.j 13 (by decide)
         · show (execAll btail t3).regs 10 = _
-          rw [u10, rd (slotNon + 1) (by decide), if_neg (by decide)]; exact h.j 14 (by decide)
+          rw [u10, rd (slotNon + 1) (by decide), ite_eq_right (by decide)]; exact h.j 14 (by decide)
         · show (execAll btail t3).regs 11 = _
-          rw [u11, rd (slotNon + 2) (by decide), if_neg (by decide)]; exact h.j 15 (by decide)
-      · rw [if_neg hi']; simp [Ctx.J, hi']
+          rw [u11, rd (slotNon + 2) (by decide), ite_eq_right (by decide)]; exact h.j 15 (by decide)
+      · rw [ite_eq_right hi']; simp [Ctx.J, hi']
   · intro j hj hj'
     show read32 (execAll btail t3).mem (slot c.fp j) = _
-    rw [um, rd j hj', if_neg (by omega)]
+    rw [um, rd j hj', ite_eq_right (by omega)]
   · rw [um, hM]
     exact w4_memOk c (w4_memOk c (w4_memOk c (by rw [← pm]; exact h.mem) _ _ (by decide)) _ _ (by decide)) _ _
       (by decide)
@@ -337,7 +337,7 @@ theorem J_toArr (c : Ctx) (k : Nat) : toArr (c.J k) = initState c.keyB (c.ctr + 
   · intro i h1 h2
     simp only [toArr, Array.getElem_ofFn, Ctx.J]
     have : i < 16 := by simpa [toArr] using h1
-    simp only [this, if_true]; exact getElem!_pos (initState c.keyB (c.ctr + BitVec.ofNat 32 k) c.nonceB) i h2
+    simp only [this, ite_true]; exact getElem!_pos (initState c.keyB (c.ctr + BitVec.ofNat 32 k) c.nonceB) i h2
 
 theorem block_keystream (c : Ctx) (k j : Nat) (hj : j < 64) :
     (block c.keyB (c.ctr + BitVec.ofNat 32 k) c.nonceB)[j]? = (bytesOfWord (ks c k (j / 4)))[j % 4]? := by

@@ -77,10 +77,10 @@ theorem add_sound {p : Params} {a b : AbsVal} {x₁ x₂ y₁ y₂ : Word}
     · have hsum : x₂.toNat + y₂.toNat < 2 ^ 32 := by
         simp [word] at hbound; omega
       have heq := BitVec.toNat_add_of_lt hsum
-      simp only [hbound, ↓reduceIte, Sem]
+      simp only [hbound, ↓reduceIte]
       rw [heq]
       exact ⟨trivial, Nat.add_le_add hxl hyl, Nat.add_le_add hxh hyh⟩
-    · simp [hbound, Sem]
+    · simp [hbound]
   case num.sp al ah bl bh =>
     obtain ⟨hxe, hxl, hxh⟩ := ha
     subst x₁
@@ -113,10 +113,10 @@ theorem sub_sound {p : Params} {a b : AbsVal} {x₁ x₂ y₁ y₂ : Word}
     by_cases hbound : bh ≤ al
     · have hle : y₂ ≤ x₂ := by rw [BitVec.le_def]; omega
       have heq := BitVec.toNat_sub_of_le hle
-      simp only [hbound, ↓reduceIte, Sem]
+      simp only [hbound, ↓reduceIte]
       rw [heq]
       exact ⟨trivial, by omega, by omega⟩
-    · simp [hbound, Sem]
+    · simp [hbound]
   case sp.num al ah bl bh =>
     obtain ⟨hye, hyl, hyh⟩ := hb
     subst y₁
@@ -130,7 +130,7 @@ theorem sub_sound {p : Params} {a b : AbsVal} {x₁ x₂ y₁ y₂ : Word}
 theorem ofPub_binary {p : Params} {a b : AbsVal} {x₁ x₂ y₁ y₂ : Word}
     (f : Word → Word → Word) (ha : Sem p a x₁ x₂) (hb : Sem p b y₁ y₂) :
     Sem p (ofPub (a.pub && b.pub)) (f x₁ y₁) (f x₂ y₂) := by
-  cases hpa : a.pub <;> cases hpb : b.pub <;> simp [hpa, hpb, ofPub, Sem]
+  cases hpa : a.pub <;> cases hpb : b.pub <;> simp [ofPub, Sem]
   have hx := sem_public ha hpa
   have hy := sem_public hb hpb
   rw [hx, hy]

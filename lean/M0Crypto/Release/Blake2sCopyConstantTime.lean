@@ -52,7 +52,7 @@ theorem dst_ok {base : Word} {s : State} (e : CopyEntry base s) :
 theorem bufferStoreOk {base : Word} {s : State} (e : CopyEntry base s)
     (hret : ∀ i < Artifacts.Release.size, s.regs 14 &&& ~~~1#32 ≠ base + BitVec.ofNat 32 i)
     {fuel : Nat} {states : List State} {events : List Event}
-    (hrun : M0Crypto.Release.runStates (s.regs 14 &&& ~~~1#32) fuel s = .ok (states, events))
+    (_hrun : M0Crypto.Release.runStates (s.regs 14 &&& ~~~1#32) fuel s = .ok (states, events))
     (hP : ∀ z ∈ states, z.pc ≠ s.regs 14 &&& ~~~1#32 → ∃ t ev, step z = .ok (t, ev) ∧
       PcWr (WC base s) z ev)
     {b : Blk} {off : Nat} {st : AbsState} {i : Instr} {is : List Instr} {z w : State}

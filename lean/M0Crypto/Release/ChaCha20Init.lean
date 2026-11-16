@@ -41,7 +41,7 @@ theorem mem_m0 (c : Ctx) {P : Nat} {m : Mem} (h : c.MemOk P m) (y : Word) (hf : 
   rw [h y hf, ite_eq_right_of_eq_false _ _ (eq_false hp), ChaCha20Return.mP_other c y hs]
 
 /-- Bytes of a buffer disjoint from the 176 stack bytes are outside the frame and the saved area. -/
-theorem disj_out (c : Ctx) (hv : Valid c) {a : Word} {n : Nat} (hd : Disj a n c.fp chStackBytes) (i : Nat)
+theorem disj_out (c : Ctx) (_hv : Valid c) {a : Word} {n : Nat} (hd : Disj a n c.fp chStackBytes) (i : Nat)
     (hi : i < n) : c.OutF (a + BitVec.ofNat 32 i) ∧
       ∀ k < 36, a + BitVec.ofNat 32 i ≠ c.sp0 - BitVec.ofNat 32 36 + BitVec.ofNat 32 k := by
   have sSB := ChaCha20Layout.chStackBytes_eq
@@ -272,15 +272,15 @@ theorem key_loop_S {Pc : Word → Prop} (c : Ctx) (hv : Valid c) (allowed : Word
       r3 := by rw [er 3 (by decide) (by decide) (by decide), h.r3]
       r4 := by rw [er 4 (by decide) (by decide) (by decide), h.r4]
       mem := by rw [em]; exact c.memOk_write_slot h.mem _ (by omega) _
-      len := by rw [fw' slotLen (by omega), if_neg (by omega), h.len]
-      outp := by rw [fw' slotOutp (by omega), if_neg (by omega), h.outp]
-      inp := by rw [fw' slotInp (by omega), if_neg (by omega), h.inp]
-      cst := fun j hj => by rw [fw' _ (by omega), if_neg (by omega), h.cst j hj]
+      len := by rw [fw' slotLen (by omega), ite_eq_right (by omega), h.len]
+      outp := by rw [fw' slotOutp (by omega), ite_eq_right (by omega), h.outp]
+      inp := by rw [fw' slotInp (by omega), ite_eq_right (by omega), h.inp]
+      cst := fun j hj => by rw [fw' _ (by omega), ite_eq_right (by omega), h.cst j hj]
       key := fun j hj => by
         rw [fw' _ (by omega)]
         by_cases e : j = i
-        · subst e; rw [if_pos rfl]
-        · rw [if_neg (by omega), h.key j (by omega)] }
+        · subst e; rw [ite_eq_left rfl]
+        · rw [ite_eq_right (by omega), h.key j (by omega)] }
 
 /-! ## Nonce loads -/
 
@@ -339,17 +339,17 @@ theorem nonce_loop_S {Pc : Word → Prop} (c : Ctx) (hv : Valid c) (allowed : Wo
       sp := by rw [er 13 (by decide) (by decide) (by decide), h.sp]
       r3 := by rw [er 3 (by decide) (by decide) (by decide), h.r3]
       mem := by rw [em]; exact c.memOk_write_slot h.mem _ (by omega) _
-      len := by rw [fw' slotLen (by omega), if_neg (by omega), h.len]
-      outp := by rw [fw' slotOutp (by omega), if_neg (by omega), h.outp]
-      inp := by rw [fw' slotInp (by omega), if_neg (by omega), h.inp]
-      cst := fun j hj => by rw [fw' _ (by omega), if_neg (by omega), h.cst j hj]
-      key := fun j hj => by rw [fw' _ (by omega), if_neg (by omega), h.key j hj]
-      ctr := by rw [fw' slotCtr (by omega), if_neg (by omega), h.ctr]
+      len := by rw [fw' slotLen (by omega), ite_eq_right (by omega), h.len]
+      outp := by rw [fw' slotOutp (by omega), ite_eq_right (by omega), h.outp]
+      inp := by rw [fw' slotInp (by omega), ite_eq_right (by omega), h.inp]
+      cst := fun j hj => by rw [fw' _ (by omega), ite_eq_right (by omega), h.cst j hj]
+      key := fun j hj => by rw [fw' _ (by omega), ite_eq_right (by omega), h.key j hj]
+      ctr := by rw [fw' slotCtr (by omega), ite_eq_right (by omega), h.ctr]
       non := fun j hj => by
         rw [fw' _ (by omega)]
         by_cases e : j = i
-        · subst e; rw [if_pos rfl]
-        · rw [if_neg (by omega), h.non j (by omega)] }
+        · subst e; rw [ite_eq_left rfl]
+        · rw [ite_eq_right (by omega), h.non j (by omega)] }
 
 /-! ## Single-instruction blocks -/
 
@@ -472,11 +472,11 @@ theorem nonce_end : nonOff + kchSize * 3 = bpreOff := by decide
 /-- After a store to slot `k`, other slots keep their values. -/
 theorem fw_other (c : Ctx) {t t' : State} {k : Nat} {v : Word} (h : t'.mem = write32 t.mem (slot c.fp k) v)
     (j : Nat) (hk : k < 64) (hj : j < 64) (hne : k ≠ j) : c.fw t' j = c.fw t j := by
-  rw [c.fw_write h j (by omega) (by omega), if_neg hne]; rfl
+  rw [c.fw_write h j (by omega) (by omega), ite_eq_right hne]; rfl
 
 theorem fw_same (c : Ctx) {t t' : State} {k : Nat} {v : Word} (h : t'.mem = write32 t.mem (slot c.fp k) v)
     (hk : k < 64) : c.fw t' k = v := by
-  rw [c.fw_write h k (by omega) (by omega), if_pos rfl]
+  rw [c.fw_write h k (by omega) (by omega), ite_eq_left rfl]
 
 theorem init_S {Pc : Word → Prop} (c : Ctx) (hv : Valid c) (allowed : Word → Kind → Word → Prop) (hA : ChaCha20Policy.Admits (ChaCha20Policy.FrontPc c.base) c.Wr allowed)
     (hS : ChaCha20Policy.AdmitsSite c.base c.Wr (KNRd c) allowed)

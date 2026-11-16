@@ -37,7 +37,7 @@ theorem blockOk_and {P Q : State → Event → Prop} :
     ∀ (is : List Instr) (s : State), BlockOk P is s → BlockOk Q is s →
       BlockOk (fun z e => P z e ∧ Q z e) is s
   | [], _, _, _ => trivial
-  | i :: is, s, ⟨h1, h2⟩, ⟨h3, h4⟩ => ⟨⟨h1, h3⟩, blockOk_and is _ h2 h4⟩
+  | _i :: is, _s, ⟨h1, h2⟩, ⟨h3, h4⟩ => ⟨⟨h1, h3⟩, blockOk_and is _ h2 h4⟩
 
 /-- The read half of a block: every `Ld` instruction's read is in `R`, given the symbolic check
 and the region bound. -/

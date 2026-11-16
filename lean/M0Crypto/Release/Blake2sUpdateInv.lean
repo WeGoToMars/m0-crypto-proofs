@@ -137,7 +137,7 @@ theorem code_ag {base : Word} {s t : State} (hc : CodeAt s.mem base B) (h : Ag s
 theorem src_ag {s t : State} (h : Ag s t) (pC : Disj (s.regs 1) (nn s) (s.regs 0) 112)
     (pF : Disj (s.regs 1) (nn s) (s.regs 13 - STREAM_FRAME_W) STREAM_FRAME) {i : Nat} (hi : i < nn s) :
     t.mem (s.regs 1 + BitVec.ofNat 32 i) = s.mem (s.regs 1 + BitVec.ofNat 32 i) :=
-  h.eq (fun o ho he => disj_ne pC hi ho he) (fun o ho he => disj_ne pF hi ho he)
+  h.eq (fun _o ho he => disj_ne pC hi ho he) (fun _o ho he => disj_ne pF hi ho he)
 
 theorem ctx_cnt {m : Mem} {c : Word} {st : SState} (h : CtxNU m c st) :
     (read32 m (c + 32#32)).toNat + 2 ^ 32 * (read32 m (c + 36#32)).toNat = st.count := by

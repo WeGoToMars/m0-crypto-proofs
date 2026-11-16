@@ -37,24 +37,24 @@ theorem fcall_eff (t : State) :
   rw [hx]
   have n15 : ∀ r : Reg, r.val ≠ 15 → r ≠ 15 := fun r h h' => h (by rw [h']; rfl)
   have a1 : ∀ r : Reg, r ≠ 0 → r.val ≠ 15 → s1.regs r = t.regs r := by
-    intro r h0 h15; rw [hs1, regs_mvns _ _ _ _ (n15 r h15)]; exact if_neg (fun h' => h0 h')
+    intro r h0 h15; rw [hs1, regs_mvns _ _ _ _ (n15 r h15)]; exact ite_eq_right (fun h' => h0 h')
   have a2 : ∀ r : Reg, r.val ≠ 15 → s2.regs r = s1.regs r := by
     intro r h15; rw [hs2, regs_strSp _ _ _ _ (n15 r h15)]
   refine ⟨?_, ?_, ?_⟩
   · rw [hs3, regs_addImm3 _ _ _ _ _ (by decide)]
-    refine (if_pos rfl).trans ?_
+    refine (ite_eq_left rfl).trans ?_
     show s2.regs 4 + _ = _
     rw [a2 4 (by decide), a1 4 (by decide) (by decide)]; simp
   · intro r h0 h15
     rw [hs3, regs_addImm3 _ _ _ _ _ (n15 r h15)]
-    refine (if_neg (fun h' => h0 h')).trans ?_
+    refine (ite_eq_right (fun h' => h0 h')).trans ?_
     rw [a2 r h15, a1 r h0 h15]
   · rw [hs3, mem_addImm3, hs2, mem_strSp, hs1, mem_mvns]
     have e13 : s1.sp = t.regs 13 := by
       show s1.regs 13 = _; exact a1 13 (by decide) (by decide)
     have e0 : s1.reg 0 = ~~~(t.regs 0) := by
       show s1.regs 0 = _
-      rw [hs1, regs_mvns _ _ _ _ (by decide)]; exact if_pos rfl
+      rw [hs1, regs_mvns _ _ _ _ (by decide)]; exact ite_eq_left rfl
     rw [← hs1, e13, e0]; simp
 
 open M0Crypto.Release.Blake2sInit (disj_ne w32_other)

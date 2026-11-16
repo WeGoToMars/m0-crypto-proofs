@@ -52,7 +52,7 @@ theorem entryStateP_sound {p : Params} {bytes : List (BitVec 8)} {off np args : 
       rcases cases with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
         first
           | (exfalso; omega)
-          | simp [entryStateP, AbsState.get, regGet, entryRegsP, numRegs, AbsVal.Sem, hlt, hp, hlr₁, hlr₂]
+          | simp [entryStateP, AbsState.get, regGet, entryRegsP, numRegs, AbsVal.Sem, hlt, hp]
     · rcases cases with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
         simp [entryStateP, AbsState.get, regGet, entryRegsP, numRegs, AbsVal.Sem, hlt, hlr₁, hlr₂]
   · simp [entryStateP, AFl.all, FlagSem, AbsFlags.Sem]

@@ -59,7 +59,7 @@ theorem dec1 (c : Nat) (h : c + 1 < 2^32) :
     simp only [BitVec.toNat_sub, BitVec.toNat_ofNat] at this; simp at this; omega
   · intro e; subst e; decide
 
-theorem succ_sub (c : Nat) (h : c + 1 < 2^32) : BitVec.ofNat 32 (c+1) - 1#32 = BitVec.ofNat 32 c := by
+theorem succ_sub (c : Nat) (_h : c + 1 < 2^32) : BitVec.ofNat 32 (c+1) - 1#32 = BitVec.ofNat 32 c := by
   apply BitVec.eq_of_toNat_eq
   simp only [BitVec.toNat_sub, BitVec.toNat_ofNat]; simp; omega
 

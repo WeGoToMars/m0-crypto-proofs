@@ -298,7 +298,7 @@ theorem next_regs_other {i : Instr} (s : State) (r : Reg) (h15 : r.val ≠ 15)
         · cases hex
           simp only [M0Crypto.Armv6M.State.setReg, h15', ite_false]
           rw [ite_eq_right_of_eq_false _ _ (eq_false (fun e => hd.2 (by rw [e]; rfl))), loadRegs_regs_other _ _ _ _ hd.1]
-          simp [M0Crypto.Armv6M.State.setReg, h15']
+          simp [h15']
         · cases hex
       · cases hex
         simp only [M0Crypto.Armv6M.State.setReg]

@@ -182,7 +182,7 @@ theorem key_reach_gen {Pn : Word → Prop} {P : State → Event → Prop} (c : A
       (.inr (by rw [fp_toNat]; omega)) ho' ho
   have tm : ∀ y, ChaCha20Xor.OutS xc y → (∀ j < 64, y ≠ c.A + BitVec.ofNat 32 (8 + j)) → t.mem y = p.mem y := by
     intro y hy hj
-    rw [hr.mem y hy, if_neg]
+    rw [hr.mem y hy, ite_eq_right]
     · exact congrFun um y
     rintro ⟨-, hlt⟩
     have e1 : c.A + BitVec.ofNat 32 (8 + (y - (c.A + 8#32)).toNat) = y := by
@@ -201,7 +201,7 @@ theorem key_reach_gen {Pn : Word → Prop} {P : State → Event → Prop} (c : A
       show (c.A + BitVec.ofNat 32 (8 + j) - (c.A + 8#32)).toNat = j
       rw [← ofNat_add_assoc]; exact sub_off _ _ (by omega)
     rw [hr.mem _ (hiS _ (by omega)),
-      if_pos ⟨hok, by show _ < (64#32 : Word).toNat; rw [ho]; simp; omega⟩, Ctx.oidx, ho]
+      ite_eq_left ⟨hok, by show _ < (64#32 : Word).toNat; rw [ho]; simp; omega⟩, Ctx.oidx, ho]
     show (M0Crypto.Spec.Aead.chacha20 xc.keyB (0#32 : Word).toNat xc.nonceB xc.msg)[j]! = _
     have kB : xc.keyB = c.keyB := bytesAt_congr (fun j hj => by show u.mem _ = _; rw [um]; exact hk j hj)
     have nB : xc.nonceB = c.nonceB := bytesAt_congr (fun j hj => by show u.mem _ = _; rw [um]; exact hn j hj)
@@ -225,7 +225,7 @@ theorem key_reach_gen {Pn : Word → Prop} {P : State → Event → Prop} (c : A
     have hfp : xc.fp = c.A - 176#32 := by
       show c.A - BitVec.ofNat 32 ChaCha20Layout.chStackBytes = _; rw [sSB]
     have := hr.frame_byte o (by rw [ChaCha20Layout.chFrameWords_eq]; omega)
-    rw [hfp, if_pos ⟨hok, by show (64#32 : Word) ≠ 0#32; decide⟩] at this
+    rw [hfp, ite_eq_left ⟨hok, by show (64#32 : Word) ≠ 0#32; decide⟩] at this
     exact this
   · rw [← hp.ctr]
     apply read32_congr

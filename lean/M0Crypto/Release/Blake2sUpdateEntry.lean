@@ -61,33 +61,33 @@ theorem upro_eff {base : Word} {s : State} {st0 : SState} (e : UpdateEntry base 
     rw [hs6, hs5, hs4, hs3, hs2, hs1]; rfl
   rw [hx]
   have p1r13 : s1.regs 13 = s.regs 13 - 20#32 := by
-    rw [hs1, regs_push _ _ _ _ (by decide), if_pos rfl, b4567]; rfl
+    rw [hs1, regs_push _ _ _ _ (by decide), ite_eq_left rfl, b4567]; rfl
   have p1o : ∀ r : Reg, r ≠ 13 → r ≠ 15 → s1.regs r = s.regs r := by
-    intro r h13 h15; rw [hs1, regs_push _ _ _ _ h15, if_neg h13]
+    intro r h13 h15; rw [hs1, regs_push _ _ _ _ h15, ite_eq_right h13]
   have p1m : s1.mem = pm s := by
     rw [hs1, mem_push, l4567, b4567]; rfl
   have p2r13 : s2.regs 13 = s.regs 13 - 24#32 := by
-    rw [hs2, M0Crypto.Release.Blake2sPro.regs_subSp _ _ _ (by decide), if_pos rfl, p1r13]; simp; bv_omega
+    rw [hs2, M0Crypto.Release.Blake2sPro.regs_subSp _ _ _ (by decide), ite_eq_left rfl, p1r13]; simp; bv_omega
   have p2o : ∀ r : Reg, r ≠ 13 → r ≠ 15 → s2.regs r = s1.regs r := by
-    intro r h13 h15; rw [hs2, M0Crypto.Release.Blake2sPro.regs_subSp _ _ _ h15, if_neg h13]
+    intro r h13 h15; rw [hs2, M0Crypto.Release.Blake2sPro.regs_subSp _ _ _ h15, ite_eq_right h13]
   have p2m : s2.mem = s1.mem := by rw [hs2, M0Crypto.Release.Blake2sPro.mem_subSp]
   have p3o : ∀ r : Reg, r ≠ 4 → r ≠ 15 → s3.regs r = s2.regs r := by
-    intro r h4 h15; rw [hs3, regs_lsl _ _ _ _ _ h15]; exact if_neg (fun h' => h4 h')
+    intro r h4 h15; rw [hs3, regs_lsl _ _ _ _ _ h15]; exact ite_eq_right (fun h' => h4 h')
   have p3r4 : s3.regs 4 = s2.regs 0 := by
-    rw [hs3, regs_lsl _ _ _ _ _ (by decide)]; refine (if_pos rfl).trans ?_; simp [lslC, State.reg]; rfl
+    rw [hs3, regs_lsl _ _ _ _ _ (by decide)]; refine (ite_eq_left rfl).trans ?_; simp [lslC, State.reg]; rfl
   have p3m : s3.mem = s2.mem := by rw [hs3, mem_lsl]
   have p4o : ∀ r : Reg, r ≠ 5 → r ≠ 15 → s4.regs r = s3.regs r := by
-    intro r h5 h15; rw [hs4, regs_lsl _ _ _ _ _ h15]; exact if_neg (fun h' => h5 h')
+    intro r h5 h15; rw [hs4, regs_lsl _ _ _ _ _ h15]; exact ite_eq_right (fun h' => h5 h')
   have p4r5 : s4.regs 5 = s3.regs 1 := by
-    rw [hs4, regs_lsl _ _ _ _ _ (by decide)]; refine (if_pos rfl).trans ?_; simp [lslC, State.reg]; rfl
+    rw [hs4, regs_lsl _ _ _ _ _ (by decide)]; refine (ite_eq_left rfl).trans ?_; simp [lslC, State.reg]; rfl
   have p4m : s4.mem = s3.mem := by rw [hs4, mem_lsl]
   have p5o : ∀ r : Reg, r ≠ 6 → r ≠ 15 → s5.regs r = s4.regs r := by
-    intro r h6 h15; rw [hs5, regs_lsl _ _ _ _ _ h15]; exact if_neg (fun h' => h6 h')
+    intro r h6 h15; rw [hs5, regs_lsl _ _ _ _ _ h15]; exact ite_eq_right (fun h' => h6 h')
   have p5r6 : s5.regs 6 = s4.regs 2 := by
-    rw [hs5, regs_lsl _ _ _ _ _ (by decide)]; refine (if_pos rfl).trans ?_; simp [lslC, State.reg]; rfl
+    rw [hs5, regs_lsl _ _ _ _ _ (by decide)]; refine (ite_eq_left rfl).trans ?_; simp [lslC, State.reg]; rfl
   have p5m : s5.mem = s4.mem := by rw [hs5, mem_lsl]
   have p6o : ∀ r : Reg, r ≠ 7 → r ≠ 15 → s6.regs r = s5.regs r := by
-    intro r h7 h15; rw [hs6, regs_ldr _ _ _ _ _ h15]; exact if_neg (fun h' => h7 h')
+    intro r h7 h15; rw [hs6, regs_ldr _ _ _ _ _ h15]; exact ite_eq_right (fun h' => h7 h')
   have p6m : s6.mem = s5.mem := by rw [hs6, mem_ldr]
   have m5 : s5.mem = pm s := by rw [p5m, p4m, p3m, p2m, p1m]
   have r0_2 : s2.regs 0 = s.regs 0 := by rw [p2o 0 (by decide) (by decide), p1o 0 (by decide) (by decide)]
@@ -104,7 +104,7 @@ theorem upro_eff {base : Word} {s : State} {st0 : SState} (e : UpdateEntry base 
   · rw [p6o 4 (by decide) (by decide), r4_5]
   · rw [p6o 5 (by decide) (by decide), p5o 5 (by decide) (by decide), p4r5, r1_3]
   · rw [p6o 6 (by decide) (by decide), p5r6, r2_4]
-  · rw [hs6, regs_ldr _ _ _ _ _ (by decide)]; refine (if_pos rfl).trans ?_
+  · rw [hs6, regs_ldr _ _ _ _ _ (by decide)]; refine (ite_eq_left rfl).trans ?_
     have : s5.reg 4 = s.regs 0 := r4_5
     rw [this, m5, show BitVec.ofNat 32 (BitVec.toNat (26 : BitVec 5) * 4) = 104#32 from rfl]
     rw [show (104#32 : Word) = BitVec.ofNat 32 104 from rfl, pm_ctx e 104 (by omega)]

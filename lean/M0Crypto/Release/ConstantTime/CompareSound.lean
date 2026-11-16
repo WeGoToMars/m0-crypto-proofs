@@ -14,7 +14,7 @@ private theorem cmpBase_no_record (a b : AbsVal) :
     (addRes a b (.known true) .lo).2.cmp = none := by
   unfold addRes
   split <;> simp_all [AFl.all]
-  split <;> simp_all [AFl.all]
+  split <;> simp_all
 
 /-- The comparison's NZCV labels describe both concrete computations, even
 when the compared register is secret. -/

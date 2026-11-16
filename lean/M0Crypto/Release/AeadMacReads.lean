@@ -112,11 +112,11 @@ theorem mac_loop_r {Rd Kn : Word → Prop} (base A dq : Word) (M0 : Mem) (R : Re
       · subst e
         have e2 : read8 u.mem (u.regs 4 + BitVec.ofNat 32 j) = (M0 (dq + BitVec.ofNat 32 j)).setWidth 32 := by
           rw [h4, read8, hout _ (hdq j hk)]
-        simp only [write8, if_true, e2, byte_copy, if_pos (show j < j + 1 by omega)]
+        simp only [write8, ite_true, e2, byte_copy, ite_eq_left (show j < j + 1 by omega)]
       · rw [write8_other _ _ _ _ (blk_ne A hj (by omega) e), hblk j hj]
         by_cases hjk : j < k
-        · rw [if_pos hjk, if_pos (by omega)]
-        · rw [if_neg hjk, if_neg (by omega)]
+        · rw [ite_eq_left hjk, ite_eq_left (by omega)]
+        · rw [ite_eq_right hjk, ite_eq_right (by omega)]
     have vout : ∀ y, OutBlk A y → v.mem y = M0 y := by
       intro y hy
       rw [lm, h1, h2, write8_other _ _ _ _ (hy k (by omega)), hout y hy]
@@ -368,7 +368,7 @@ theorem mac_tail_r {Rd Kn : Word → Prop} (base A d n : Word) (M : Mem) (m : Na
         rw [← ofNat_add_assoc] at h1; exact h1) rem 0 (by omega) (by omega) s3 p3 d1 d2 h4
       (by rw [dr 6 (by decide) (by decide) (by decide) (by decide) (by decide), r2 6 (by decide), c6])
       (by rw [dr 13 (by decide) (by decide) (by decide) (by decide) (by decide), s213]) hR3
-      (fun j hj => by simp only [Nat.not_lt_zero, if_false]; rw [dm]; exact z0 j hj)
+      (fun j hj => by simp only [Nat.not_lt_zero, ite_false]; rw [dm]; exact z0 j hj)
       (fun y _ => rfl)).mono (fun _ _ h => h)
     rintro v ⟨vpc, v1, v13, vR, vblk, vout⟩
     -- memory facts at the loop exit

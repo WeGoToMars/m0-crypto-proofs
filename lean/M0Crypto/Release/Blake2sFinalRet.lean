@@ -80,7 +80,7 @@ theorem pop_eff (t : State) (hbit : (read32 t.mem (t.regs 13 + 16#32)).getLsbD 0
   have a6 : ((LowReg.toReg 6 : Reg) : Nat) = 6 := rfl
   have a5 : ((LowReg.toReg 5 : Reg) : Nat) = 5 := rfl
   have a4 : ((LowReg.toReg 4 : Reg) : Nat) = 4 := rfl
-  simp only [a15, a13, a7, a6, a5, a4, h15, h13, if_false]
+  simp only [a15, a13, a7, a6, a5, a4, h15, h13, ite_false]
   have : ¬ (r.val = 7) := by omega
   have : ¬ (r.val = 6) := by omega
   have : ¬ (r.val = 5) := by omega
@@ -237,7 +237,7 @@ theorem ob_body {R m0 c o k t} (h : OI R m0 c o k t) (hD : Disj o 32 c 32) (hk :
   have ar6 : ((Instr.addImm8 6 1).next t2).regs 6 = t2.regs 6 + 1#32 := by
     rw [regs_addImm8 _ _ _ _ (by decide)]
     have e6 : (6 : Reg) = LowReg.toReg 6 := rfl
-    rw [if_pos e6]
+    rw [ite_eq_left e6]
     rfl
   have arn : ∀ r : Reg, r.val ≠ 15 → r.val ≠ 6 → ((Instr.addImm8 6 1).next t2).regs r = t2.regs r := by
     intro r h15 h6
@@ -318,7 +318,7 @@ theorem outB_loop (hb2 : base.toNat % 2 = 0) (hD : Disj o 32 c 32)
       simp [Instr.accesses, MemOp.width, MemOp.isLoad] at ha
       subst ha
       simp at hj; subst hj
-      simp only [] at hy
+      simp only at hy
       have e : t.reg 4 + t.reg 6 = c + BitVec.ofNat 32 k := by
         show t.regs 4 + t.regs 6 = _
         rw [hq.r4, hq.r6]
@@ -329,7 +329,7 @@ theorem outB_loop (hb2 : base.toNat % 2 = 0) (hD : Disj o 32 c 32)
         simp [Instr.accesses, MemOp.width, MemOp.isLoad] at ha
         subst ha
         simp at hj; subst hj
-        simp only [] at hy
+        simp only at hy
         have e : ((Instr.memReg .ldrb 0 4 6).next t).reg 5 + ((Instr.memReg .ldrb 0 4 6).next t).reg 6 =
             o + BitVec.ofNat 32 k := by
           show _ + _ = _
@@ -385,7 +385,7 @@ theorem tstO_z (u : State) : (execAll tstO u).z = decide ((u.regs 5).toNat % 4 =
   have := lsl30 (u.regs 5)
   simp only [lslC] at this ⊢
   rw [show (30 : BitVec 5).toNat = 30 from rfl]
-  simp only [show (30 = 0) = False from by decide, if_false]
+  simp only [show (30 = 0) = False from by decide, ite_false]
   rw [this]
 
 theorem tstO_keep (u : State) (r : Reg) (h15 : r.val ≠ 15) (h0 : r.val ≠ 0) :
@@ -445,12 +445,12 @@ theorem out_reach {base : Word} {W : Word → Word → Prop} {Rd : Word → Prop
         intro r h15 h6 h0
         rw [hw, regs_movImm _ _ _ _ (n15 r h15)]
         have : r ≠ LowReg.toReg 6 := fun e => h6 (by rw [e]; rfl)
-        rw [if_neg this]
+        rw [ite_eq_right this]
         exact kp1.regs r h15 h0
       refine ⟨keep 4 (by decide) (by decide) (by decide), keep 5 (by decide) (by decide) (by decide), ?_, ?_, ?_, by omega⟩
       · rw [hw, regs_movImm _ _ _ _ (by decide)]
         have e6 : (6 : Reg) = LowReg.toReg 6 := rfl
-        rw [if_pos e6]; rfl
+        rw [ite_eq_left e6]; rfl
       · rw [hw, mem_movImm, kp1.mem]; exact cp_zero _ _ _
       · intro r h7 h15
         exact keep r h15 (by omega) (by omega)
@@ -477,7 +477,7 @@ theorem out_reach {base : Word} {W : Word → Word → Prop} {Rd : Word → Prop
     · intro p hp o' ho' j hj
       simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at hp
       subst hp
-      simp only [] at ho'
+      simp only at ho'
       simp only [r5, BitVec.add_zero]
       exact hWw j hj o' ho'
     · apply rr_one
@@ -521,8 +521,8 @@ theorem zero_eff (s : State) :
   · rw [a r (fun h => h15 (by rw [h]; rfl))]
     have n : ∀ d : Reg, d.val < 4 → ¬ r = d := fun d hd e => by rw [e] at h4; omega
     show (if r = 3 then _ else if r = 2 then _ else if r = 1 then _ else if r = 0 then _ else _) = _
-    rw [if_neg (n 3 (by decide)), if_neg (n 2 (by decide)), if_neg (n 1 (by decide)),
-      if_neg (n 0 (by decide))]
+    rw [ite_eq_right (n 3 (by decide)), ite_eq_right (n 2 (by decide)), ite_eq_right (n 1 (by decide)),
+      ite_eq_right (n 0 (by decide))]
 
 /-- The epilogue: `movs r0..r3, #0; add sp, #4; pop {r4-r7, pc}`. -/
 structure RetPost (base : Word) (v w : State) : Prop where

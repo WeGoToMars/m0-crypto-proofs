@@ -37,7 +37,7 @@ theorem upro_pre {base : Word} {s : State} {st0 : SState} (e : UpdateEntry base 
     rw [this]; rfl
   rw [hx] at r4 rmem
   refine ⟨?_, ?_⟩
-  · rw [← r4, regs_ldr _ _ _ _ _ (by decide), if_neg (by decide)]
+  · rw [← r4, regs_ldr _ _ _ _ _ (by decide), ite_eq_right (by decide)]
   · rw [← rmem, mem_ldr]
 
 theorem update_reachSR {base : Word} {s : State} {st0 : SState} (e : UpdateEntry base s st0) :

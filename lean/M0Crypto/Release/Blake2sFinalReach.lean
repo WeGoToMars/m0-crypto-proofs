@@ -312,7 +312,7 @@ theorem stk_eq (s : State) (o : Nat) :
     s.regs 13 - 20#32 + BitVec.ofNat 32 o = (s.regs 13 - STREAM_FRAME_W) + BitVec.ofNat 32 (STREAM_LOCALS + o) := by
   rw [← ofNat_add_assoc]; bv_omega
 
-theorem push_ne {base : Word} {s : State} {st : M0Crypto.Spec.Blake2s.State} (e : FinalEntry base s st)
+theorem push_ne {base : Word} {s : State} {st : M0Crypto.Spec.Blake2s.State} (_e : FinalEntry base s st)
     {a : Word} {n : Nat} (h : Disj a n (s.regs 13 - STREAM_FRAME_W) STREAM_FRAME) {i : Nat} (hi : i < n) (o : Nat) (ho : o < 20) :
     a + BitVec.ofNat 32 i ≠ s.regs 13 - 20#32 + BitVec.ofNat 32 o := by
   rw [stk_eq]
@@ -348,7 +348,7 @@ theorem pad_bytes {base : Word} {s t : State} {st : M0Crypto.Spec.Blake2s.State}
       rw [hfar]
       simp only [M0Crypto.Spec.Blake2s.pad, List.getElem_append_left hlt]
       have := congrArg (fun l => l[i]?) hcb
-      simp only [bytesAt, List.getElem?_map, List.getElem?_range, hlt, if_true] at this
+      simp only [bytesAt, List.getElem?_map, List.getElem?_range, hlt, ite_true] at this
       rw [List.getElem?_eq_getElem hlt] at this
       simpa using this
     · rw [po.zero i (by omega) hi]

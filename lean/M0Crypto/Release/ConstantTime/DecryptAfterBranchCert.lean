@@ -49,7 +49,7 @@ theorem graphWalk_sound {env : Env} {cert : Cert} {starts : List GraphNode}
     | cons first rest =>
       have hfirst : GraphReach env cert starts first := hpending first (by simp)
       by_cases hm : first ∈ seen
-      · simp only [graphWalk, List.contains_iff_mem, if_pos hm]
+      · simp only [graphWalk, List.contains_iff_mem, ite_eq_left hm]
         apply ih seen rest hseen
         intro x hx
         exact hpending x (by simp [hx])
@@ -66,7 +66,7 @@ theorem graphWalk_sound {env : Env} {cert : Cert} {starts : List GraphNode}
           rcases hx with hx | hx
           · exact hpending x (by simp [hx])
           · exact GraphReach.next hfirst hx
-        simpa only [graphWalk, List.contains_iff_mem, if_neg hm] using ih (first :: seen)
+        simpa only [graphWalk, List.contains_iff_mem, ite_eq_right hm] using ih (first :: seen)
           (rest ++ (graphBlock cert first).flatMap (graphOut env)) hseen' hpending'
 
 theorem decryptAfterReach_sound {node : GraphNode} (h : node ∈ decryptAfterReach) :

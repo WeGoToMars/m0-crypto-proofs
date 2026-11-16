@@ -110,7 +110,7 @@ theorem body_accesses (s : State) : AccessesIn (traceAll body s) (s.regs 13) dro
 
 theorem cond_eq (t : State) : condPassed 0 t = t.z := by simp [condPassed]
 
-theorem ofNat_sub_one (k : Nat) (hk : k + 1 < 2 ^ 32) :
+theorem ofNat_sub_one (k : Nat) (_hk : k + 1 < 2 ^ 32) :
     BitVec.ofNat 32 (k + 1) - 1 = BitVec.ofNat 32 k := by
   apply BitVec.eq_of_toNat_eq; simp [BitVec.toNat_sub]; omega
 

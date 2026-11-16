@@ -310,7 +310,7 @@ theorem sound_basic (i : Instr) (h : symBasic i = true) : Sound i := by
   cases i <;> simp only [symBasic, Bool.false_eq_true] at h
   all_goals
     simp only [symStep, Instr.next, Instr.exec, SState.denote_setReg, SState.denote_setNZ,
-      denote_sAddFlags, SExpr.denote, SBool.denote, denote_regs, denote_reg, SState.reg, SState.sp,
+      denote_sAddFlags, SExpr.denote, SBool.denote, denote_regs, SState.reg, SState.sp,
       State.reg, State.sp, State.pc]
 
 end M0Crypto.Sym

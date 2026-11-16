@@ -95,7 +95,7 @@ theorem write32_zero_pass (m : Mem) (a x : Word) (h : m x = 0#8) : write32 m a 0
 
 theorem write32_zero_hit (m : Mem) (a : Word) (k : Nat) (hk : k < 4) :
     write32 m a 0#32 (a + BitVec.ofNat 32 k) = 0#8 := by
-  rw [write32_zero, if_pos]
+  rw [write32_zero, ite_eq_left]
   rcases (by omega : k = 0 ∨ k = 1 ∨ k = 2 ∨ k = 3) with rfl | rfl | rfl | rfl
   · left; simp
   · right; left; rfl

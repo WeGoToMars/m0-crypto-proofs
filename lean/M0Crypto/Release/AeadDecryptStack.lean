@@ -133,7 +133,7 @@ theorem decrypt_hbuffer (c : ACall) (hv : AValid c) (hb : ABuf c) (s : State)
   apply decrypt_recorded_bufferStoreOk c hv hb s x he hlr hret hrun hm hp hlow hx
   by_cases hu : untrackedStore st i = true
   · rcases untracked_cases decrypt_counter hm hp hu with ⟨hsite, hcnt⟩ | hf
-    · have hc1 := counter_of_stack (x := x) (y := x) hlow.stack (by simpa using hcnt)
+    · have hc1 := counter_of_stack (_x := x) (_y := x) hlow.stack (by simpa using hcnt)
       have hc2 : read32 x.mem (c.A + 4#32) = 1#32 := by
         rw [← counter_eq c]; exact hc1
       exact nonStack_of_policy c hv hb hlow.pc hev hpol hsite hc2

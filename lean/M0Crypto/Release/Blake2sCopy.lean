@@ -78,11 +78,11 @@ theorem write32_hit (m : Mem) (a v : Word) (q : Nat) (hq : q < 4) :
   rcases (by omega : q = 0 ∨ q = 1 ∨ q = 2 ∨ q = 3) with rfl | rfl | rfl | rfl
   · simp [write32]
   · simp only [write32]
-    rw [if_neg h10]; simp
+    rw [ite_eq_right h10]; simp
   · simp only [write32]
-    rw [if_neg h20, if_neg h21]; simp
+    rw [ite_eq_right h20, ite_eq_right h21]; simp
   · simp only [write32]
-    rw [if_neg h30, if_neg h31, if_neg h32]; simp
+    rw [ite_eq_right h30, ite_eq_right h31, ite_eq_right h32]; simp
 
 /-- Copy progress: `m` agrees with `m0`'s source bytes in `dst[0,k)` and with `m0` elsewhere. -/
 def Cp (m0 m : Mem) (d s : Word) (k : Nat) : Prop :=
@@ -113,11 +113,11 @@ theorem cp_w8 {m0 m : Mem} {d s : Word} {k : Nat} (hk : k < 2 ^ 32) (hc : Cp m0 
     · subst hik; simp [write8, hv]
     · have hne : d + BitVec.ofNat 32 i ≠ d + BitVec.ofNat 32 k :=
         fun h => hik (add_ofNat_inj d i k (by omega) hk h)
-      simp only [write8, if_neg hne]
+      simp only [write8, ite_eq_right hne]
       exact hc.1 i (by omega)
   · intro y hy
     have hne : y ≠ d + BitVec.ofNat 32 k := hy k (by omega)
-    simp only [write8, if_neg hne]
+    simp only [write8, ite_eq_right hne]
     exact hc.2 y (fun i hi => hy i (by omega))
 
 theorem cp_w32 {m0 m : Mem} {d s : Word} {k : Nat} (hk : k + 4 < 2 ^ 32) (hc : Cp m0 m d s k) (w : Word)

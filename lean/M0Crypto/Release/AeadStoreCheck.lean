@@ -63,7 +63,7 @@ theorem encrypt_counter : certCounter encryptEnv emitSite encryptCert = true := 
   decide +kernel
 
 /-- The counter slot value, from the certificate state. -/
-theorem counter_of_stack {p : Params} {st : AbsState} {x y : State} {mem : M0Crypto.Armv6M.Mem}
+theorem counter_of_stack {p : Params} {st : AbsState} {_x _y : State} {mem : M0Crypto.Armv6M.Mem}
     {m2 : M0Crypto.Armv6M.Mem} (hst : StkSem p st.stk mem m2)
     (h : stkGet st.stk counterSlot == AbsVal.num 1 1) :
     M0Crypto.Armv6M.read32 mem (p.sp0 + BitVec.ofInt 32 counterSlot) = 1#32 := by

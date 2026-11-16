@@ -272,7 +272,7 @@ theorem pop_exec (t : State)
   have hb : bitCount (0xF0#8) = 4 := by decide
   have h1 : (read32 t.mem (t.sp + BitVec.ofNat 32 (4 * bitCount 240))).getLsbD 0 = true := by
     simpa [State.sp, hb] using hbit
-  simp only [Instr.exec, if_true, h1]
+  simp only [Instr.exec, ite_true, h1]
   refine ⟨_, rfl, ?_⟩
   have hl : listRegs (0xF0#8) = [4, 5, 6, 7] := by decide
   have e8 : t.regs 13 + 4#32 + 4#32 = t.regs 13 + 8#32 := by bv_omega

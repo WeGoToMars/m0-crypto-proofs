@@ -103,6 +103,6 @@ theorem interruptWitness_of {K n : Nat} {sp0 a : Word} {P : Word → Prop} (rs :
   · obtain ⟨r, hr, hry⟩ := hP y hp
     have hya : y ≠ a := fun h => hne r _ _ (hd r hr).2 y hry (by rw [h]; simp)
     show (if _ then _ else _) = _
-    rw [if_neg hk, if_neg hya]
+    rw [ite_eq_right hk, ite_eq_right hya]
 
 end M0Crypto.Release.NonVacuity

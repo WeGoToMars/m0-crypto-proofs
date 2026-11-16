@@ -193,7 +193,7 @@ theorem read32_storeWords_ne (m : Mem) (a : Word) (vs : List Word) (b : Word)
 
 /-- The feed-forward of the working-vector half held in registers and slots 1, 3. -/
 def S1 : List Instr :=
-  [ .dp .eors 0 6, .movHi 6 8, .dp .eors 2 6, .ldrSp 6 1, .dp .eors 5 6, .ldrSp 6 3, .dp .eors 7 6,
+  [.dp .eors 0 6, .movHi 6 8, .dp .eors 2 6, .ldrSp 6 1, .dp .eors 5 6, .ldrSp 6 3, .dp .eors 7 6,
     .ldrSp 4 HPTR_WORDS ]
 
 theorem S1_eq : S1 = tail.take 8 := by decide
@@ -229,7 +229,7 @@ theorem S1_eff {t : State} {R : Reg → Word} (h : RA t R) :
 
 
 def S2a : List Instr :=
-  [ .memImm .ldr 1 4 0, .dp .eors 1 2, .memImm .ldr 2 4 1, .dp .eors 2 5,
+  [.memImm .ldr 1 4 0, .dp .eors 1 2, .memImm .ldr 2 4 1, .dp .eors 2 5,
     .memImm .ldr 3 4 2, .dp .eors 3 0, .memImm .ldr 5 4 3, .dp .eors 5 7 ]
 
 theorem S2a_eff {t : State} {R : Reg → Word} (h : RA t R) :
@@ -258,7 +258,7 @@ theorem S2a_eff {t : State} {R : Reg → Word} (h : RA t R) :
        repeat' split
        all_goals first | rfl | (exfalso; omega))
 
-def S2b : List Instr := [ .stm 4 0x2e, .ldm 4 0x0f ]
+def S2b : List Instr := [.stm 4 0x2e, .ldm 4 0x0f ]
 
 theorem S2b_eff {t : State} {R : Reg → Word} (h : RA t R) :
     ∃ R', RA (execAll S2b t) R' ∧
@@ -295,7 +295,7 @@ theorem S2b_eff {t : State} {R : Reg → Word} (h : RA t R) :
     | (simp (config := {decide := true}) [upd, hm1', e20, e24, e28, e32, e24', e28']; bv_omega)
 
 def S3a : List Instr :=
-  [ .ldrSp 6 4, .dp .eors 0 6, .movHi 6 9, .dp .eors 0 6,
+  [.ldrSp 6 4, .dp .eors 0 6, .movHi 6 9, .dp .eors 0 6,
     .ldrSp 6 5, .dp .eors 1 6, .movHi 6 10, .dp .eors 1 6,
     .ldrSp 6 6, .dp .eors 2 6, .movHi 6 11, .dp .eors 2 6,
     .ldrSp 6 7, .dp .eors 3 6, .movHi 6 12, .dp .eors 3 6,
@@ -338,7 +338,7 @@ theorem S3a_eff {t : State} {R : Reg → Word} (h : RA t R) :
        repeat' split
        all_goals first | rfl | (exfalso; omega))
 
-def S3b : List Instr := [ .stm 4 0x0f ]
+def S3b : List Instr := [.stm 4 0x0f ]
 
 theorem S3b_eff {t : State} {R : Reg → Word} (h : RA t R) :
     ∃ R', RA (execAll S3b t) R' ∧
@@ -399,14 +399,14 @@ theorem S3c_eff {t : State} {R : Reg → Word} (h : RA t R) :
     have n12 : r ≠ 12 := by rintro rfl; exact absurd h4 (by decide)
     have n5 : r ≠ 5 := by rintro rfl; exact absurd h4 (by decide)
     rw [hx, hr r h15]
-    simp only [upd, n12, if_false]
+    simp only [upd, n12, ite_false]
     exact (fo r h15 n5).trans (hz r (by omega))
   · rw [hx, hr 12 (by decide)]; simp [upd, z0]
   · intro r h15 h6 h12
     have n12 : r ≠ 12 := by rintro rfl; exact h12 rfl
     have n5 : r ≠ 5 := by rintro rfl; exact absurd h6 (by decide)
     rw [hx, hr r h15]
-    simp only [upd, n12, if_false]
+    simp only [upd, n12, ite_false]
     exact (fo r h15 n5).trans (ho r h15 h6)
 
 /-- The cleared locals do not reach the saved registers above them. -/
@@ -460,7 +460,7 @@ theorem RA_pop4f {s : State} {R : Reg → Word} (h : RA s R) :
           · simp [upd, e13, e4, e5, e6, e7, h r hr]
 
 def S4 : List Instr :=
-  [ .addSp LOCALS_WORDS, .pop 0xF0 false, .movHi 8 4, .movHi 9 5, .movHi 10 6, .movHi 11 7 ]
+  [.addSp LOCALS_WORDS, .pop 0xF0 false, .movHi 8 4, .movHi 9 5, .movHi 10 6, .movHi 11 7 ]
 
 theorem S4_eff {t : State} {R : Reg → Word} (h : RA t R) :
     ∃ R', RA (execAll S4 t) R' ∧ (execAll S4 t).mem = t.mem ∧

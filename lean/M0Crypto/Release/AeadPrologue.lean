@@ -109,17 +109,17 @@ theorem rd_wr (m : Mem) (A v : Word) (a b : Nat) (ha : a % 4 = 0) (hb : b % 4 = 
   rw [e1, e2, read32_write32_slot' m A v _ _ (by omega) (by omega)]
   by_cases h : a = b
   · subst h; simp
-  · rw [if_neg (by omega), if_neg h]
+  · rw [ite_eq_right (by omega), ite_eq_right h]
 
 theorem rd_wr_ne (m : Mem) (A v : Word) (a b : Nat) (ha : a % 4 = 0) (hb : b % 4 = 0) (ha' : a < 2 ^ 30)
     (hb' : b < 2 ^ 30) (h : a ≠ b) :
     read32 (write32 m (A + BitVec.ofNat 32 a) v) (A + BitVec.ofNat 32 b) = read32 m (A + BitVec.ofNat 32 b) := by
-  rw [rd_wr m A v a b ha hb ha' hb', if_neg h]
+  rw [rd_wr m A v a b ha hb ha' hb', ite_eq_right h]
 
 theorem rd_wr0 (m : Mem) (A v : Word) (b : Nat) (hb : b % 4 = 0) (hb0 : b ≠ 0) (hb' : b < 2 ^ 30) :
     read32 (write32 m A v) (A + BitVec.ofNat 32 b) = read32 m (A + BitVec.ofNat 32 b) := by
   have := rd_wr m A v 0 b (by omega) hb (by omega) hb'
-  rw [if_neg (Ne.symm hb0)] at this
+  rw [ite_eq_right (Ne.symm hb0)] at this
   simpa using this
 
 theorem rd_store_other (m : Mem) (A : Word) (vs : List Word) (a b : Nat)

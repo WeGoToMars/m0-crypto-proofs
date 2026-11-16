@@ -40,7 +40,7 @@ theorem eors_sound {p : Params} {bytes : List (BitVec 8)} {off : Nat}
   have hn := hw.withNZ hval
   have hp : (AbsVal.ofPub ((st.get d.val).pub && (st.get m.val).pub)).pub =
       ((st.get d.val).pub && (st.get m.val).pub) := by
-    cases hp : ((st.get d.val).pub && (st.get m.val).pub) <;> simp [AbsVal.ofPub, AbsVal.pub, hp]
+    cases hp : ((st.get d.val).pub && (st.get m.val).pub) <;> simp [AbsVal.ofPub, AbsVal.pub]
   rw [hp] at hn
   simp only [AbsState.set, setNZ_touch] at hn
   have hpc₁ := h.pc
@@ -82,7 +82,7 @@ theorem orrs_sound {p : Params} {bytes : List (BitVec 8)} {off : Nat}
   have hn := hw.withNZ hval
   have hp : (AbsVal.ofPub ((st.get d.val).pub && (st.get m.val).pub)).pub =
       ((st.get d.val).pub && (st.get m.val).pub) := by
-    cases hp : ((st.get d.val).pub && (st.get m.val).pub) <;> simp [AbsVal.ofPub, AbsVal.pub, hp]
+    cases hp : ((st.get d.val).pub && (st.get m.val).pub) <;> simp [AbsVal.ofPub, AbsVal.pub]
   rw [hp] at hn
   simp only [AbsState.set, setNZ_touch] at hn
   have hpc₁ := h.pc
@@ -124,7 +124,7 @@ theorem muls_sound {p : Params} {bytes : List (BitVec 8)} {off : Nat}
   have hn := hw.withNZ hval
   have hp : (AbsVal.ofPub ((st.get d.val).pub && (st.get m.val).pub)).pub =
       ((st.get d.val).pub && (st.get m.val).pub) := by
-    cases hp : ((st.get d.val).pub && (st.get m.val).pub) <;> simp [AbsVal.ofPub, AbsVal.pub, hp]
+    cases hp : ((st.get d.val).pub && (st.get m.val).pub) <;> simp [AbsVal.ofPub, AbsVal.pub]
   rw [hp] at hn
   simp only [AbsState.set, setNZ_touch] at hn
   have hpc₁ := h.pc

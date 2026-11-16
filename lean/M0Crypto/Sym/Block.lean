@@ -126,7 +126,7 @@ theorem add_toNat_mod_of_dvd (x y : Word) (w : Nat) (hw : w ∣ 2 ^ 32)
 
 theorem and_not3_toNat' (a : Word) : (a &&& ~~~3#32).toNat = a.toNat - a.toNat % 4 := by
   have h1 : (a &&& ~~~3#32) &&& (a &&& 3#32) = 0 := by
-    ext i hi; simp only [BitVec.getElem_and, BitVec.getElem_not, BitVec.getElem_zero]
+    ext i hi; simp only [BitVec.getElem_and, BitVec.getElem_not]
     cases a[i] <;> cases (3#32)[i] <;> simp
   have h2 : (a &&& ~~~3#32) + (a &&& 3#32) = a := by
     rw [BitVec.add_eq_or_of_and_eq_zero _ _ h1]

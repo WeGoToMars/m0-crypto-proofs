@@ -158,13 +158,13 @@ theorem factFailure_eq_none (fs : List Fact) :
   | cons f fs ih =>
     simp only [factFailure?, List.all_cons, Bool.and_eq_true]
     cases h : factIndexFailure? f with
-    | none => simp [h, (factIndexFailure?_eq_none f).mp h, ih]
+    | none => simp [(factIndexFailure?_eq_none f).mp h, ih]
     | some r =>
       have hf : factIndexCheck f ≠ true := by
         intro ht
         have := (factIndexFailure?_eq_none f).mpr ht
         simp [h] at this
-      simp [h, hf]
+      simp [hf]
 
 theorem linkFailure_eq_none (ls : List Lnk) :
     linkFailure? ls = none ↔ ls.all linkIndexCheck = true := by
@@ -173,13 +173,13 @@ theorem linkFailure_eq_none (ls : List Lnk) :
   | cons l ls ih =>
     simp only [linkFailure?, List.all_cons, Bool.and_eq_true]
     cases h : linkIndexFailure? l with
-    | none => simp [h, (linkIndexFailure?_eq_none l).mp h, ih]
+    | none => simp [(linkIndexFailure?_eq_none l).mp h, ih]
     | some r =>
       have hl : linkIndexCheck l ≠ true := by
         intro ht
         have := (linkIndexFailure?_eq_none l).mpr ht
         simp [h] at this
-      simp [h, hl]
+      simp [hl]
 
 theorem AbsState.indicesFailure_eq_none (s : AbsState) :
     s.indicesFailure = none ↔ s.indicesCheck = true := by
@@ -190,7 +190,7 @@ theorem AbsState.indicesFailure_eq_none (s : AbsState) :
     cases h : factFailure? s.rel with
     | none =>
       have hs := (factFailure_eq_none s.rel).mp h
-      simp only [h, hs, true_and, linkFailure_eq_none]
+      simp only [hs, true_and, linkFailure_eq_none]
     | some e =>
       have hs : s.rel.all factIndexCheck ≠ true := by
         intro ht

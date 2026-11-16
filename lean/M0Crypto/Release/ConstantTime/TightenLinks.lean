@@ -25,13 +25,13 @@ theorem tightenLink_sound {p : Params} {bytes : List (BitVec 8)} {off : Nat}
   rcases hidx with ⟨hi, hj⟩
   unfold tightenLink
   cases hv : s.get l.i with
-  | hi | lo | num _ _ | ret _ | lr0 => simp [hv]; exact h
+  | hi | lo | num _ _ | ret _ | lr0 => simp; exact h
   | sp a b =>
     cases hjv : ival (s.get l.j) with
-    | none => simp [hv, hjv]; exact h
+    | none => simp; exact h
     | some bounds =>
       rcases bounds with ⟨nl, nh⟩
-      simp only [hv, hjv]
+      simp only
       split
       next hg =>
         apply h.withRegSet

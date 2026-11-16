@@ -253,7 +253,7 @@ theorem evBcond {base : Word} {Pc : Word → Prop} {allowed : Word → Kind → 
     (hF : condPassed cond s = false → ReachS base (EvP Pc allowed) (s.setReg 15 (base + BitVec.ofNat 32 (off + 2))) Q) :
     ReachS base (EvP Pc allowed) s Q :=
   ReachS.bcond hb off tgt cond imm hpc ho hi hsz ht
-    ⟨by rw [hpc]; exact hr, by intro a ha; simp [Instr.accesses] at ha⟩ hT hF
+    ⟨by rw [hpc]; exact hr, by intro a ha; simp at ha⟩ hT hF
 
 theorem evB {base : Word} {Pc : Word → Prop} {allowed : Word → Kind → Word → Prop}
     {s : State} {Q : State → Prop} (hb : base.toNat % 2 = 0) (off tgt : Nat)
@@ -264,7 +264,7 @@ theorem evB {base : Word} {Pc : Word → Prop} {allowed : Word → Kind → Word
     (hq : ReachS base (EvP Pc allowed) (s.setReg 15 (base + BitVec.ofNat 32 tgt)) Q) :
     ReachS base (EvP Pc allowed) s Q :=
   ReachS.b hb off tgt imm hpc ho hi hsz ht
-    ⟨by rw [hpc]; exact hr, by intro a ha; simp [Instr.accesses] at ha⟩ hq
+    ⟨by rw [hpc]; exact hr, by intro a ha; simp at ha⟩ hq
 
 theorem pcBefore_of_between {base : Word} {lo hi : Nat} {pc : Word} (h : PCBetween base lo hi pc) :
     PCBefore base hi pc := by

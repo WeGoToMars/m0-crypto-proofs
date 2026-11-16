@@ -43,21 +43,21 @@ theorem dirAdv_eff (t : State) :
   have n15 : ∀ r : Reg, r.val ≠ 15 → r ≠ 15 := fun r h h' => h (by rw [h']; rfl)
   have a1r5 : a1.regs 5 = t.regs 5 + 64#32 := by
     rw [ha1, regs_addImm8 _ _ _ _ (by decide)]
-    refine (if_pos rfl).trans ?_; rfl
+    refine (ite_eq_left rfl).trans ?_; rfl
   have a1o : ∀ r : Reg, r.val ≠ 5 → r.val ≠ 15 → a1.regs r = t.regs r := by
     intro r h5 h15
     rw [ha1, regs_addImm8 _ _ _ _ (n15 r h15)]
-    exact if_neg (fun h => h5 (by rw [h]; rfl))
+    exact ite_eq_right (fun h => h5 (by rw [h]; rfl))
   have a1m : a1.mem = t.mem := by rw [ha1, mem_addImm8]
   have a2r6 : a2.regs 6 = t.regs 6 - 64#32 := by
     rw [ha2, regs_subImm8 _ _ _ _ (by decide)]
-    refine (if_pos rfl).trans ?_
+    refine (ite_eq_left rfl).trans ?_
     show a1.regs 6 - _ = _
     rw [a1o 6 (by decide) (by decide)]; rfl
   have a2o : ∀ r : Reg, r.val ≠ 6 → r.val ≠ 15 → a2.regs r = a1.regs r := by
     intro r h6 h15
     rw [ha2, regs_subImm8 _ _ _ _ (n15 r h15)]
-    exact if_neg (fun h => h6 (by rw [h]; rfl))
+    exact ite_eq_right (fun h => h6 (by rw [h]; rfl))
   have a2m : a2.mem = a1.mem := by rw [ha2, mem_subImm8]
   obtain ⟨bc, bz, bm, br⟩ := cmp_eff 6 0x40 a2
   have e3 : (Instr.cmpImm 6 0x40).next a2 = execAll [Instr.cmpImm 6 0x40] a2 := rfl
@@ -93,7 +93,7 @@ theorem pre2_eff (t : State) :
   refine ⟨?_, fun r h1 h15 => execAll_regs_other _ _ r h15 (by simp [pre2, Instr.dsts, Fin.ext_iff]; omega), ?_⟩
   · have e : execAll pre2 t = (Instr.lslImm 1 5 0).next t := rfl
     rw [e, regs_lsl _ _ _ _ _ (by decide)]
-    refine (if_pos rfl).trans ?_
+    refine (ite_eq_left rfl).trans ?_
     simp [lslC, State.reg]
     try rfl
   · have e : execAll pre2 t = (Instr.lslImm 1 5 0).next t := rfl

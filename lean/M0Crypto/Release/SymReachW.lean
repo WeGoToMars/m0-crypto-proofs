@@ -67,6 +67,6 @@ theorem ReachS.stepNW {s s1 : State} {Q : State → Prop} (hb : base.toNat % 2 =
 theorem ReachS.pcWr_mono {Wr : Word → Prop} {s : State} {Q : State → Prop}
     (h : ReachS base (PcWr W) s Q) (hw : ∀ pc y, W pc y → Wr y) : Reach base Wr s Q :=
   (reach_iff_reachS Wr s Q).mpr
-    (h.mono (fun _ e hp y hy => hw _ _ (hp y hy)) (fun _ h => h))
+    (h.mono (fun _ _e hp y hy => hw _ _ (hp y hy)) (fun _ h => h))
 
 end M0Crypto.Release

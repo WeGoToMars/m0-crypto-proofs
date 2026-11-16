@@ -36,16 +36,16 @@ theorem decrypt_return_r {Rd Kn : Word → Prop} (c : ACall) (hv : AValid c) (hb
     have hok : c.expected=c.tagB := by
       by_cases hn : c.expected=c.tagB
       · exact hn
-      · simp only [decrypt_eq, if_neg hn] at hs
+      · simp only [decrypt_eq, ite_eq_right hn] at hs
         cases hs
-    refine ⟨by rw [ha.r0, if_pos hok], ?_⟩
+    refine ⟨by rw [ha.r0, ite_eq_left hok], ?_⟩
     simpa only [hs] using ho
   · intro hs
     have hbad : c.expected≠c.tagB := by
       intro heq
-      simp only [decrypt_eq, if_pos heq] at hs
+      simp only [decrypt_eq, ite_eq_left heq] at hs
       cases hs
-    exact ⟨by rw [ha.r0, if_neg hbad], by simpa only [hs] using ho⟩
+    exact ⟨by rw [ha.r0, ite_eq_right hbad], by simpa only [hs] using ho⟩
   · intro y hy
     rw [hf y (fun hw => hy (.inl (clearWr_swr _ _ hw))), h.frame y hy]
 
@@ -80,8 +80,8 @@ theorem decrypt_tail_r {Rd Kn : Word → Prop} (c : ACall) (hv : AValid c) (hb :
       (fun r a b => wr r (by omega) (by omega))
     apply decrypt_return_r c hv hb w wp _ hlr
     refine ⟨wb.sp, wb.high, wb.hi, ?_, ?_, ?_⟩
-    · simpa [if_neg hbad] using w4
-    · simp only [decrypt_eq, if_neg hbad]
+    · simpa [ite_eq_right hbad] using w4
+    · simp only [decrypt_eq, ite_eq_right hbad]
       exact bytesAt_congr (fun j hj => wb.frame _ (hv.not_swr hb.outStack hj))
     · intro y hy; exact wb.frame y (fun hw => hy (.inl hw))
   · intro heq
@@ -121,8 +121,8 @@ theorem decrypt_tail_r {Rd Kn : Word → Prop} (c : ACall) (hv : AValid c) (hb :
     · rw [ym]; exact wb.high
     · intro r a b
       rw [←hy, setReg_ne _ _ _ _ (by rintro rfl; omega), xr r (by omega) (by omega), wb.hi r a b]
-    · rw [←hy, setReg_ne _ _ _ _ (by decide), x4, if_pos hok]; rfl
-    · simp only [decrypt_eq, if_pos hok]
+    · rw [←hy, setReg_ne _ _ _ _ (by decide), x4, ite_eq_left hok]; rfl
+    · simp only [decrypt_eq, ite_eq_left hok]
       rw [ym]; exact hw.out
     · intro a ha; rw [ym]; exact wf a ha
 

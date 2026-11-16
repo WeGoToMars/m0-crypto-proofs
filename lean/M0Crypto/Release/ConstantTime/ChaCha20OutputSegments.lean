@@ -132,7 +132,7 @@ theorem output_tail_loop_runH (c : ACall) (xc : Frame.Ctx) (hv : Frame.Valid xc)
         rw [upc, BitVec.add_assoc, BitVec.add_assoc, hjump]
       have hs : stepH B xc.base u = .ok (next, ⟨u.pc, branch, []⟩) := by
         apply stepH_of_instr hbase (by rw [B_len]; decide) upc (by decide) blo_at (by rw [B_len]; decide)
-          (by simp [branch, Instr.accesses])
+          (by simp [Instr.accesses])
         change branch.exec u = .ok next
         simp only [branch, Instr.exec, hcond, ite_true, htarget]
         rfl
@@ -178,7 +178,7 @@ theorem output_tail_loop_runH (c : ACall) (xc : Frame.Ctx) (hv : Frame.Valid xc)
           ofNat_add_assoc, blo_next]
       have hs : stepH B xc.base u = .ok (next, ⟨u.pc, branch, []⟩) := by
         apply stepH_of_instr hbase (by rw [B_len]; decide) upc (by decide) blo_at (by rw [B_len]; decide)
-          (by simp [branch, Instr.accesses])
+          (by simp [Instr.accesses])
         change branch.exec u = .ok next
         simp only [branch, Instr.exec, hcond, Bool.false_eq_true, ite_false, Instr.size, htarget]
         rfl

@@ -193,7 +193,7 @@ theorem finish_not_A (c : ACall) (hv : AValid c) (hb : ABuf c) (dec : Bool) (o :
     rw [← e] at eq
     exact off_ne (c.A-20#32) (by omega) (by omega) (by omega) eq
   · cases dec
-    · exact hb.tagA hv o ho (by rw [eq, if_neg (by decide), sub_off _ _ (by omega)]; exact hq)
+    · exact hb.tagA hv o ho (by rw [eq, ite_eq_right (by decide), sub_off _ _ (by omega)]; exact hq)
     · exact off_ne c.A (a := o) (b := 72+q) (by omega) (by omega) (by omega)
         (by simpa only [Bool.true_eq, ite_true, ofNat_add_assoc] using eq)
 

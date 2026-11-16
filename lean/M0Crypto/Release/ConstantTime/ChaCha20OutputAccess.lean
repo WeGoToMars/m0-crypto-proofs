@@ -45,10 +45,10 @@ theorem aligned_chunk_read_addresses (t : State) (i : Nat) (hi : i < 16)
   all_goals try subst ha
   all_goals refine ⟨q, by simpa [MemOp.width] using hq, ?_⟩
   all_goals simp only [M0Crypto.Armv6M.State.sp, M0Crypto.Armv6M.State.reg,
-    M0Crypto.Proofs.toReg_2, hsp, hreg', BitVec.toNat_ofNat,
-    Nat.mod_eq_of_lt (by simp [slotX, slotJ]; omega : slotX + i < 256),
-    Nat.mod_eq_of_lt (by simp [slotX, slotJ]; omega : slotJ + i < 256),
-    Nat.mod_eq_of_lt (by omega : i < 32), MemOp.width, Nat.mul_comm] at hy
+    M0Crypto.Proofs.toReg_2, hsp, hreg',
+    Nat.mod_eq_of_lt (by simp [slotX]; omega : slotX + i < 256),
+    Nat.mod_eq_of_lt (by simp [slotJ]; omega : slotJ + i < 256),
+    Nat.mod_eq_of_lt (by omega : i < 32), MemOp.width] at hy
   · left; simpa [Nat.mul_comm] using hy
   · right; left; simpa [Nat.mul_comm] using hy
   · right; right; simpa [Nat.mul_comm] using hy
@@ -77,8 +77,8 @@ theorem aligned_chunk_read_pcs (t : State) (i : Nat) (hi : i < 16)
   all_goals try subst ha
   right; right
   refine ⟨q, by simpa [MemOp.width] using hq, ?_⟩
-  simp only [M0Crypto.Armv6M.State.reg, M0Crypto.Proofs.toReg_2, hreg', BitVec.toNat_ofNat,
-    Nat.mod_eq_of_lt (by omega : i < 32), MemOp.width, Nat.mul_comm] at hy
+  simp only [M0Crypto.Armv6M.State.reg, M0Crypto.Proofs.toReg_2, hreg',
+    Nat.mod_eq_of_lt (by omega : i < 32), MemOp.width] at hy
   simpa [Nat.mul_comm] using hy
 
 /-- Instruction addresses of ChaCha's caller-buffer output stores. -/
@@ -176,7 +176,7 @@ theorem byte_prepare_write_pc (t : State) (i : Nat) (e : Event)
   rcases hy with ⟨a, ha, hw, q, hq, hy⟩
   simp only [traceAll, bch, List.mem_cons, List.not_mem_nil, or_false] at he
   rcases he with rfl | rfl | rfl | rfl
-  all_goals simp [Instr.accesses, MemOp.isLoad] at ha
+  all_goals simp [Instr.accesses] at ha
   all_goals try (subst ha; cases hw)
   change (execAll ((bch i).dropLast) t).pc = _
   rw [execAll_pc _ _ (by simp [bch, Instr.falls])]
@@ -212,14 +212,13 @@ theorem byte_prepare_read_addresses (t : State) (i : Nat) (hi : i < 16)
   rcases hy with ⟨a, ha, hk, q, hq, hy⟩
   simp only [traceAll, bch, List.mem_cons, List.not_mem_nil, or_false] at he
   rcases he with rfl | rfl | rfl | rfl
-  all_goals simp [Instr.accesses, MemOp.isLoad] at ha
+  all_goals simp [Instr.accesses] at ha
   all_goals try (subst ha; cases hk)
   all_goals try subst ha
   all_goals refine ⟨q, by simpa [MemOp.width] using hq, ?_⟩
-  all_goals simp only [M0Crypto.Armv6M.State.sp, hsp, BitVec.toNat_ofNat,
-    Nat.mod_eq_of_lt (by simp [slotX, slotJ]; omega : slotX + i < 256),
-    Nat.mod_eq_of_lt (by simp [slotX, slotJ]; omega : slotJ + i < 256),
-    MemOp.width, Nat.mul_comm] at hy
+  all_goals simp only [M0Crypto.Armv6M.State.sp, hsp,
+    Nat.mod_eq_of_lt (by simp [slotX]; omega : slotX + i < 256),
+    Nat.mod_eq_of_lt (by simp [slotJ]; omega : slotJ + i < 256)] at hy
   · left; simpa [Nat.mul_comm] using hy
   · right; simpa [Nat.mul_comm] using hy
 

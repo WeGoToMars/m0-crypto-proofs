@@ -34,7 +34,7 @@ theorem cmpSem_flags {c : Cmp} {s : M0Crypto.Armv6M.State}
         have hh := congrArg (fun z => z + operand s c.b) he
         simpa [BitVec.sub_add_cancel] using hh
       · intro he
-        simpa [he] using (BitVec.sub_self (operand s c.b))
+        simp [he]
     · rw [hc.2.2.1, M0Crypto.Release.sub_carry]
 
 /-- For the unsigned and equality conditions that the analyzer refines, the
@@ -266,7 +266,7 @@ theorem branchFacts_sound {p : Params} {bytes : List (BitVec 8)} {off : Nat}
         fun he => AbsState.entails_sound h ⟨hr, ha⟩ he
       cases habool : st.entails (a, r, false) <;>
         cases hbbool : st.entails (r, a, false) <;>
-        simp_all [branchFacts, heq, FactSem, Rel.holds] <;> omega
+        simp_all [branchFacts, FactSem, Rel.holds] <;> omega
 
 /-- Branch-derived facts refer only to the checked comparison operands. -/
 theorem branchFacts_indices {st : AbsState} {a r : Nat} {rel : Rel}
@@ -276,7 +276,7 @@ theorem branchFacts_indices {st : AbsState} {a r : Nat} {rel : Rel}
   by_cases heq : r = a
   · simp [branchFacts, heq] at hf
   · cases rel <;> simp_all [branchFacts, factIndexOk]
-    rcases hf with ⟨_, rfl⟩ | ⟨_, rfl⟩ <;> simp [factIndexOk, ha, hr]
+    rcases hf with ⟨_, rfl⟩ | ⟨_, rfl⟩ <;> simp [ha, hr]
 
 /-- The successful interval-refinement case preserves the full relational
 state, including newly recorded facts and the subsequent tightening pass. -/
@@ -306,7 +306,7 @@ theorem refine_core_sound {p : Params} {bytes : List (BitVec 8)} {off : Nat}
       | .reg r => branchFacts st cmp.a r rel
       | .imm _ => []), FactSem f s₁ ∧ FactSem f s₂ := by
     cases hop : cmp.b with
-    | imm n => simp [hop]
+    | imm n => simp
     | reg r =>
       have hr : regIndexOk r := by simpa [opndIndexOk, hop] using hcmp.2
       apply branchFacts_sound h hcmp.1 hr
@@ -316,7 +316,7 @@ theorem refine_core_sound {p : Params} {bytes : List (BitVec 8)} {off : Nat}
       | .reg r => branchFacts st cmp.a r rel
       | .imm _ => []), factIndexOk f := by
     cases hop : cmp.b with
-    | imm n => simp [hop]
+    | imm n => simp
     | reg r =>
       have hr : regIndexOk r := by simpa [opndIndexOk, hop] using hcmp.2
       exact branchFacts_indices hcmp.1 hr
@@ -355,11 +355,11 @@ theorem refine_feasible {p : Params} {bytes : List (BitVec 8)} {off : Nat}
           cases rel <;> simp_all
         have hrelation := condRel_sound cond taken rel hcmp hr ht hzr
         cases hleft : ival (st.get c.a) with
-        | none => simp [refine, hc, hr, hz, hleft]
+        | none => simp [refine, hc, hr, hleft]
         | some left =>
           rcases left with ⟨a₁, a₂⟩
           cases hright : opndIval st c.b with
-          | none => simp [refine, hc, hr, hz, hleft, hright]
+          | none => simp [refine, hc, hr, hleft, hright]
           | some right =>
             rcases right with ⟨b₁, b₂⟩
             have ha := interval_bounds (h.regs c.a hci.1.1 hci.1.2) hleft
@@ -414,7 +414,7 @@ theorem refine_sound {p : Params} {bytes : List (BitVec 8)} {off : Nat}
             have hcore := refine_core_sound w h hidx hci hleft hright hrelation hresult
             cases hop : c.b with
             | imm n =>
-              cases rel <;> simp_all [refine, branchFacts]
+              cases rel <;> simp_all [refine]
             | reg r =>
               cases rel <;> simp_all [refine, branchFacts]
 

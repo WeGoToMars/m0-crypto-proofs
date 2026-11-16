@@ -32,7 +32,7 @@ def SState.initK (k : List (Reg × Word)) : SState := { SState.init with regs :=
 theorem initK_denote (k : List (Reg × Word)) (s : State) (h : ∀ p ∈ k, s.regs p.1 = p.2) :
     (SState.initK k).denote s = s := by
   cases s
-  simp only [SState.denote, SState.initK, SState.init, SExpr.denote, SBool.denote, SMem.denote]
+  simp only [SState.denote, SState.initK, SState.init, SBool.denote, SMem.denote]
   congr 1
   funext r
   exact lookK_denote _ k h r

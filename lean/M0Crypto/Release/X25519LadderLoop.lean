@@ -58,7 +58,7 @@ theorem tail_runs {Wr : Word → Prop} (u : State) {j : Nat} (hj : j + 1 < 256)
   have r0 : (execAll decT u).regs 0 = BitVec.ofNat 32 j := by
     have : (execAll decT u).regs 0 = read32 u.mem (u.sp + BitVec.ofNat 32 lvT) - 1#32 := by
       simp [decT, execAll, Instr.next, Instr.exec, State.setReg, State.setNZCV, State.setNZ,
-        addFlags, State.sp, State.reg, X25519Mem.toReg0, X25519ChainLoop.lvT_off,
+        addFlags, State.sp, State.reg, X25519Mem.toReg0,
         X25519ChainLoop.lvT_off', X25519ChainLoop.awc_dec]
     rw [this, hT, X25519ChainLoop.ofNat_dec hj]
   rw [hT, X25519ChainLoop.ofNat_dec hj] at hd

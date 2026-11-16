@@ -99,10 +99,10 @@ theorem blk_bytes (A dq : Word) (M0 M mem : Mem) (rem : Nat) (hr : rem ≤ 16) (
   by_cases hj : j < 16
   · rw [Frame.bytesAt_get _ _ _ _ hj, h j hj]
     by_cases hjr : j < rem
-    · rw [if_pos hjr, List.getElem?_append_left (by rw [bytesAt_length]; exact hjr),
+    · rw [ite_eq_left hjr, List.getElem?_append_left (by rw [bytesAt_length]; exact hjr),
         Frame.bytesAt_get _ _ _ _ hjr, hs j hjr]
-    · rw [if_neg hjr, List.getElem?_append_right (by rw [bytesAt_length]; omega), bytesAt_length,
-        List.getElem?_replicate, if_pos (by omega)]
+    · rw [ite_eq_right hjr, List.getElem?_append_right (by rw [bytesAt_length]; omega), bytesAt_length,
+        List.getElem?_replicate, ite_eq_left (by omega)]
   · rw [List.getElem?_eq_none (by rw [bytesAt_length]; omega),
       List.getElem?_eq_none (by simp [bytesAt_length]; omega)]
 
@@ -189,7 +189,7 @@ theorem mac_tail {Pc : Word → Prop} (base A d n : Word) (M : Mem) (m : Nat) (i
       fun y hy => by rw [setReg_mem, cm, ht.frame y hy], ?_, ?_⟩, ?_, ?_, ?_⟩
     · rw [setReg_mem, cm, pad_zero M d _ hr]; exact ht.acc
     · rw [setReg_mem, cm]; exact ht.bound
-    · rw [setReg_ne _ _ _ _ (by decide), cr 4 (by decide) (by decide), ht.r4, if_pos hr]
+    · rw [setReg_ne _ _ _ _ (by decide), cr 4 (by decide) (by decide), ht.r4, ite_eq_left hr]
     · rw [setReg_ne _ _ _ _ (by decide), cr 5 (by decide) (by decide), ht.r5]
     · rw [setReg_ne _ _ _ _ (by decide), c6]
   · intro hz
@@ -239,7 +239,7 @@ theorem mac_tail {Pc : Word → Prop} (base A d n : Word) (M : Mem) (m : Nat) (i
       (fun j hj => outBlk_of (src_out j hj)) rem 0 (by omega) (by omega) s3 p3 d1 d2 h4
       (by rw [dr 6 (by decide) (by decide) (by decide) (by decide) (by decide), r2 6 (by decide), c6])
       (by rw [dr 13 (by decide) (by decide) (by decide) (by decide) (by decide), s213]) (fun _ _ _ => rfl)
-      (fun j hj => by simp only [Nat.not_lt_zero, if_false]; rw [dm]; exact z0 j hj)
+      (fun j hj => by simp only [Nat.not_lt_zero, ite_false]; rw [dm]; exact z0 j hj)
       (fun y _ => rfl)).mono (fun _ _ h => h)
     rintro v ⟨vpc, v1, v13, vR, vblk, vout⟩
     -- memory facts at the loop exit
@@ -318,7 +318,7 @@ theorem mac_tail {Pc : Word → Prop} (base A d n : Word) (M : Mem) (m : Nat) (i
       rw [he.key_eq xM, xacc, ht.acc, xm, vblk'] at acc'
       rw [acc', pad_split M d _ (by omega), hrem,
         Poly1305Spec.polyBlocks_append _ _ _ (n.toNat / 16) _ _ (bytesAt_length _ _ _)]
-    · rw [uR 4 (by decide) (by decide), h4, if_neg (by rw [hrem]; exact hr0)]
+    · rw [uR 4 (by decide) (by decide), h4, ite_eq_right (by rw [hrem]; exact hr0)]
     · rw [uR 5 (by decide) (by decide), dr 5 (by decide) (by decide) (by decide) (by decide) (by decide),
         r2 5 (by decide), cr 5 (by decide) (by decide), ht.r5]
     · rw [uR 6 (by decide) (by decide), dr 6 (by decide) (by decide) (by decide) (by decide) (by decide),

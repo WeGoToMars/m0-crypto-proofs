@@ -40,7 +40,7 @@ theorem wz_pass (m : Mem) (a x : Word) (h : m x = 0#8) : write32 m a 0#32 x = 0#
 
 theorem wz_hit (m : Mem) (a : Word) (k : Nat) (hk : k < 4) :
     write32 m a 0#32 (a + BitVec.ofNat 32 k) = 0#8 := by
-  rw [wz, if_pos]
+  rw [wz, ite_eq_left]
   rcases (by omega : k = 0 ∨ k = 1 ∨ k = 2 ∨ k = 3) with rfl | rfl | rfl | rfl
   · left; simp
   · right; left; rfl
@@ -65,7 +65,7 @@ theorem pz_w8 {m1 : Mem} {buf : Word} {u k : Nat} {m : Mem} (h : Pz m1 buf u k m
     rw [Thumb.write8_other _ _ _ _ hyk]
     exact hb y (fun i hui hi => hy i hui (by omega))
 
-theorem pz_w32 {m1 : Mem} {buf : Word} {u k : Nat} {m : Mem} (h : Pz m1 buf u k m) (hu : u ≤ k) (hk : k + 4 ≤ 64) :
+theorem pz_w32 {m1 : Mem} {buf : Word} {u k : Nat} {m : Mem} (h : Pz m1 buf u k m) (hu : u ≤ k) (_hk : k + 4 ≤ 64) :
     Pz m1 buf u (k + 4) (write32 m (buf + BitVec.ofNat 32 k) 0#32) := by
   obtain ⟨ha, hb⟩ := h
   have inj : ∀ i j, i < 64 → j < 64 → buf + BitVec.ofNat 32 i = buf + BitVec.ofNat 32 j → i = j :=
@@ -112,10 +112,10 @@ theorem pi_tst {R m1 buf u k t} (h : PI R m1 buf u k t) :
   have e1 : execAll tstW t = (Instr.lslImm 7 6 30).next t := rfl
   refine ⟨fun r h6 h7 h15 => ?_, ?_, h.2.2.1, h.2.2.2.1, ?_, h.2.2.2.2.2.1, h.2.2.2.2.2.2⟩
   · rw [e1, regs_lsl _ _ _ _ _ (fun h' => h15 (by rw [h']; rfl))]
-    refine (if_neg (fun h' => h7 (by rw [h']; rfl))).trans ?_
+    refine (ite_eq_right (fun h' => h7 (by rw [h']; rfl))).trans ?_
     exact h.1 r h6 h7 h15
   · rw [e1, regs_lsl _ _ _ _ _ (by decide)]
-    refine (if_neg (by decide)).trans ?_
+    refine (ite_eq_right (by decide)).trans ?_
     exact h.2.1
   · rw [e1, mem_lsl]; exact h.2.2.2.2.1
 
@@ -127,21 +127,21 @@ theorem tst_z {R m1 buf u k t} (h : PI R m1 buf u k t) : (execAll tstW t).z = de
   have := lsl30 (BitVec.ofNat 32 k)
   simp only [lslC] at this ⊢
   rw [show (30 : BitVec 5).toNat = 30 from rfl]
-  simp only [show (30 = 0) = False from by decide, if_false]
+  simp only [show (30 = 0) = False from by decide, ite_false]
   have hk : k < 2 ^ 32 := by have := h.2.2.2.1; omega
   rw [this]; simp [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hk]
 
-theorem pi_bodyB {R m1 buf u k t} (h : PI R m1 buf u k t) (hbuf : buf.toNat + 64 ≤ 2 ^ 32) (hk : k < 64) :
+theorem pi_bodyB {R m1 buf u k t} (h : PI R m1 buf u k t) (_hbuf : buf.toNat + 64 ≤ 2 ^ 32) (hk : k < 64) :
     PI R m1 buf u (k + 1) ((Instr.addImm8 6 1).next ((Instr.memReg .strb 0 1 6).next t)) := by
   have n15 : ∀ r : Reg, r.val ≠ 15 → r ≠ 15 := fun r h h' => h (by rw [h']; rfl)
   have r6 : ((Instr.memReg .strb 0 1 6).next t).regs 6 = BitVec.ofNat 32 k := by
     rw [regs_memReg_st _ _ _ _ _ (Or.inr rfl) _ (by decide)]; exact h.2.1
   refine ⟨fun r h6 h7 h15 => ?_, ?_, by have := h.2.2.1; omega, by omega, ?_, h.2.2.2.2.2.1, h.2.2.2.2.2.2⟩
   · rw [regs_addImm8 _ _ _ _ (n15 r h15)]
-    refine (if_neg (fun h' => h6 (by rw [h']; rfl))).trans ?_
+    refine (ite_eq_right (fun h' => h6 (by rw [h']; rfl))).trans ?_
     rw [regs_memReg_st _ _ _ _ _ (Or.inr rfl) _ (n15 r h15)]; exact h.1 r h6 h7 h15
   · rw [regs_addImm8 _ _ _ _ (by decide)]
-    refine (if_pos rfl).trans ?_
+    refine (ite_eq_left rfl).trans ?_
     have : ((Instr.memReg .strb 0 1 6).next t).reg 6 = BitVec.ofNat 32 k := r6
     rw [this]; simp; bv_omega
   · rw [mem_addImm8, mem_strb]
@@ -178,7 +178,7 @@ theorem padB_loop (hb2 : base.toNat % 2 = 0) (hbuf : buf.toNat + 64 ≤ 2 ^ 32)
         have hzz := z_lsl t 7 6 30
         rw [← e1, hz, hc] at hzz
         rw [e1, regs_lsl _ _ _ _ _ (by decide)]
-        exact (if_pos (by decide)).trans (beq_iff_eq.mp hzz.symm)
+        exact (ite_eq_left (by decide)).trans (beq_iff_eq.mp hzz.symm)
       exact K k _ (by rw [sr_pc]) (hpi'.setPc _) (by simpa using hc) (by rw [sr_ne _ _ _ _ (by decide)]; exact h7)
     · intro hc
       rw [cp0, hz] at hc
@@ -201,7 +201,7 @@ theorem padB_loop (hb2 : base.toNat % 2 = 0) (hbuf : buf.toNat + 64 ≤ 2 ^ 32)
         simp [Instr.accesses, MemOp.width, MemOp.isLoad] at ha
         subst ha
         simp at hj; subst hj
-        simp only [] at hy
+        simp only at hy
         rw [hy, a1, BitVec.add_zero]; exact hW k hk64
       · have hp2 : ((Instr.memReg .strb 0 1 6).next t1).pc = base + BitVec.ofNat 32 (oPadBBody + 2) := by
           rw [pc_next _ f1, hp1, ofNat_add_assoc]; rfl
@@ -246,10 +246,10 @@ theorem pi_bodyW {R m1 buf u k t} (h : PI R m1 buf u k t) (hk : k + 4 ≤ 64) :
     rw [regs_memReg_st _ _ _ _ _ (Or.inl rfl) _ (by decide)]; exact h.2.1
   refine ⟨fun r h6 h7 h15 => ?_, ?_, by have := h.2.2.1; omega, by omega, ?_, h.2.2.2.2.2.1, h.2.2.2.2.2.2⟩
   · rw [regs_addImm8 _ _ _ _ (n15 r h15)]
-    refine (if_neg (fun h' => h6 (by rw [h']; rfl))).trans ?_
+    refine (ite_eq_right (fun h' => h6 (by rw [h']; rfl))).trans ?_
     rw [regs_memReg_st _ _ _ _ _ (Or.inl rfl) _ (n15 r h15)]; exact h.1 r h6 h7 h15
   · rw [regs_addImm8 _ _ _ _ (by decide)]
-    refine (if_pos rfl).trans ?_
+    refine (ite_eq_left rfl).trans ?_
     have : ((Instr.memReg .str 0 1 6).next t).reg 6 = BitVec.ofNat 32 k := r6
     rw [this]; simp; bv_omega
   · rw [mem_addImm8, mem_strw]
@@ -312,7 +312,7 @@ theorem padW_loop (hb2 : base.toNat % 2 = 0) (hbuf : buf.toNat + 64 ≤ 2 ^ 32) 
         simp [Instr.accesses, MemOp.width, MemOp.isLoad] at ha
         subst ha
         simp only [MemOp.width] at hj
-        simp only [] at hy
+        simp only at hy
         rw [hy, a1, ofNat_add_assoc]; exact hW _ (by omega)
       · have hp2 : ((Instr.memReg .str 0 1 6).next t1).pc = base + BitVec.ofNat 32 (oPadWBody + 2) := by
           rw [pc_next _ f1, hp1, ofNat_add_assoc]; rfl
@@ -326,7 +326,7 @@ theorem padW_loop (hb2 : base.toNat % 2 = 0) (hbuf : buf.toNat + 64 ≤ 2 ^ 32) 
             (by decide +kernel) (by decide +kernel)
           have h7' : ((Instr.addImm8 6 4).next ((Instr.memReg .str 0 1 6).next t1)).regs 7 = v7 := by
             rw [regs_addImm8 _ _ _ _ (by decide)]
-            refine (if_neg (by decide)).trans ?_
+            refine (ite_eq_right (by decide)).trans ?_
             rw [regs_memReg_st _ _ _ _ _ (Or.inl rfl) _ (by decide), ht1, sr_ne _ _ _ _ (by decide),
               show execAll cmp64 t = (Instr.cmpImm 6 0x40).next t from rfl, regs_cmpImm _ _ _ _ (by decide)]
             exact h7

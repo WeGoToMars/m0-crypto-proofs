@@ -62,9 +62,9 @@ theorem certPoint_outputSite {env : Env} {cert : Cert} {b : Blk} {off : Nat} {st
   split at hw
   · cases hw
   · rename_i hn
-    simp only [hu, Bool.true_and, Bool.not_eq_true', Bool.not_eq_false', ite_eq_right_iff] at hn
+    simp only [hu, Bool.true_and, Bool.not_eq_true'] at hn
     cases ho : outputStoreOffset off
-    · simp [hu, ho] at hn
+    · simp [ho] at hn
     · rfl
 
 theorem chacha20_outputSiteCheck : certOutputSiteCheck chacha20Env chacha20Cert = true := by

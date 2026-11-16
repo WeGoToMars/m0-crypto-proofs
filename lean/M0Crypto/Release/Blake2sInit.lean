@@ -99,7 +99,7 @@ theorem ld_eff (s : State) (t : LowReg) (imm : BitVec 8) (a v : Word)
     ((Instr.ldrLit t imm).next s).mem = s.mem ∧
     ((Instr.ldrLit t imm).next s).pc = s.pc + 2#32 := by
   refine ⟨?_, ?_, mem_ldrLit _ _ _, ?_⟩
-  · rw [regs_ldrLit _ _ _ _ (M0Crypto.Release.Blake2s.toReg_ne15 t), if_pos rfl, ha, hv]
+  · rw [regs_ldrLit _ _ _ _ (M0Crypto.Release.Blake2s.toReg_ne15 t), ite_eq_left rfl, ha, hv]
   · intro r h1 h15; rw [regs_ldrLit _ _ _ _ h15]; simp [h1]
   · exact pc_next _ (by simp [Instr.falls]) s
 
@@ -110,7 +110,7 @@ theorem stm_eff (s : State) (l : BitVec 8) :
     ((Instr.stm 0 l).next s).pc = s.pc + 2#32 := by
   refine ⟨?_, ?_, mem_stm _ _ _, pc_next _ (by simp [Instr.falls]) s⟩
   · rw [regs_stm _ _ _ _ (by decide)]; simp [State.reg]; rfl
-  · intro r h0 h15; rw [regs_stm _ _ _ _ h15]; exact if_neg (fun h => h0 (by rw [h]; rfl))
+  · intro r h0 h15; rw [regs_stm _ _ _ _ h15]; exact ite_eq_right (fun h => h0 (by rw [h]; rfl))
 
 theorem lit_pc {base : Word} (hb4 : base.toNat % 4 = 0) (t : State) (off imm j : Nat)
     (hpc : t.pc = base + BitVec.ofNat 32 off) (hT : (off + 4) / 4 * 4 + imm * 4 = iPool + 4 * j)
@@ -268,13 +268,13 @@ theorem block_eff {base : Word} {s : State} (e : InitEntry base s) :
   have p12 : s12.pc = base + BitVec.ofNat 32 (iStart + 24) := by
     rw [hs12]; exact pc_step _ (by decide) s11 _ p11
   have r0_12 : s12.regs 0 = s.regs 0 + 24#32 := by
-    rw [hs12, regs_movImm _ _ _ _ (by decide), if_neg (by decide), o11 0 (by decide) (by decide), o10 0 (by decide) (by decide), r0_9]
+    rw [hs12, regs_movImm _ _ _ _ (by decide), ite_eq_right (by decide), o11 0 (by decide) (by decide), o10 0 (by decide) (by decide), r0_9]
   have r1_12 : s12.regs 1 = M0Crypto.Spec.Blake2s.h0[6]! := by
-    rw [hs12, regs_movImm _ _ _ _ (by decide), if_neg (by decide), o11 1 (by decide) (by decide), v10]
+    rw [hs12, regs_movImm _ _ _ _ (by decide), ite_eq_right (by decide), o11 1 (by decide) (by decide), v10]
   have r2_12 : s12.regs 2 = M0Crypto.Spec.Blake2s.h0[7]! := by
-    rw [hs12, regs_movImm _ _ _ _ (by decide), if_neg (by decide), v11]
+    rw [hs12, regs_movImm _ _ _ _ (by decide), ite_eq_right (by decide), v11]
   have r3_12 : s12.regs 3 = 0#32 := by
-    rw [hs12, regs_movImm _ _ _ _ (by decide), if_pos (by decide)]; rfl
+    rw [hs12, regs_movImm _ _ _ _ (by decide), ite_eq_left (by decide)]; rfl
   have m12 : s12.mem = s9.mem := by rw [hs12, mem_movImm, mm11, mm10]
   obtain ⟨z0, zo, zm, zp⟩ := stm_eff s12 14
   rw [← hs13] at z0 zo zm zp
@@ -313,7 +313,7 @@ theorem block_eff {base : Word} {s : State} (e : InitEntry base s) :
     have n2 : r ≠ 2 := fun h => by rw [h] at h4; exact absurd h4 (by decide)
     have n3 : r ≠ 3 := fun h => by rw [h] at h4; exact absurd h4 (by decide)
     have r12 : s12.regs r = s11.regs r := by
-      rw [hs12, regs_movImm _ _ _ _ n15, if_neg (by exact n3)]
+      rw [hs12, regs_movImm _ _ _ _ n15, ite_eq_right (by exact n3)]
     rw [R15 r n15, R14 r n15, zo r n0 n15, r12, o11 r (by exact n2) n15, o10 r (by exact n1) n15,
       yo r n0 n15, o8 r (by exact n3) n15, o7 r (by exact n2) n15, o6 r (by exact n1) n15,
       xo r n0 n15, o4 r (by exact n3) n15, o3 r (by exact n2) n15, o2 r (by exact n1) n15]
@@ -399,7 +399,7 @@ theorem pop_pc_exec (t : State) (hbit : (read32 t.mem (t.regs 13)).getLsbD 0 = t
   have h1 : (read32 t.mem (t.sp + BitVec.ofNat 32 (4 * bitCount 0))).getLsbD 0 = true := by
     simpa [State.sp, hb] using hbit
   unfold iPop
-  simp only [Instr.exec, if_true, h1]
+  simp only [Instr.exec, ite_true, h1]
   refine ⟨_, rfl, ?_⟩
   have hl : listRegs (0#8) = [] := by decide
   simp (config := {decide := true}) [hl, hb, loadRegs, State.setReg, State.sp, State.pc, Fin.ext_iff]
