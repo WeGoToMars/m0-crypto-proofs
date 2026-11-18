@@ -163,7 +163,7 @@ ld.lld -T "$LIB/tests/microbit.ld" --build-id=none \
 llvm-objcopy -O binary -j .text.sbcs_fixture "$TMP/sbcs_steps.S.o" "$TMP/sbcs.bin"
 python3 -I tools/qemu_steps.py "$FIRST" "${QEMU:-qemu-system-arm}" llvm-nm "$TMP/sbcs.bin" \
     "$TMP/sbcs.elf" sbcs_fixture
-# A whole m0c_x25519 call is about three million instructions: sampled windows instead
+# A whole m0c_x25519 call is too long to single-step: sampled windows instead
 # (prologue, one ladder step, each loop exit, epilogue).
 if has x25519; then
     python3 -I tools/qemu_x25519_windows.py --obj "$LIB/build/lib/x25519/m0crypto_x25519.o" \

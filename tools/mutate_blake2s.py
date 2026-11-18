@@ -23,7 +23,7 @@ Every mutant must be rejected by the proofs. Mutants marked "qemu-blind" are exp
 QEMU (they show that tests alone would miss them). QEMU DETECTS a mutant when the BLAKE2s
 image reports a failing check or stops with a fault, and reports TIMEOUT when the image hangs. A
 QEMU that does not start is an ERROR. The first run builds the copy from
-scratch (several minutes); each mutant then costs one rebuild of everything that imports the
+scratch; each mutant then costs one rebuild of everything that imports the
 artifact and has `Blake2s` in its name. Exit status 1 if a mutant is not rejected, does not change the bytes, or a tool
 fails.
 """
@@ -108,7 +108,7 @@ def extract(obj, pdir):
     return run([sys.executable, "-I", os.path.join(pdir, "tools", "extract_release.py"), obj, out])
 
 
-# Seconds for one run of the executable checks (they take about 10 s on the release object).
+# Seconds for one run of the executable checks.
 # A mutant can make the model run to the step limit, which the evaluator handles slowly; that
 # is reported as TIMEOUT. It is not a detection and not an error: the proofs decide.
 EXEC_TIMEOUT = 300

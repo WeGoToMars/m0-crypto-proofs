@@ -4,7 +4,7 @@
     python3 -I tools/qemu_x25519_windows.py [--obj OBJ] [--work DIR] [--qemu QEMU]
                                             [--hit N] [--no-model]
 
-A full call is about three million instructions, too many to single-step through the gdb stub.
+A full call is too long to single-step through the gdb stub.
 This script samples it instead. It builds a small test image (tests/startup.S, a generated
 driver that calls m0c_x25519 once on RFC 7748 vector 1, and the release object itself), runs it
 under QEMU's Cortex-M0 "microbit" machine and single-steps these windows of the one call:

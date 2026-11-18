@@ -10,8 +10,7 @@
 # kernel replay for every declaration the asset root reaches, the witnesses included. Both run in a
 # bwrap sandbox where bwrap is available (Linux), and otherwise with --inadvisably-no-sandbox.
 # The sandbox hides /home, /root and /tmp, and the asset workspaces read ../../lean, so under
-# bwrap the proofs tree has to lie outside those directories.
-# One asset at a time: 5 to 11 minutes and up to about 5 GB each.
+# bwrap the proofs tree has to lie outside those directories. It judges one asset at a time.
 #
 # Usage: tools/comparator.sh [ASSET...]     (default: chacha20poly1305 blake2s x25519)
 set -eu

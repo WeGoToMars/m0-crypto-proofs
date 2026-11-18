@@ -1,6 +1,6 @@
 """Build and run an asset's native release-check executable (`release_check` in the asset's
 lakefile): the checks the asset root runs in Lean's interpreter, compiled. The mutation scripts
-use it because a compiled run takes seconds where the interpreted modules take minutes."""
+use it because a compiled run is much faster than the interpreted modules."""
 import os
 import subprocess
 import sys
