@@ -141,14 +141,14 @@ grep -E 'peak stack|RESULT' "$TMP/qemu.txt"
 echo "== 7b. machine model agrees with QEMU after every instruction a call can execute"
 FIRST=${ASSETS%% *}
 if has chacha20poly1305; then
-    python3 -I tools/qemu_steps.py chacha20poly1305 "${QEMU:-qemu-system-arm}" llvm-nm \
+    python3 -I tools/qemu_steps.py --cover "$LIB/build/lib/chacha20poly1305/m0crypto_chacha20poly1305.o" chacha20poly1305 "${QEMU:-qemu-system-arm}" llvm-nm \
         "$LIB/build/lib/chacha20poly1305/text.bin" \
         "$LIB/build/test/test_chacha20.elf" m0c_chacha20_xor \
         "$LIB/build/test/test_aead.elf" \
         m0c_chacha20poly1305_encrypt,m0c_chacha20poly1305_decrypt,m0c_poly1305_blocks
 fi
 if has blake2s; then
-    python3 -I tools/qemu_steps.py blake2s "${QEMU:-qemu-system-arm}" llvm-nm \
+    python3 -I tools/qemu_steps.py --cover "$LIB/build/lib/blake2s/m0crypto_blake2s.o" blake2s "${QEMU:-qemu-system-arm}" llvm-nm \
         "$LIB/build/lib/blake2s/text.bin" \
         "$LIB/build/test/test_blake2s.elf" m0c_blake2s_init,m0c_blake2s_update,m0c_blake2s_final
 fi

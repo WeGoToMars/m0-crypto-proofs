@@ -17,7 +17,9 @@ gives the number of distinct instructions. It checks the model, not timing.
 
 QEMU is driven through its gdb stub (remote serial protocol over a Unix socket).
 
-Usage: qemu_steps.py ASSET QEMU NM TEXT_BIN ELF FUNCTION[,FUNCTION...] [ELF FUNCTIONS ...]
+Usage: qemu_steps.py [--cover OBJECT] ASSET QEMU NM TEXT_BIN ELF FUNCTION[,FUNCTION...] [ELF FUNCTIONS ...]
+  --cover   the asset's release object: the calls must execute exactly its instructions, every
+            instruction llvm-objdump lists except alignment padding (see `padding`)
   ASSET     the release asset whose built Lake workspace (assets/ASSET) runs the model
   TEXT_BIN  the asset's release artifact (build/lib/ASSET/text.bin); the image must contain
             these bytes
@@ -33,6 +35,8 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "tools"))   # python3 -I leaves the script directory out
+from check_listing import objdump_lines  # noqa: E402
 RAM = (0x20000000, 0x4000)   # QEMU "microbit": 16 KiB of RAM
 CALLS = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987]   # which calls to trace
 
@@ -223,7 +227,31 @@ def find_calls(qemu, nm, text, elf, functions, todo):
         img.close()
 
 
+FILLERS = {"movs r0, r0", "mov r8, r8", "nop"}   # what the assembler emits for .p2align
+
+
+def padding(listing, starts, end):
+    """Alignment padding in an object's listing: a filler halfword at an offset 2 mod 4 that
+    a literal pool word, a function or the end of .text follows. Execution can never reach
+    one: it is not a branch, so running it would fall into data or into another function."""
+    return {o for o, t in listing.items()
+            if t in FILLERS and o % 4 == 2 and (o + 2 not in listing or o + 2 in starts or o + 2 == end)}
+
+
+def required(obj, text):
+    """The offsets the calls must execute: every listed instruction except padding."""
+    listing = objdump_lines(os.environ.get("OBJDUMP", "llvm-objdump"), obj)
+    nm = subprocess.run([os.environ.get("NM", "llvm-nm"), "--defined-only", obj], check=True,
+                        capture_output=True, text=True).stdout
+    starts = {int(f[0], 16) for f in (l.split() for l in nm.splitlines())
+              if len(f) == 3 and f[1] in "Tt"}
+    return set(listing) - padding(listing, starts, len(text))
+
+
 def main(argv):
+    cover = None
+    if len(argv) > 2 and argv[1] == "--cover":
+        cover, argv = argv[2], argv[:1] + argv[3:]
     if len(argv) < 7 or len(argv) % 2 == 0 or not (ROOT / "assets" / argv[1]).is_dir():
         sys.exit(__doc__)
     workspace = ROOT / "assets" / argv[1]
@@ -267,7 +295,16 @@ def main(argv):
             sys.exit(f"qemu_steps: {name}: QEMU ran {len(steps)} instructions, the model printed "
                      f"{len(got)} lines; last: {got[-1][:160] if got else ''}")
         total += len(steps)
-    instructions = len({p for p in pcs if 0 <= p < len(text)})
+    executed = {p for p in pcs if 0 <= p < len(text)}
+    instructions = len(executed)
+    if cover is not None:
+        want = required(cover, text)
+        missing, extra = sorted(want - executed), sorted(executed - want)
+        if missing or extra:
+            sys.exit(f"qemu_steps: the calls executed {instructions} distinct instructions of the "
+                     f"artifact, not the {len(want)} a call can execute; never executed "
+                     f"{[hex(o) for o in missing[:20]]}, executed padding or data "
+                     f"{[hex(o) for o in extra[:20]]}")
     print(f"ok: model and QEMU agree after each of {total} instructions in {len(qemu_states)} calls "
           f"({instructions} distinct instructions of the artifact: every one these images execute), "
           f"and on the final RAM")

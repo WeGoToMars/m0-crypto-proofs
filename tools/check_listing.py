@@ -79,6 +79,14 @@ def main(argv):
     if stray:
         sys.exit(f"check_listing: {len(stray)} of {len(branches)} direct branches leave the listing")
     print(f"ok: all {len(branches)} direct branches target a listed instruction")
+    # A bl returns, through pop {..., pc}, to the instruction after it.
+    calls = [o for o, f in branches if f[0] == "bl"]
+    lost = [o for o in calls if o + 4 not in got]
+    for o in lost[:20]:
+        print(f"  0x{o:x}: bl returns to 0x{o + 4:x}, which is not a listed instruction")
+    if lost:
+        sys.exit(f"check_listing: {len(lost)} of {len(calls)} calls return outside the listing")
+    print(f"ok: all {len(calls)} calls return to a listed instruction")
 
 
 if __name__ == "__main__":

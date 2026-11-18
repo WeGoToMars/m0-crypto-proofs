@@ -40,6 +40,7 @@ partial def closure (env : Environment) (start : List Name) : NameSet := Id.run 
     let mut es : Array Expr := #[ci.type]
     match ci with
     | .defnInfo d => es := es.push d.value
+    | .opaqueInfo d => es := es.push d.value
     | .inductInfo i => todo := i.ctors ++ todo
     | .ctorInfo c => todo := c.induct :: todo
     | _ => pure ()
@@ -131,6 +132,13 @@ def fpLine (l : String) : FpM Nat := do
   modify fun s => { s with lines := s.lines.push l, ids := s.ids.insert l i }
   return i
 
+/-- A compiler-generated helper (matcher, recursion helper, auxiliary recursor, projection,
+constructor index). A `private` declaration's name starts with `_private`, which
+`isInternalDetail` alone counts as generated, so the test reads the name without that prefix. -/
+def generated (env : Environment) (n : Name) : Bool :=
+  (privateToUserName n).isInternalDetail || isAuxRecursor env n || isNoConfusion env n
+    || env.isProjectionFn n || n.getString! == "ctorIdx"
+
 /-- The generated helpers that `printTrusted` does not print on their own (matchers, recursion
 helpers, auxiliary recursors, projections) of the modules it prints. They are written into the
 fingerprint of each declaration that uses them. -/
@@ -139,9 +147,7 @@ def fpHelper (env : Environment) (n : Name) : Bool :=
   | none => false
   | some mi =>
     let m := env.header.moduleNames[mi.toNat]!
-    (`M0Crypto).isPrefixOf m && m != `M0Crypto.Artifacts.Release &&
-      (n.isInternalDetail || isAuxRecursor env n || isNoConfusion env n || env.isProjectionFn n
-        || n.getString! == "ctorIdx")
+    (`M0Crypto).isPrefixOf m && m != `M0Crypto.Artifacts.Release && generated env n
 
 partial def fpExpr (e : Expr) : FpM Nat := do
   if let some i := (← get).memo[FpKey.mk e]? then return i
@@ -208,6 +214,7 @@ non-recursive definition, whose value already is its body. Each declaration is f
 fingerprint (`printFingerprint`). Ordered by module and source line. -/
 def printTrusted (roots : List Name) : MetaM Unit := do
   let env ← getEnv
+  if roots.isEmpty then throwError "no roots: unknown asset"
   for r in roots do
     if (env.find? r).isNone then throwError s!"missing root {r}"
   let mut out : Array (String × Nat × Name) := #[]
@@ -215,8 +222,7 @@ def printTrusted (roots : List Name) : MetaM Unit := do
     let some mi := env.getModuleIdxFor? n | continue
     let m := env.header.moduleNames[mi.toNat]!
     if !(`M0Crypto).isPrefixOf m || m == `M0Crypto.Artifacts.Release then continue
-    if n.isInternalDetail || isAuxRecursor env n || isNoConfusion env n || env.isProjectionFn n
-        || n.getString! == "ctorIdx" then continue
+    if generated env n then continue
     let some ci := env.find? n | continue
     match ci with
     | .defnInfo _ | .inductInfo _ | .opaqueInfo _ | .axiomInfo _ => pure ()

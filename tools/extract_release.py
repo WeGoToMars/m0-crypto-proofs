@@ -94,7 +94,11 @@ def main(argv):
             name = cstr(data, names["off"] + st_name)
             if shndx == ti and info >> 4 == 0 and name.split(".")[0] in ("$t", "$d", "$a"):
                 maps.append((value, name.split(".")[0]))
-            if info >> 4 in (STB_LOCAL, STB_GLOBAL) and info & 0xF == STT_FUNC:
+            if info >> 4 not in (STB_LOCAL, STB_GLOBAL):
+                fail(f"symbol {name} is neither local nor global (weak?)")
+            if info >> 4 == STB_GLOBAL and info & 0xF != STT_FUNC:
+                fail(f"global symbol {name} is not a function: mark it .type {name}, %function")
+            if info & 0xF == STT_FUNC:
                 if shndx != ti:
                     fail(f"function {name} outside .text")
                 if not value & 1:
