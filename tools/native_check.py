@@ -3,6 +3,7 @@ lakefile): the checks the asset root runs in Lean's interpreter, compiled. The m
 use it because a compiled run takes seconds where the interpreted modules take minutes."""
 import os
 import subprocess
+import sys
 
 
 def native_check(workspace, timeout=1800):
@@ -10,7 +11,9 @@ def native_check(workspace, timeout=1800):
     when the executable ran and reported a failing case; a build failure, a crash or a timeout
     is an ERROR."""
     env = dict(os.environ, PATH=os.path.expanduser("~/.elan/bin") + ":" + os.environ["PATH"])
-    b = subprocess.run(["lake", "build", "release_check"], cwd=workspace, env=env,
+    # Through tools/membuild.py, like the proof builds, so the compile stays under the budget.
+    mb = os.path.join(os.path.dirname(os.path.abspath(__file__)), "membuild.py")
+    b = subprocess.run([sys.executable, mb, "release_check"], cwd=workspace, env=env,
                        capture_output=True, text=True)
     if b.returncode:
         return "ERROR", "release_check does not build: " + (b.stdout + b.stderr).strip()[-300:]

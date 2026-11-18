@@ -6,14 +6,18 @@
 Lake starts as many Lean processes as there are cores and knows nothing about memory.
 This runner starts `lake build` unchanged and supervises the Lean processes it spawns:
 when the memory they need together exceeds the budget, the newest ones are paused
-(SIGSTOP) and resumed (SIGCONT) as the older ones finish. Nothing is killed, and the
-build's result is exactly Lake's.
+(SIGSTOP) and resumed (SIGCONT) as the older ones finish. Below the hard limit nothing is
+killed, and the build's result is exactly Lake's.
 
 "Need" is the larger of a process's current memory and the peak that module reached in
-an earlier run, remembered in `.lake/membuild-peaks.json`. Memory is the footprint, which
-counts compressed and swapped pages; resident size alone shrinks under pressure. So the
-first build reacts to memory as it grows, and later builds hold a known-heavy module back
-before it starts.
+an earlier successful run, remembered in `.lake/membuild-peaks.json`. A module with no remembered peak
+is taken to need M0C_BUILD_UNKNOWN_GB (default 3), so a first build holds it back before it
+has grown: a paused process keeps the memory it has. Memory is the footprint, which counts
+compressed and swapped pages; resident size alone shrinks under pressure.
+
+Hard limit: when the Lean processes together, running and paused, hold more than
+M0C_BUILD_KILL_GB (default 1.5 times the budget), the runner kills them and Lake and exits
+with status 137.
 
 Pausing makes Lake's per-module times include the pauses. The runner therefore also writes
 each module's CPU time (user + system, sampled once a second, so up to a second low) to
@@ -94,11 +98,21 @@ def lean_children(root, procs):
 
 
 def main():
+    # A timeout or kill (SIGALRM, SIGTERM) exits through the finally below, which resumes
+    # paused Lean processes and stops Lake and its Lean processes instead of leaving them.
+    def stop(signum, _frame):
+        raise SystemExit(128 + signum)
+    signal.signal(signal.SIGTERM, stop)
+    signal.signal(signal.SIGALRM, stop)
     budget = float(os.environ.get("M0C_BUILD_MEM_GB", 0)) * 2**30 or physical_bytes() / 2
+    unknown = float(os.environ.get("M0C_BUILD_UNKNOWN_GB", 3)) * 2**30
+    limit = float(os.environ.get("M0C_BUILD_KILL_GB", 0)) * 2**30 or 1.5 * budget
     try:
         peaks = json.load(open(PEAKS))
     except (OSError, ValueError):
         peaks = {}
+    known = set(peaks)
+    killed = False
     build = subprocess.Popen(["lake", "build"] + sys.argv[1:])
     stopped, order, held, times = set(), [], set(), {}
     try:
@@ -106,21 +120,40 @@ def main():
             lean = lean_children(build.pid, processes())
             order = [p for p in order if p in lean] + sorted(p for p in lean if p not in order)
             stopped &= set(lean)
+            used = sum(mem for mem, _, _ in lean.values())
+            if used > limit:
+                print(f"membuild: KILLED: the Lean processes hold {used / 2**30:.1f} GB, "
+                      f"limit {limit / 2**30:.1f} GB", flush=True)
+                killed = True
+                build.kill()
+                for pid in lean:
+                    try:
+                        os.kill(pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                break
             total = 0
             for i, pid in enumerate(order):
                 mem, src, cpu = lean[pid]
                 times[src] = max(times.get(src, 0), cpu)
                 peaks[src] = max(peaks.get(src, 0), mem)
-                total += peaks[src]
+                need = peaks[src] if src in known else max(mem, unknown)
+                total += need
                 fits = i == 0 or total <= budget  # the oldest process always runs
                 if not fits and pid not in stopped:
-                    os.kill(pid, signal.SIGSTOP)
+                    try:
+                        os.kill(pid, signal.SIGSTOP)
+                    except ProcessLookupError:   # it finished since `ps` listed it
+                        continue
                     stopped.add(pid)
                     if src not in held:
                         held.add(src)
-                        print(f"membuild: holding {src} (needs about {peaks[src] / 2**30:.1f} GB)", flush=True)
+                        print(f"membuild: holding {src} (needs about {need / 2**30:.1f} GB)", flush=True)
                 elif fits and pid in stopped:
-                    os.kill(pid, signal.SIGCONT)
+                    try:
+                        os.kill(pid, signal.SIGCONT)
+                    except ProcessLookupError:
+                        pass
                     stopped.discard(pid)
             time.sleep(1)
     finally:
@@ -130,11 +163,21 @@ def main():
             except ProcessLookupError:
                 pass
         if build.poll() is None:
+            workers = lean_children(build.pid, processes())
             build.terminate()
+            build.wait()
+            for pid in workers:
+                try:
+                    os.kill(pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
         os.makedirs(".lake", exist_ok=True)
-        json.dump(peaks, open(PEAKS, "w"), indent=0, sort_keys=True)
+        # Peaks only from a build that completed: a killed or failed module's sample is low
+        # and would let the next build start it next to others.
+        if not killed and build.returncode == 0:
+            json.dump(peaks, open(PEAKS, "w"), indent=0, sort_keys=True)
         json.dump(times, open(TIMES, "w"), indent=0, sort_keys=True)
-    return build.returncode
+    return 137 if killed else build.returncode
 
 
 if __name__ == "__main__":
