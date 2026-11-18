@@ -3,7 +3,10 @@
 
     python3 -I tools/mutate_blake2s.py [WORKDIR]      (default WORKDIR /tmp/m0c-mut-b2s)
 
-Works on copies; neither the library nor the proofs tree is modified. For each deliberate
+Works on copies; neither the library nor the proofs tree is modified. The library is the
+parent of this proofs tree (its `proofs` submodule) or M0C_LIB; the script stops before copying
+anything unless it holds the BLAKE2s release sources. WORKDIR must be new, empty or a
+previous WORKDIR of this script. For each deliberate
 bug below it applies the edit to src/blake2s_*.S in a copy of the library, rebuilds the
 release object, then runs three checks:
 
@@ -13,10 +16,13 @@ release object, then runs three checks:
   the proofs build runs in Lean's interpreter, Thumb/ReleaseCheck/Blake2s*);
 * proofs: builds, in that asset's workspace, every module with `Blake2s` in its name except
   the interpreted release-check modules (the BLAKE2s proofs and certificates). The modules
-  that fail are listed. A mutant is REJECTED by the proofs when that build fails.
+  that fail are listed. A mutant is REJECTED by the proofs when Lean reports an error in a
+  failing module (tools/mutation_run.py). A killed or crashed worker or a timeout is an ERROR.
 
 Every mutant must be rejected by the proofs. Mutants marked "qemu-blind" are expected to pass
-QEMU (they show that tests alone would miss them). The first run builds the copy from
+QEMU (they show that tests alone would miss them). QEMU DETECTS a mutant when the BLAKE2s
+image reports a failing check or stops with a fault, and reports TIMEOUT when the image hangs. A
+QEMU that does not start is an ERROR. The first run builds the copy from
 scratch (several minutes); each mutant then costs one rebuild of everything that imports the
 artifact and has `Blake2s` in its name. Exit status 1 if a mutant is not rejected, does not change the bytes, or a tool
 fails.
@@ -30,8 +36,10 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))   # python3 -I leaves the script directory out
 from native_check import native_check
+from mutation_run import lake_build as lean_build, lean_verdict
 LIB = os.path.abspath(os.environ.get("M0C_LIB", os.path.join(ROOT, "..")))
-WORK = sys.argv[1] if len(sys.argv) > 1 else "/tmp/m0c-mut-b2s"
+LIB_FILES = ["include/m0crypto/blake2s.h", "src/blake2s_stream.S", "tools/build_lib.sh"]
+MARKER = ".m0c-mutate-blake2s"
 CS, CP, ST, CPY = "blake2s_compress.S", None, "blake2s_stream.S", "blake2s_copy.S"
 
 # (name, file, original, mutated, expectation). Each original occurs exactly once.
@@ -117,28 +125,58 @@ def blake2s_modules(pdir):
 
 
 def lake_build(pdir):
-    env = dict(os.environ, PATH=os.path.expanduser("~/.elan/bin") + ":" + os.environ["PATH"])
-    # tools/membuild.py (memory-budgeted lake build) if present, else plain lake.
-    mb = os.environ.get("M0C_MEMBUILD", os.path.join(ROOT, "tools", "membuild.py"))
-    cmd = [sys.executable, mb] if os.path.exists(mb) else ["lake"]
-    r = run(cmd + (["build"] if cmd == ["lake"] else []) + blake2s_modules(pdir), cwd=workspace(pdir), env=env)
-    out = r.stdout + r.stderr
-    failed = sorted(set(re.findall(r"^✖ \[\d+/\d+\] Building (\S+)", out, re.M)))
-    return r.returncode, failed, out
+    """(ACCEPTED | REJECTED | ERROR, failing modules, detail) of the BLAKE2s proofs."""
+    v, detail = lean_verdict(lean_build(workspace(pdir), blake2s_modules(pdir), 3600))
+    verdict = {"PASS": "ACCEPTED", "DETECTED": "REJECTED"}.get(v, "ERROR")
+    return verdict, detail.split() if v == "DETECTED" else [], detail
+
+
+def image_verdict(out, img):
+    """(PASS | DETECTED | TIMEOUT | ERROR, details) of one image in test_qemu.sh output."""
+    if f"== {img}\n" not in out:
+        return "ERROR", [f"{img} did not run"]
+    log = out.split(f"== {img}\n")[1].split("\n== ")[0]
+    status = re.search(rf"^FAIL: {img}: qemu exit status (\d+)", out, re.M)
+    fails = sorted({l.split(" 0x")[0][5:] for l in log.splitlines() if l.startswith("FAIL ")})
+    if fails or "RESULT: FAIL" in log:
+        return "DETECTED", fails or ["RESULT: FAIL"]
+    if status is None:
+        return ("PASS", []) if "RESULT: PASS" in log else ("ERROR", [f"{img}: no result line"])
+    code = int(status.group(1))
+    if code == 124:
+        return "TIMEOUT", [f"{img} hangs"]
+    if code in (126, 127):
+        return "ERROR", [f"{img}: QEMU did not start (status {code})"]
+    if code == 0:   # exit 0 without RESULT: PASS
+        return "ERROR", [f"{img}: no result line"]
+    return "DETECTED", [f"{img} faults (status {code})"]
 
 
 def qemu(libdir):
-    r = run([os.path.join(libdir, "tools", "test_qemu.sh")], env=dict(os.environ, TIMEOUT="60"))
+    """(PASS | DETECTED | TIMEOUT | ERROR, details) of the BLAKE2s test images."""
+    r = run([os.path.join(libdir, "tools", "test_qemu.sh"), "blake2s"], env=dict(os.environ, TIMEOUT="60"))
     out = r.stdout + r.stderr
-    b2 = out.split("== test_blake2s")[-1] if "== test_blake2s" in out else ""
-    fails = sorted({l.split(" 0x")[0][5:] for l in b2.splitlines() if l.startswith("FAIL ")})
-    # A crash or timeout (nonzero status without a FAIL line) also counts as seeing the bug.
-    return ("PASS" if r.returncode == 0 and not fails else "DETECTED"), fails or ["crash/timeout"]
+    vs = [image_verdict(out, img) for img in ("test_blake2s", "test_irq_blake2s")]
+    for v in ("ERROR", "DETECTED", "TIMEOUT"):
+        if any(x == v for x, _ in vs):
+            return v, [d for x, ds in vs if x == v for d in ds]
+    return "PASS", []
+
+
+def check_dirs():
+    """Stop before any copy unless LIB is the library and WORK is ours to overwrite."""
+    missing = [f for f in LIB_FILES if not os.path.isfile(os.path.join(LIB, f))]
+    if missing:
+        sys.exit(f"{LIB} is not the m0-crypto library (no {missing[0]}): set M0C_LIB")
+    if os.path.isdir(WORK) and os.listdir(WORK) and not os.path.exists(os.path.join(WORK, MARKER)):
+        sys.exit(f"{WORK} is not empty and was not made by this script")
+    os.makedirs(WORK, exist_ok=True)
+    open(os.path.join(WORK, MARKER), "w").close()
 
 
 def main():
     libd, prd = os.path.join(WORK, "lib"), os.path.join(WORK, "proofs")
-    os.makedirs(WORK, exist_ok=True)
+    check_dirs()
     sync(LIB, libd, [".git", "proofs", "build", "bench"])
     # First run: copy the built tree (.lake included) so only changed modules rebuild.
     sync(ROOT, prd, [".git", "build", "__pycache__"] + ([".lake"] if os.path.isdir(os.path.join(workspace(prd), ".lake")) else []))
@@ -148,9 +186,9 @@ def main():
     base_obj = open(obj, "rb").read()
     if extract(obj, prd).returncode:
         sys.exit("baseline extract failed")
-    rc, failed, out = lake_build(prd)
-    if rc:
-        sys.exit("baseline proofs do not build: " + " ".join(failed))
+    verdict, failed, detail = lake_build(prd)
+    if verdict != "ACCEPTED":
+        sys.exit(f"baseline proofs do not build: {verdict} {detail}")
     ex, why = native_check(workspace(prd))
     if ex != "PASS":
         sys.exit("baseline executable checks do not pass: " + why)
@@ -175,12 +213,13 @@ def main():
             ex, why = native_check(workspace(prd), EXEC_TIMEOUT)
             if ex == "ERROR" and "timed out" in why:
                 ex = "TIMEOUT"
-            rc, failed, out = lake_build(prd)
-            verdict = "REJECTED" if rc else "ACCEPTED"
-            if not rc or "ERROR" in (q, ex):
+            verdict, failed, detail = lake_build(prd)
+            if verdict != "REJECTED" or "ERROR" in (q, ex):
                 bad += 1
                 if ex == "ERROR":
                     print(f"ERROR {name}: {why}")
+                if verdict == "ERROR":
+                    print(f"ERROR {name}: proofs build: {detail}")
             if expect == "qemu-blind" and q != "PASS":
                 print(f"NOTE {name}: expected QEMU to miss it, but it reported {q}")
             rows.append((name, q, ",".join(qk), verdict, " ".join(m.replace("M0Crypto.", "") for m in failed[:6]), ex))
@@ -196,4 +235,6 @@ def main():
     sys.exit(1 if bad else 0)
 
 
-main()
+if __name__ == "__main__":
+    WORK = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else "/tmp/m0c-mut-b2s")
+    main()
