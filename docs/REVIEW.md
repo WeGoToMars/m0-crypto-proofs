@@ -2,7 +2,7 @@
 
 This guide lists exactly which parts of the Lean code a person has to read to trust the proofs of ChaCha20, Poly1305, the ChaCha20-Poly1305 AEAD, X25519 and BLAKE2s, which document each part must be checked against, and how to keep that true as the proofs change. It assumes no background in formal verification.
 
-**Scope.** This guide describes the proofs of library 0.3.1, three release assets:
+**Scope.** This guide describes the proofs of library 0.3.3, three release assets:
 
 | Asset | Object | `.text` | sha256 | Sections |
 |---|---|---:|---|---|
@@ -16,7 +16,7 @@ The sizes and hashes are those in the header of each asset's `assets/ASSET/artif
 
 ## 1. What a proof gives you, and what it does not
 
-A Lean theorem has two parts: a **statement** (what is claimed) and a **proof** (why it holds). Lean's kernel checks every proof mechanically, so you never need to read a proof to know it is valid. That is the whole point: of about 80,000 lines of Lean in `lean/`, the ChaCha20-Poly1305 asset trusts 1,042 hand-written lines in 12 files. 941 of them need a careful human reading. The other 101 are the instruction decoding functions, which are compared with LLVM on every instruction of the code instead (section 3.2). The X25519 and BLAKE2s assets share the model, the decoder and the shared vocabulary, and add their own specification and statement files (sections 9.2 and 10.2).
+A Lean theorem has two parts: a **statement** (what is claimed) and a **proof** (why it holds). Lean's kernel checks every proof mechanically, so you never need to read a proof to know it is valid. That is the whole point: of about 80,000 lines of Lean in `lean/`, the ChaCha20-Poly1305 asset trusts 1,046 hand-written lines in 12 files. 945 of them need a careful human reading. The other 101 are the instruction decoding functions, which are compared with LLVM on every instruction of the code instead (section 3.2). The X25519 and BLAKE2s assets share the model, the decoder and the shared vocabulary, and add their own specification and statement files (sections 9.2 and 10.2).
 
 What you *do* have to read is the statement, and every definition the statement mentions, recursively. Together these are the **trusted base**. If a definition in the trusted base is wrong, the theorem can be proved and still say something other than what you think.
 
@@ -65,7 +65,7 @@ All six theorems about one function assume the same thing, a valid call: `ChaCha
 | 2 | [Decoder](#32-decoder) | 1 | 66 to read, 101 cross-checked | `Instr.exec`; `llvm-objdump` |
 | 3 | [Artifact](#33-artifact) | 1 | generated (196) | the build; review the generator instead |
 | 4 | [Specifications](#34-specifications) | 2 | 117 | RFC 8439 |
-| 5 | [Contracts and statements](#35-contracts-and-statements) | 5 | 469 | public headers, AAPCS, README claims |
+| 5 | [Contracts and statements](#35-contracts-and-statements) | 5 | 473 | public headers, AAPCS, README claims |
 
 `tools/trusted_defs.sh ASSET` (section 6) prints the trusted declarations of each file with their line ranges. The counts here are its output; they include doc comments. For each part, read every listed declaration with its doc comment and compare it with the reference; the lists below say what to look for. If you disagree, the finding is a **specification or model bug**: report it, do not patch the proofs around it.
 
@@ -202,7 +202,7 @@ For every postcondition and statement, ask:
 | [`TraceSpec.lean`](../lean/M0Crypto/Release/TraceSpec.lean) | 13 | 71 |
 | [`ChaCha20Contract.lean`](../lean/M0Crypto/Release/ChaCha20Contract.lean) | 19 | 102 |
 | [`AeadContract.lean`](../lean/M0Crypto/Release/AeadContract.lean) | 26 | 132 |
-| [`ChaCha20TraceSpec.lean`](../lean/M0Crypto/Release/ChaCha20TraceSpec.lean) | 22 | 133 |
+| [`ChaCha20TraceSpec.lean`](../lean/M0Crypto/Release/ChaCha20TraceSpec.lean) | 22 | 137 |
 
 **ChaCha20** (`ChaCha20Contract.lean`):
 
@@ -230,7 +230,7 @@ For every postcondition and statement, ask:
 - `StackDiscipline`, over the `n` bytes below the entry SP: each byte a step reads or writes there lies at or above the SP before or after the step, and every byte read there was written by an earlier step, with SP at or below it ever since.
 - `Handlers` is **the interrupt model**. `H k` runs before the call's `k`-th instruction (the identity is allowed). It restores registers and flags and preserves every byte the call may read or write (`P`) outside the `K` bytes below SP. Check that this matches what the caller's handlers do, exception entry and return included.
 - `InterruptedCall` is **the interrupted-call claim**. Given `HandlerRoom` (the `K` bytes below the window lie above address 0 and hold no byte of `P`), for all handlers: the uninterrupted call returns with `Result`; the interrupted one (`irunStates`) returns with the same events, its registers and flags and its memory on every byte of `P` outside the window, and keeps SP in the window.
-- Each exported function of the three assets has two Props built from these, next to its stack-bound Prop: `…StackDiscipline` (8 lines), which is `StackDiscipline` over its stack window on every run long enough to return, and `…Interrupted` (6 lines), which is `InterruptedCall` with its `Result` and with `P` its read region or its allowed writes (`WrOk`, `AWr`, `DAllowed`). Both assume the function's `Pre`.
+- Each exported function of the three assets has two Props built from these, next to its stack-bound Prop: `…StackDiscipline` (8 lines), which is `StackDiscipline` over its stack window on every run long enough to return, and `…Interrupted` (6 lines), which is `InterruptedCall` with its `Result` and with `P` its read region or its writable regions (`WrOk`, `AWr`, `DWr`, and for ChaCha20 also `out`). Both assume the function's `Pre`.
 
 ## 4. Trusted code that is not a Lean definition
 
@@ -262,9 +262,9 @@ The assembler is *not* trusted. The proofs are about its output bytes, whatever 
 
 These are stated in the [library README](https://github.com/WeGoToMars/m0-crypto-lib/blob/main/README.md#proofs-and-scope). A reviewer checks that they are stated, not that they hold:
 
-- Execution is sequential, and nothing but the modelled handlers modifies memory a function uses while it runs (another bus master such as DMA could). The interrupted-call theorems model an interrupt by its effect alone: exception entry, handler and exception return together restore every register and flag and preserve every byte the call may read or write outside the `K` bytes below SP. The exception entry stores r0-r3, r12, LR, PC and xPSR there, and the handler sees the call's working state. Clearing covers uninterrupted calls.
+- Execution is sequential, and nothing but the modelled handlers modifies memory a function uses while it runs (another bus master such as DMA could). The interrupted-call theorems model an interrupt by its effect alone: exception entry, handler and exception return together restore every register and flag and preserve the call's buffers and every byte the call may read or write outside the `K` bytes below SP. The exception entry stores r0-r3, r12, LR, PC and xPSR there, and the handler sees the call's working state. Clearing covers uninterrupted calls.
 - Memory is ordinary RAM: no faults, no device side effects.
-- Execution time depends only on the trace (instructions, addresses, branches): the constant-time claims are about the model's trace. The Cortex-M0+ has no cache and no branch prediction, and its multiplier (`muls`, used by X25519) is single-cycle or 32-cycle iterative by build option, with a fixed time either way, per Arm's documentation.
+- Execution time depends only on the trace (instructions, addresses, branches): the constant-time claims are about the model's trace. The decoder rejects a conditional branch to the next instruction, so every accepted conditional branch reaches a different PC when taken and the trace records its outcome. The Cortex-M0+ has no cache and no branch prediction, and its multiplier (`muls`, used by X25519) is single-cycle or 32-cycle iterative by build option, with a fixed time either way, per Arm's documentation.
 - Physical side channels and fault injection (power analysis, electromagnetic leakage, glitching) are out of scope.
 
 ## 6. Keeping the proofs robust
@@ -408,8 +408,8 @@ Vectors, as `#guard`s in [`Spec/X25519Vectors.lean`](../lean/M0Crypto/Spec/X2551
 ### 9.3 Checks and evidence specific to X25519
 
 - `src/x25519.S` is generated by [`../tools/gen_x25519.py`](https://github.com/WeGoToMars/m0-crypto-lib/blob/main/tools/gen_x25519.py). `check.sh` step 2b regenerates it and requires the checked-in file to be equal.
-- `check.sh` step 7b ([`tools/qemu_x25519_windows.py`](../tools/qemu_x25519_windows.py)) compares the model with QEMU after every instruction of windows of one call: six named windows (prologue, one ladder step, the exit of each loop kind, epilogue) and 41 short ones that start at each instruction those miss. The 47 windows execute 25,780 instructions and all 3,462 instructions of the asset. A fixture covers `sbcs` with both carries, overflow and zero.
-- [`tools/mutate_x25519.py`](../tools/mutate_x25519.py): 14 single-instruction mutants over the four symbols, each patched into a copy of the object. On every push, the library's CI requires the executable release checks (`Thumb/ReleaseCheck/X25519*`) to reject the 13 functional mutants and the constant-time certificate to reject the timing mutant.
+- `check.sh` step 7b ([`tools/qemu_x25519_windows.py`](../tools/qemu_x25519_windows.py)) compares the model with QEMU after every instruction of windows of one call: six named windows (prologue, one ladder step, the exit of each loop kind, epilogue) and 41 short ones that start at each instruction those miss. The 47 windows execute all 3,462 instructions of the asset. A fixture covers `sbcs` with both carries, overflow and zero.
+- [`tools/mutate_x25519.py`](../tools/mutate_x25519.py): 15 single-instruction mutants over the four symbols, each patched into a copy of the object. Whenever its workflow runs, the library's CI requires the executable release checks (`Thumb/ReleaseCheck/X25519*`) to reject the 13 functional mutants and a branch to the next instruction, which the decoder rejects, and the constant-time certificate to reject the timing mutant.
 - [`../tests/test_x25519.c`](https://github.com/WeGoToMars/m0-crypto-lib/blob/main/tests/test_x25519.c), run by `check.sh` step 7 (`tools/test_qemu.sh x25519`): the release object on QEMU's Cortex-M0 on the 524 vectors of section 9.2, compared on the 32 output bytes (the function has no low-order check and always returns `M0C_OK`); the section 5.2 iteration after 1 and 1,000 steps (1,000,000 only when built with `-DX25519_ITER_1M`, which `check.sh` does not do); all 64 alignments of the three pointers; overlaps of `out`, `scalar` and `point` in one region; guard bytes around `out`; and, through `tests/check_call8.S`, r4-r11 and SP restored, r0-r3 and r12 zero, the 516-byte stack bound and the 480 cleared bytes.
 
 ## 10. BLAKE2s-256 (`m0c_blake2s_init`, `_update`, `_final`)

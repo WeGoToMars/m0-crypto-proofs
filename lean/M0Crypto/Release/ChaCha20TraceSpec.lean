@@ -113,11 +113,13 @@ def ChaCha20XorStackDiscipline : Prop :=
         StackDiscipline c.sp0 ChaCha20Layout.chStackBytes states tr
 
 /-- ChaCha20 with interrupts: a valid call that may read its read region and write its allowed
-writes returns as `InterruptedCall` states, for every handler room `K` below its stack window. -/
+writes returns as `InterruptedCall` states, for every handler room `K` below its stack window.
+`out` is kept on every call, including one the counter check rejects. -/
 def ChaCha20XorInterrupted : Prop :=
   ∀ K c s, ChaCha20Xor.Pre c s →
     InterruptedCall K ChaCha20Layout.chStackBytes c.sp0 c.ret s
-      (fun y => ChaCha20XorReadRegion c y ∨ ChaCha20Xor.WrOk c y) (ChaCha20Xor.Result c)
+      (fun y => ChaCha20XorReadRegion c y ∨ ChaCha20Xor.WrOk c y ∨ Region c.out c.len.toNat y)
+      (ChaCha20Xor.Result c)
 
 /-! ## AEAD encrypt specifications -/
 
@@ -191,11 +193,12 @@ def AeadDecryptStackDiscipline : Prop :=
       ∃ states tr, runStates c.ret fuel s = .ok (states, tr) ∧
         StackDiscipline c.sp0 aeadStackBytes states tr
 
-/-- AEAD decrypt with interrupts: a valid call that may read its read region and write its allowed
-writes returns as `InterruptedCall` states, for every handler room `K` below its stack window. -/
+/-- AEAD decrypt with interrupts: a valid call that may read its read region and write its stack
+window and `out` returns as `InterruptedCall` states, for every handler room `K` below its stack
+window. `out` is kept on every call, including a rejected one. -/
 def AeadDecryptInterrupted : Prop :=
   ∀ K c s, APre c decOff s →
     InterruptedCall K aeadStackBytes c.sp0 c.ret s
-      (fun y => AeadDecryptReadRegion c y ∨ DAllowed c y) (DecryptResult c)
+      (fun y => AeadDecryptReadRegion c y ∨ DWr c y) (DecryptResult c)
 
 end M0Crypto.Release.TraceSpec

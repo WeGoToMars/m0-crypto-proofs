@@ -753,7 +753,8 @@ def M0Crypto.Thumb.decode16 : BitVec 16 → Option M0Crypto.Thumb.Instr :=
                                                                       (M0Crypto.Thumb.bits hw 0 8))
                                                               else
                                                                 if op >>> 12 = 13 then
-                                                                  if op >>> 8 % 16 ≥ 14 then Option.none
+                                                                  if op >>> 8 % 16 ≥ 14 ∨ op % 256 = 255 then
+                                                                    Option.none
                                                                   else
                                                                     Option.some
                                                                       (M0Crypto.Thumb.Instr.bcond
@@ -765,7 +766,7 @@ def M0Crypto.Thumb.decode16 : BitVec 16 → Option M0Crypto.Thumb.Instr :=
                                                                       (M0Crypto.Thumb.Instr.b
                                                                         (M0Crypto.Thumb.bits hw 0 11))
                                                                   else Option.none
-sha256 23778fcd1f82c6bfeb2791d19c82e2a497613676d15c279c27f0169458daed5a
+sha256 531ed5947c2a325d04c61adac165322aa76ecae724775e6ee6b97abbec58ed5c
 def M0Crypto.Thumb.decodeBL : BitVec 16 → BitVec 16 → Option M0Crypto.Thumb.Instr :=
   fun hw1 hw2 =>
   if hw1.toNat >>> 11 = 30 ∧ hw2.toNat >>> 14 % 4 = 3 ∧ hw2.toNat >>> 12 % 2 = 1 then

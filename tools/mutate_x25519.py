@@ -28,7 +28,7 @@ Modes:
   .X25519Shard0-3). A mutant is DETECTED when the executable reports "release check FAILED".
   Any other failure (a build error, a crash, a timeout) is a tool ERROR, never a detection.
   --cert also builds M0Crypto.Release.ConstantTime.X25519Entry (the constant-time
-  certificate; about 5 minutes and up to 6 GB per mutant).
+  certificate) for each mutant.
 * --list SYMBOL: print the symbol's instructions in the normalised form the patterns use.
 
 Expected catchers (column `expect`):
@@ -37,7 +37,10 @@ Expected catchers (column `expect`):
 * cert   timing-only: the executable checks are expected to miss it, the constant-time
          certificate (--cert) and `x25519_constant_time` must not.
 Every mutant also names the proof that must reject it (`proof`); those are
-recorded, not run. Lean runs go under `nice -n 5` with an alarm (--timeout seconds per build).
+recorded, not run. Lean runs go under `nice -n 5` in their own process group, stopped after
+--timeout seconds per build. The certificate catches a mutant only when Lean reports an error in
+its module (tools/mutation_run.py). Each --only substring must match a mutant, and a run with
+no mutant to run fails.
 Exit status 1 if a mutant does not apply to exactly one instruction, an `exec` mutant is not
 detected by the executable checks, a --cert run misses a mutant, or a tool fails.
 """
@@ -52,6 +55,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))   # python3 -I leaves the script directory out
 from native_check import native_check
+from mutation_run import lake_build as lean_build, lean_verdict, select
 LIB = os.path.abspath(os.environ.get("M0C_LIB", os.path.join(ROOT, "..")))
 CASES = os.path.join(ROOT, "lean", "M0Crypto", "Thumb", "ReleaseCheck", "X25519Cases.lean")
 WS = os.path.join("assets", "x25519")
@@ -74,6 +78,7 @@ ADCS_TO_SBCS = field(6, 4, 0b0110)   # data processing 010000 op Rm Rdn: ADC = 0
 SBCS_TO_ADCS = field(6, 4, 0b0101)
 NOP = 0x46C0                         # mov r8, r8
 BHS_NEXT = 0xD2FF                    # bhs to the next instruction (offset -1 halfword)
+LDRB_R2_R0_R1 = 0x5C42               # ldrb r2, [r0, r1]: load at a secret-dependent address
 
 # Each mutant: name, symbol, window (normalised instruction texts, consecutive), index of the
 # target inside the window, transform of its halfword, regex the new text must match,
@@ -140,10 +145,16 @@ MUTANTS = [
          window=["add sp, #0x1e0", "movs r0, #0x0", "mov r12, r0"], at=2,
          patch=const(0x46E4), new=r"mov r12, r12$",
          expect="exec", proof="epilogue / x25519_correct (Result)"),
-    dict(name="x25519: dead store -> branch on secret carry", sym="m0c_x25519",
+    dict(name="x25519: dead store -> branch on secret carry to the next instruction",
+         sym="m0c_x25519",
          window=["adcs r1, r2", "str r1, [r0, #0x1c]", "lsls r1, r1, #0x1",
                  "lsrs r1, r1, #0x1", "str r1, [r0, #0x1c]"], at=1,
          patch=const(BHS_NEXT), new=r"bhs ",
+         expect="exec", proof="Thumb.decode (rejects b<cond> .+2)"),
+    dict(name="x25519: dead store -> load at a secret address", sym="m0c_x25519",
+         window=["adcs r1, r2", "str r1, [r0, #0x1c]", "lsls r1, r1, #0x1",
+                 "lsrs r1, r1, #0x1", "str r1, [r0, #0x1c]"], at=1,
+         patch=const(LDRB_R2_R0_R1), new=r"ldrb r2, \[r0, r1\]$",
          expect="cert", proof="x25519_constant_time"),
 ]
 
@@ -264,15 +275,9 @@ def check_offsets(syms):
         sys.exit("field routines are not back to back below m0c_x25519")
 
 
-def lake_build(pdir, modules, timeout):
-    env = dict(os.environ, PATH=os.path.expanduser("~/.elan/bin") + ":" + os.environ["PATH"])
-    mb = os.path.join(pdir, "tools", "membuild.py")
-    cmd = [sys.executable, mb] if os.path.exists(mb) else ["lake", "build"]
-    full = ["nice", "-n", "5", "perl", "-e", f"alarm {timeout}; exec @ARGV"] + cmd + modules
-    r = run(full, cwd=os.path.join(pdir, WS), env=env)
-    out = r.stdout + r.stderr
-    failed = sorted(set(re.findall(r"^✖ \[\d+/\d+\] Building (\S+)", out, re.M)))
-    return r.returncode, failed, out
+def cert_build(pdir, timeout):
+    """(PASS | DETECTED | ERROR, detail): the certificate on the copy's current artifact."""
+    return lean_verdict(lean_build(os.path.join(pdir, WS), CERT_MODULES, timeout), CERT_MODULES)
 
 
 def main():
@@ -305,12 +310,15 @@ def main():
     base = open(obj, "rb").read()
     os.makedirs(args.work, exist_ok=True)
 
-    chosen = [m for m in MUTANTS if not args.only or any(s in m["name"] for s in args.only)]
+    names = select([m["name"] for m in MUTANTS], args.only)
+    chosen = [m for m in MUTANTS if m["name"] in names]
     if not args.cert and not args.dry_run:
         skipped = [m["name"] for m in chosen if m["expect"] == "cert"]
         chosen = [m for m in chosen if m["expect"] != "cert"]
         for n in skipped:
             print(f"SKIP {n}: only the certificate is expected to catch it; rerun with --cert")
+    if not chosen:
+        sys.exit("no selected mutant runs (certificate mutants need --cert)")
     per_sym = {s: sum(m["sym"] == s for m in chosen) for s in SYMBOLS}
     print(f"object {obj}\n{len(chosen)} mutants: " + ", ".join(f"{s} {n}" for s, n in per_sym.items()))
     bad, built = 0, []
@@ -340,9 +348,9 @@ def main():
     if ex != "PASS":
         sys.exit("baseline executable checks do not pass: " + why)
     if args.cert:
-        rc, failed, out = lake_build(pdir, CERT_MODULES, args.timeout)
-        if rc:
-            sys.exit("baseline certificate does not build: " + " ".join(failed) + "\n" + out[-600:])
+        c, cmsg = cert_build(pdir, args.timeout)
+        if c != "PASS":
+            sys.exit(f"baseline certificate does not build: {c} {cmsg}")
     print("baseline: executable checks pass" + (" and the certificate builds" if args.cert else ""))
     rows = []
     try:
@@ -355,9 +363,9 @@ def main():
             why = why[:160]
             ce = "not run"
             if args.cert:
-                rc2, failed2, out2 = lake_build(pdir, CERT_MODULES, args.timeout)
-                ce = "PASS" if rc2 == 0 else ("DETECTED" if set(failed2) <= set(CERT_MODULES) and failed2
-                                              else "ERROR")
+                ce, cmsg = cert_build(pdir, args.timeout)
+                if ce == "ERROR":
+                    print(f"ERROR {m['name']}: certificate build: {cmsg}")
             ok = "ERROR" not in (ex, ce) and (
                 (m["expect"] == "exec" and ex == "DETECTED") or
                 (m["expect"] == "cert" and ce == "DETECTED"))

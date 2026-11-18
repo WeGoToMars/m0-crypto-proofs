@@ -10,8 +10,8 @@ This is the whole-function model. It is separate from the fragment model in
 Accepted encodings are exactly the forms the artifact uses, plus the other
 non-signed load/store widths of the two load/store groups. Everything else decodes
 to `none` and executing it is a fault, never a silent no-op. In particular:
-* the data-processing group (`010000 oooo`) accepts only ANDS, EORS, ADCS, RORS,
-  TST, RSBS, CMP, ORRS, MULS, MVNS; LSLS/LSRS/ASRS (register), SBCS, CMN and
+* the data-processing group (`010000 oooo`) accepts only ANDS, EORS, ADCS, SBCS,
+  RORS, TST, RSBS, CMP, ORRS, MULS, MVNS; LSLS/LSRS/ASRS (register), CMN and
   BICS are rejected;
 * of the special data group (`010001`) only MOV is accepted, and only when neither
   register is SP or PC (no ADD/CMP high, no BX/BLX);
@@ -19,7 +19,10 @@ to `none` and executing it is a fault, never a silent no-op. In particular:
   is the lowest register; the artifact never does it);
 * the only 32-bit encoding accepted is BL;
 * ASRS (immediate), ADR, LDRSB/LDRSH, SXT*/UXTB, REV*, CPS, BKPT, hints, SVC, UDF,
-  the conditional-branch encodings with cond = 1110 or 1111 are rejected.
+  the conditional-branch encodings with cond = 1110 or 1111 are rejected;
+* a conditional branch to the next instruction (imm8 = 0xff) is rejected. Taken or not, it
+  reaches the same PC, so the trace would not record its outcome, while the core takes
+  2 cycles for a taken branch and 1 for one not taken.
 -/
 
 namespace M0Crypto.Thumb
@@ -184,7 +187,7 @@ def decode16 (hw : BitVec 16) : Option Instr :=
   else if op >>> 11 = 0b11001 then
     if op % 256 = 0 then none else some (.ldm (low hw 8) (bits hw 0 8))
   else if op >>> 12 = 0b1101 then
-    if (op >>> 8) % 16 ≥ 14 then none
+    if (op >>> 8) % 16 ≥ 14 ∨ op % 256 = 0xff then none
     else some (.bcond (bits hw 8 4) (bits hw 0 8))
   else if op >>> 11 = 0b11100 then some (.b (bits hw 0 11))
   else none
@@ -233,6 +236,7 @@ example : decode 0x46e8#16 0 = none := by decide   -- mov r8, sp
 example : decode 0xc103#16 0 = none := by decide   -- stm r1!, {r0, r1}: base in list
 example : decode 0xc50f#16 0 = some (.stm 5 0x0f) := by decide   -- stm r5!, {r0-r3}
 example : decode 0x4770#16 0 = none := by decide
+example : decode 0xd2ff#16 0 = none := by decide   -- bhs .+2: same PC taken or not
 example : decode 0x4448#16 0 = none := by decide
 example : decode 0x1008#16 0 = none := by decide
 example : decode 0x4388#16 0 = none := by decide

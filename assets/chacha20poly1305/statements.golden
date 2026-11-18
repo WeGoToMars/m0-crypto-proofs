@@ -27,13 +27,17 @@ M0Crypto.Release.NonVacuity.xor_interrupted_nonvacuous : M0Crypto.Release.ChaCha
   (M0Crypto.Release.TraceSpec.HandlerRoom 256 M0Crypto.Release.ChaCha20Layout.chStackBytes
       M0Crypto.Release.NonVacuity.chCtx.sp0 fun y =>
       M0Crypto.Release.TraceSpec.ChaCha20XorReadRegion M0Crypto.Release.NonVacuity.chCtx y ∨
-        M0Crypto.Release.ChaCha20Xor.WrOk M0Crypto.Release.NonVacuity.chCtx y) ∧
+        M0Crypto.Release.ChaCha20Xor.WrOk M0Crypto.Release.NonVacuity.chCtx y ∨
+          M0Crypto.Release.Region M0Crypto.Release.NonVacuity.chCtx.out
+            (BitVec.toNat M0Crypto.Release.NonVacuity.chCtx.len) y) ∧
     M0Crypto.Release.TraceSpec.Handlers 256
       (fun y =>
         M0Crypto.Release.TraceSpec.ChaCha20XorReadRegion M0Crypto.Release.NonVacuity.chCtx y ∨
-          M0Crypto.Release.ChaCha20Xor.WrOk M0Crypto.Release.NonVacuity.chCtx y)
+          M0Crypto.Release.ChaCha20Xor.WrOk M0Crypto.Release.NonVacuity.chCtx y ∨
+            M0Crypto.Release.Region M0Crypto.Release.NonVacuity.chCtx.out
+              (BitVec.toNat M0Crypto.Release.NonVacuity.chCtx.len) y)
       (M0Crypto.Release.NonVacuity.tickBelowSp 256 536879104#32)
-sha256 fe86d62c012b7373ec4d37b9be3ce3975bbb8e27a3de3f4e20f7cfbdd3cdaf40
+sha256 bd24a3a5f27f0b49d1699092af22bc30a8702837f73a35771dbfb5057179b8b4
 M0Crypto.Release.Aead.encrypt_correct : M0Crypto.Release.Aead.EncryptCorrect
 sha256 a916bfbceda29c258654faed32ae6d14d327f08e0de73121c176fd46fae1b4dc
 M0Crypto.Release.Aead.encrypt_constant_time : M0Crypto.Release.TraceSpec.AeadEncryptConstantTime
@@ -122,14 +126,14 @@ M0Crypto.Release.NonVacuity.decrypt_interrupted_nonvacuous : M0Crypto.Release.Ae
       (M0Crypto.Release.NonVacuity.aCall M0Crypto.Release.Aead.decOff).sp0 fun y =>
       M0Crypto.Release.TraceSpec.AeadDecryptReadRegion (M0Crypto.Release.NonVacuity.aCall M0Crypto.Release.Aead.decOff)
           y ∨
-        M0Crypto.Release.Aead.DAllowed (M0Crypto.Release.NonVacuity.aCall M0Crypto.Release.Aead.decOff) y) ∧
+        M0Crypto.Release.Aead.DWr (M0Crypto.Release.NonVacuity.aCall M0Crypto.Release.Aead.decOff) y) ∧
     M0Crypto.Release.TraceSpec.Handlers 256
       (fun y =>
         M0Crypto.Release.TraceSpec.AeadDecryptReadRegion
             (M0Crypto.Release.NonVacuity.aCall M0Crypto.Release.Aead.decOff) y ∨
-          M0Crypto.Release.Aead.DAllowed (M0Crypto.Release.NonVacuity.aCall M0Crypto.Release.Aead.decOff) y)
+          M0Crypto.Release.Aead.DWr (M0Crypto.Release.NonVacuity.aCall M0Crypto.Release.Aead.decOff) y)
       (M0Crypto.Release.NonVacuity.tickBelowSp 256 536879104#32)
-sha256 8b2b5ca58d4dba4797d343d10fed947d0e185f5aeb4231951d16094169dfc628
+sha256 bd3b37075a089036f1b0cbe1bb73ac633e9e6bf955e1be07102a7f96ee0ef97a
 def M0Crypto.Armv6M.Mem : Type :=
   M0Crypto.Armv6M.Word → BitVec 8
 sha256 4cacbc8ff4162ad6e9a1c05e157b1ea9c4021eac26c33cd14b8807a40622c6f7
@@ -599,9 +603,11 @@ def M0Crypto.Release.TraceSpec.ChaCha20XorInterrupted : Prop :=
   ∀ (K : Nat) (c : M0Crypto.Release.Frame.Ctx) (s : M0Crypto.Armv6M.State),
   M0Crypto.Release.ChaCha20Xor.Pre c s →
     M0Crypto.Release.TraceSpec.InterruptedCall K M0Crypto.Release.ChaCha20Layout.chStackBytes c.sp0 c.ret s
-      (fun y => M0Crypto.Release.TraceSpec.ChaCha20XorReadRegion c y ∨ M0Crypto.Release.ChaCha20Xor.WrOk c y)
+      (fun y =>
+        M0Crypto.Release.TraceSpec.ChaCha20XorReadRegion c y ∨
+          M0Crypto.Release.ChaCha20Xor.WrOk c y ∨ M0Crypto.Release.Region c.out (BitVec.toNat c.len) y)
       (M0Crypto.Release.ChaCha20Xor.Result c)
-sha256 634090d072fad90638d7fd3adcaaec193ef0e2cfbd2e87cfa6c37f5b4e3289d7
+sha256 83cfcaafc70bf6b0123dc66c6856a85065196a003f86fb87470a6784d4ce80c3
 def M0Crypto.Release.TraceSpec.AeadEncryptConstantTime : Prop :=
   ∀ (c₁ c₂ : M0Crypto.Release.Aead.ACall) (s₁ s₂ : M0Crypto.Armv6M.State),
   M0Crypto.Release.Aead.APre c₁ M0Crypto.Release.Aead.encOff s₁ →
@@ -696,9 +702,9 @@ def M0Crypto.Release.TraceSpec.AeadDecryptInterrupted : Prop :=
   ∀ (K : Nat) (c : M0Crypto.Release.Aead.ACall) (s : M0Crypto.Armv6M.State),
   M0Crypto.Release.Aead.APre c M0Crypto.Release.Aead.decOff s →
     M0Crypto.Release.TraceSpec.InterruptedCall K M0Crypto.Release.TraceSpec.aeadStackBytes c.sp0 c.ret s
-      (fun y => M0Crypto.Release.TraceSpec.AeadDecryptReadRegion c y ∨ M0Crypto.Release.Aead.DAllowed c y)
+      (fun y => M0Crypto.Release.TraceSpec.AeadDecryptReadRegion c y ∨ M0Crypto.Release.Aead.DWr c y)
       (M0Crypto.Release.Aead.DecryptResult c)
-sha256 d9c72d67383b421700bf03ff0e7d249a84fcbd501dbefc110c04d20759460b0d
+sha256 ea6c3f89dfe0ae9b6caedb5accc06561fe0fa45ec8919629ff700b6bb8a552e9
 def M0Crypto.Release.B : List (BitVec 8) :=
   M0Crypto.Artifacts.Release.bytes
 sha256 17f5d1d528c164c0fa1a3856e7eb18a7acc98f3ae409e2bff3f99db2efd72367
@@ -1322,7 +1328,8 @@ def M0Crypto.Thumb.decode16 : BitVec 16 → Option M0Crypto.Thumb.Instr :=
                                                                       (M0Crypto.Thumb.bits hw 0 8))
                                                               else
                                                                 if op >>> 12 = 13 then
-                                                                  if op >>> 8 % 16 ≥ 14 then Option.none
+                                                                  if op >>> 8 % 16 ≥ 14 ∨ op % 256 = 255 then
+                                                                    Option.none
                                                                   else
                                                                     Option.some
                                                                       (M0Crypto.Thumb.Instr.bcond
@@ -1334,7 +1341,7 @@ def M0Crypto.Thumb.decode16 : BitVec 16 → Option M0Crypto.Thumb.Instr :=
                                                                       (M0Crypto.Thumb.Instr.b
                                                                         (M0Crypto.Thumb.bits hw 0 11))
                                                                   else Option.none
-sha256 23778fcd1f82c6bfeb2791d19c82e2a497613676d15c279c27f0169458daed5a
+sha256 531ed5947c2a325d04c61adac165322aa76ecae724775e6ee6b97abbec58ed5c
 def M0Crypto.Thumb.decodeBL : BitVec 16 → BitVec 16 → Option M0Crypto.Thumb.Instr :=
   fun hw1 hw2 =>
   if hw1.toNat >>> 11 = 30 ∧ hw2.toNat >>> 14 % 4 = 3 ∧ hw2.toNat >>> 12 % 2 = 1 then

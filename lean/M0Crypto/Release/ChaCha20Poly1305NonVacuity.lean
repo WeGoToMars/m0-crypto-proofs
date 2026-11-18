@@ -178,9 +178,11 @@ assumes them. -/
 theorem xor_interrupted_nonvacuous :
     ChaCha20Xor.Pre chCtx (stOf chMem chCtx.regs0) ∧
       TraceSpec.HandlerRoom 256 ChaCha20Layout.chStackBytes chCtx.sp0
-        (fun y => TraceSpec.ChaCha20XorReadRegion chCtx y ∨ ChaCha20Xor.WrOk chCtx y) ∧
+        (fun y => TraceSpec.ChaCha20XorReadRegion chCtx y ∨ ChaCha20Xor.WrOk chCtx y ∨
+          Region chCtx.out chCtx.len.toNat y) ∧
       TraceSpec.Handlers 256
-        (fun y => TraceSpec.ChaCha20XorReadRegion chCtx y ∨ ChaCha20Xor.WrOk chCtx y)
+        (fun y => TraceSpec.ChaCha20XorReadRegion chCtx y ∨ ChaCha20Xor.WrOk chCtx y ∨
+          Region chCtx.out chCtx.len.toNat y)
         (tickBelowSp 256 0x20002000#32) := by
   refine ⟨xor_correct_nonvacuous, interruptWitness_of [(chCtx.inp, 100), (chCtx.key, 32),
     (chCtx.nonce, 12), (chCtx.base, Artifacts.Release.size),
@@ -188,7 +190,7 @@ theorem xor_interrupted_nonvacuous :
   · simp only [chCtx, ChaCha20Layout.chStackBytes, ChaCha20Layout.chStackWords, sp0]
     decide
   · intro y hy
-    rcases hy with (h | h | h | h | h) | (h | ⟨-, h⟩)
+    rcases hy with (h | h | h | h | h) | (h | ⟨-, h⟩) | h
     · exact ⟨_, .head _, h⟩
     · exact ⟨_, .tail _ (.head _), h⟩
     · exact ⟨_, .tail _ (.tail _ (.head _)), h⟩
@@ -196,6 +198,7 @@ theorem xor_interrupted_nonvacuous :
     · exact ⟨_, .tail _ (.tail _ (.tail _ (.tail _ (.head _)))), h⟩
     · exact ⟨_, .tail _ (.tail _ (.tail _ (.tail _ (.head _)))),
         show (y - chCtx.fp).toNat < ChaCha20Layout.chStackBytes + 8 by unfold Region at h; omega⟩
+    · exact ⟨_, .head _, h⟩
     · exact ⟨_, .head _, h⟩
   · simp only [List.forall_mem_cons, List.not_mem_nil, false_imp_iff, implies_true, and_true,
       Disj, Frame.Ctx.fp, chCtx, ChaCha20Layout.chStackBytes, ChaCha20Layout.chStackWords, sp0,
@@ -246,9 +249,9 @@ assumes them. -/
 theorem decrypt_interrupted_nonvacuous :
     Aead.APre (aCall Aead.decOff) Aead.decOff (stOf aMem (aCall Aead.decOff).regs0) ∧
       TraceSpec.HandlerRoom 256 TraceSpec.aeadStackBytes (aCall Aead.decOff).sp0
-        (fun y => TraceSpec.AeadDecryptReadRegion (aCall Aead.decOff) y ∨ Aead.DAllowed (aCall Aead.decOff) y) ∧
+        (fun y => TraceSpec.AeadDecryptReadRegion (aCall Aead.decOff) y ∨ Aead.DWr (aCall Aead.decOff) y) ∧
       TraceSpec.Handlers 256
-        (fun y => TraceSpec.AeadDecryptReadRegion (aCall Aead.decOff) y ∨ Aead.DAllowed (aCall Aead.decOff) y)
+        (fun y => TraceSpec.AeadDecryptReadRegion (aCall Aead.decOff) y ∨ Aead.DWr (aCall Aead.decOff) y)
         (tickBelowSp 256 0x20002000#32) := by
   have e : (aCall Aead.decOff).A - 176#32 =
       (aCall Aead.decOff).sp0 - BitVec.ofNat 32 TraceSpec.aeadStackBytes := by decide
@@ -256,7 +259,7 @@ theorem decrypt_interrupted_nonvacuous :
   · simp only [aCall, TraceSpec.aeadStackBytes, sp0]
     decide
   · intro y hy
-    rcases hy with (h | h | h | h | h | h | h) | (h | ⟨-, h⟩)
+    rcases hy with (h | h | h | h | h | h | h) | (h | h)
     · exact ⟨_, .head _, h⟩
     · exact ⟨_, .tail _ (.head _), h⟩
     · exact ⟨_, .tail _ (.tail _ (.head _)), h⟩
