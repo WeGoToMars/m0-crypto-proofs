@@ -18,14 +18,14 @@ open M0Crypto.Armv6M (Word Reg State Mem)
 open M0Crypto.Thumb
 open M0Crypto.Release (ReachW Region B InRegion)
 open M0Crypto.Release.Frame (Disj)
-open M0Crypto.Release.X25519Routines (feVal)
-open M0Crypto.Release.X25519Congr (ModP)
+open M0Crypto.Release.Field25519Routines (feVal)
+open M0Crypto.Release.Field25519Congr (ModP)
 open M0Crypto.Release.X25519Layout
 open M0Crypto.Release.X25519Op
 open M0Crypto.Release.X25519EntryCode
 open M0Crypto.Release.X25519OpRun
 open M0Crypto.Release.X25519SlotEnv (env)
-open M0Crypto.Release.X25519Block (Runs Runs.reg)
+open M0Crypto.Release.Field25519Block (Runs Runs.reg)
 
 theorem canon_eq : X25519Inl.canonBody = X25519EntryCode.canonBody := by decide
 
@@ -74,9 +74,9 @@ theorem finish_w {s : State} {Q : State → Prop}
   simp only [mul, bAddr, Fn.rel] at uv
   have u13 : u.regs 13 = E c := hb1.sp
   -- `add r0, sp, #X2`
-  have hreg : [Instr.addRdSp 0 (BitVec.ofNat 8 (sX2 / 4))].all X25519Mul.regOnly = true ∧
+  have hreg : [Instr.addRdSp 0 (BitVec.ofNat 8 (sX2 / 4))].all Field25519Mul.regOnly = true ∧
       [Instr.addRdSp 0 (BitVec.ofNat 8 (sX2 / 4))].all (!·.writesMem) = true := ⟨rfl, rfl⟩
-  refine X25519Block.ReachW.blockRuns hb0 [.addRdSp 0 (BitVec.ofNat 8 (sX2 / 4))] _ upc
+  refine Field25519Block.ReachW.blockRuns hb0 [.addRdSp 0 (BitVec.ofNat 8 (sX2 / 4))] _ upc
     (by omega) h2 rfl
     (Runs.reg (Q := fun w => w = execAll [.addRdSp 0 (BitVec.ofNat 8 (sX2 / 4))] u) hreg.1 hreg.2 rfl)
     (hPO.inE (by omega) (by rw [show seqSize [Instr.addRdSp 0 (BitVec.ofNat 8 (sX2 / 4))] = 2 from rfl]; omega)) ?_
@@ -84,10 +84,10 @@ theorem finish_w {s : State} {Q : State → Prop}
   have w0 : (execAll [Instr.addRdSp 0 (BitVec.ofNat 8 (sX2 / 4))] u).regs 0 =
       E c + BitVec.ofNat 32 sX2 := by
     rw [← u13]
-    simp [execAll, Instr.next, Instr.exec, State.setReg, State.sp, X25519Mem.toReg0, sX2]
+    simp [execAll, Instr.next, Instr.exec, State.setReg, State.sp, Field25519Mem.toReg0, sX2]
   have w13 : (execAll [Instr.addRdSp 0 (BitVec.ofNat 8 (sX2 / 4))] u).regs 13 = E c := by
     rw [← u13]
-    simp [execAll, Instr.next, Instr.exec, State.setReg, X25519Mem.toReg0]
+    simp [execAll, Instr.next, Instr.exec, State.setReg, Field25519Mem.toReg0]
   have wm : (execAll [Instr.addRdSp 0 (BitVec.ofNat 8 (sX2 / 4))] u).mem = u.mem := by
     simp [execAll, Instr.next, Instr.exec, State.setReg]
   generalize execAll [Instr.addRdSp 0 (BitVec.ofNat 8 (sX2 / 4))] u = w at w0 w13 wm wpc

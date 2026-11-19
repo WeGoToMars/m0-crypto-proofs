@@ -48,9 +48,11 @@ theorem split_sound (s0 : State) : ∀ e : SExpr, (split e).1.denote s0 + (split
   | .add _ (.or _ _) | .add _ (.xor _ _) | .add _ (.not _) | .add _ (.mul _ _)
   | .add _ (.uxth _) | .add _ (.awc _ _ _) | .add _ (.lsl _ _) | .add _ (.lsr _ _)
   | .add _ (.ror _ _ _) | .add _ (.ld32 _ _) | .add _ (.ld16 _ _) | .add _ (.ld8 _ _)
-  | .add _ (.rotl _ _)
+  | .add _ (.rotl _ _) | .add _ (.lslR _ _ _) | .add _ (.lsrR _ _ _) | .add _ (.asr _ _)
+  | .add _ (.rev _)
   | .sub _ _ | .and _ _ | .or _ _ | .xor _ _ | .not _ | .mul _ _ | .uxth _ | .awc _ _ _
-  | .lsl _ _ | .lsr _ _ | .ror _ _ _ | .ld32 _ _ | .ld16 _ _ | .ld8 _ _ | .rotl _ _ => by
+  | .lsl _ _ | .lsr _ _ | .ror _ _ _ | .ld32 _ _ | .ld16 _ _ | .ld8 _ _ | .rotl _ _
+  | .lslR _ _ _ | .lsrR _ _ _ | .asr _ _ | .rev _ => by
     simp [split]
 
 /-- Rebuild `x + k`, dropping `+ 0` and folding constants. -/
@@ -183,6 +185,10 @@ def norm : SExpr → SExpr
   | .lsl a n => .lsl (norm a) n
   | .lsr a n => .lsr (norm a) n
   | .ror a b c => rorK (norm a) (norm b) c
+  | .lslR a b c => .lslR (norm a) (norm b) c
+  | .lsrR a b c => .lsrR (norm a) (norm b) c
+  | .asr a n => .asr (norm a) n
+  | .rev a => .rev (norm a)
   | .rotl a n => .rotl (norm a) n
   | .ld32 m a => rdW m (norm a)
   | .ld16 m a => .ld16 m (norm a)
@@ -190,12 +196,14 @@ def norm : SExpr → SExpr
   | e => e
 
 /-- `ld32 m a`, looking through stores to provably equal or disjoint addresses. An equal
-store gives its value, normalised; a disjoint store is skipped. -/
+store gives its value, normalised; a disjoint store is skipped. A store whose address has
+another base than `a` as written (an `stm` writeback chain) is compared again after `norm`. -/
 def rdW : SMem → SExpr → SExpr
   | .w32 m b v, a =>
-    if (split a).1 = (split b).1 then
-      if (split a).2 - (split b).2 = 0#32 then norm v
-      else if 4 ≤ ((split a).2 - (split b).2).toNat ∧ ((split a).2 - (split b).2).toNat ≤ 2 ^ 32 - 4
+    let b' := if (split a).1 = (split b).1 then b else norm b
+    if (split a).1 = (split b').1 then
+      if (split a).2 - (split b').2 = 0#32 then norm v
+      else if 4 ≤ ((split a).2 - (split b').2).toNat ∧ ((split a).2 - (split b').2).toNat ≤ 2 ^ 32 - 4
       then rdW m a
       else .ld32 (.w32 m b v) a
     else .ld32 (.w32 m b v) a
@@ -209,11 +217,12 @@ theorem norm_sound (s0 : State) : ∀ e : SExpr, (norm e).denote s0 = e.denote s
   | .add a b => by simp only [norm, addK_sound, norm_sound s0 a, norm_sound s0 b, SExpr.denote]
   | .ld32 m a => by
     simp only [norm, SExpr.denote, rdW_sound s0 m (norm a), norm_sound s0 a]
-  | .sub a b | .and a b | .or a b | .xor a b | .mul a b => by
+  | .sub a b | .and a b | .or a b | .xor a b | .mul a b | .lslR a b _ | .lsrR a b _ => by
     simp only [norm, SExpr.denote, norm_sound s0 a, norm_sound s0 b]
   | .awc a b c => by simp only [norm, awcK_sound, SExpr.denote, norm_sound s0 a, norm_sound s0 b]
   | .ror a b c => by simp only [norm, rorK_sound, SExpr.denote, norm_sound s0 a, norm_sound s0 b]
-  | .not a | .uxth a | .lsl a _ | .lsr a _ | .ld16 _ a | .ld8 _ a | .rotl a _ => by
+  | .not a | .uxth a | .lsl a _ | .lsr a _ | .ld16 _ a | .ld8 _ a | .rotl a _ | .asr a _
+  | .rev a => by
     simp only [norm, SExpr.denote, norm_sound s0 a]
   | .reg0 _ | .const _ => rfl
 
@@ -221,8 +230,15 @@ theorem rdW_sound (s0 : State) : ∀ (m : SMem) (a : SExpr),
     (rdW m a).denote s0 = read32 (m.denote s0) (a.denote s0)
   | .w32 m b v, a => by
     have ha := split_sound s0 a
-    have hb := split_sound s0 b
+    generalize hb' : (if (split a).1 = (split b).1 then b else norm b) = b'
+    have hbd : b'.denote s0 = b.denote s0 := by
+      rw [← hb']; split
+      · rfl
+      · exact norm_sound s0 b
+    have hb := split_sound s0 b'
+    rw [hbd] at hb
     unfold rdW
+    simp only [hb']
     split
     · rename_i hx
       split
@@ -237,8 +253,8 @@ theorem rdW_sound (s0 : State) : ∀ (m : SMem) (a : SExpr),
           simp only [SMem.denote]
           rw [read32_write32_far]
           rw [← ha, ← hb, hx]
-          have : (split b).1.denote s0 + (split a).2 - ((split b).1.denote s0 + (split b).2) =
-              (split a).2 - (split b).2 := by
+          have : (split b').1.denote s0 + (split a).2 - ((split b').1.denote s0 + (split b').2) =
+              (split a).2 - (split b').2 := by
             bv_omega
           rw [this]; exact hd
         · rfl

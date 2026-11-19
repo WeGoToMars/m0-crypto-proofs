@@ -100,6 +100,7 @@ theorem sound_of_falls (i : Instr) (h : i.falls = true) : Sound i := by
   cases i with
   | lslImm d m imm5 => exact sound_lslImm d m imm5
   | lsrImm d m imm5 => exact sound_lsrImm d m imm5
+  | asrImm d m imm5 => exact sound_asrImm d m imm5
   | addReg d n m => exact sound_basic _ rfl
   | subReg d n m => exact sound_basic _ rfl
   | addImm3 d n imm3 => exact sound_basic _ rfl
@@ -110,6 +111,7 @@ theorem sound_of_falls (i : Instr) (h : i.falls = true) : Sound i := by
   | subImm8 dn imm8 => exact sound_basic _ rfl
   | dp op dn m => exact sound_dp op dn m
   | movHi d m => exact sound_basic _ h
+  | addPc dn => exact sound_basic _ rfl
   | ldrLit t imm8 => exact sound_ldrLit t imm8
   | memReg op t n m => exact sound_memReg op t n m
   | memImm op t n imm5 => exact sound_memImm op t n imm5
@@ -119,6 +121,7 @@ theorem sound_of_falls (i : Instr) (h : i.falls = true) : Sound i := by
   | addSp imm7 => exact sound_basic _ rfl
   | subSp imm7 => exact sound_basic _ rfl
   | uxth d m => exact sound_basic _ rfl
+  | rev d m => exact sound_basic _ rfl
   | push l lr => exact sound_push l lr
   | pop l pc =>
     cases pc

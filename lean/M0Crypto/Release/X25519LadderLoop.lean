@@ -20,14 +20,14 @@ namespace M0Crypto.Release.X25519LadderLoop
 open M0Crypto.Armv6M (Word State Mem read32 write32)
 open M0Crypto.Thumb
 open M0Crypto.Release (ReachW Region B)
-open M0Crypto.Release.X25519Congr (ModP)
+open M0Crypto.Release.Field25519Congr (ModP)
 open M0Crypto.Release.X25519Layout
 open M0Crypto.Release.X25519Op
 open M0Crypto.Release.X25519EntryCode
 open M0Crypto.Release.X25519OpRun
 open M0Crypto.Release.X25519SlotEnv
 open M0Crypto.Release.X25519LadderStep
-open M0Crypto.Release.X25519Block (Runs AccOk)
+open M0Crypto.Release.Field25519Block (Runs AccOk)
 open M0Crypto.Release.X25519Val (val Words)
 open M0Crypto.Spec.X25519 (LadderState ladderStep)
 open M0Crypto.Release.X25519Ladder (Matches)
@@ -41,7 +41,7 @@ def lt3 (x : Word) : Bool :=
 
 theorem cmp3 (u : State) : condPassed 11#4 ((Instr.cmpImm 0 3#8).next u) = lt3 (u.regs 0) := by
   simp [Instr.next, Instr.exec, addFlags, State.setReg, State.setNZCV, State.setNZ, State.reg,
-    condPassed, X25519Mem.toReg0, lt3]
+    condPassed, Field25519Mem.toReg0, lt3]
 
 theorem lt3_ofNat : ∀ j : Fin 256, lt3 (BitVec.ofNat 32 j.val) = decide (j.val < 3) := by
   decide +kernel
@@ -58,14 +58,14 @@ theorem tail_runs {Wr : Word → Prop} (u : State) {j : Nat} (hj : j + 1 < 256)
   have r0 : (execAll decT u).regs 0 = BitVec.ofNat 32 j := by
     have : (execAll decT u).regs 0 = read32 u.mem (u.sp + BitVec.ofNat 32 lvT) - 1#32 := by
       simp [decT, execAll, Instr.next, Instr.exec, State.setReg, State.setNZCV, State.setNZ,
-        addFlags, State.sp, State.reg, X25519Mem.toReg0,
+        addFlags, State.sp, State.reg, Field25519Mem.toReg0,
         X25519ChainLoop.lvT_off', X25519ChainLoop.awc_dec]
     rw [this, hT, X25519ChainLoop.ofNat_dec hj]
   rw [hT, X25519ChainLoop.ofNat_dec hj] at hd
   refine Runs.append (Q1 := fun t => (t.regs 13 = u.regs 13 ∧
       t.mem = write32 u.mem (u.sp + BitVec.ofNat 32 lvT) (BitVec.ofNat 32 j) ∧ _) ∧
       t.regs 0 = BitVec.ofNat 32 j) ⟨hd.1, hd.2, r0⟩ fun t ⟨⟨h13, hm, _⟩, h0⟩ => ?_
-  refine X25519Block.Runs.reg (by decide) (by decide) ⟨?_, ?_, ?_⟩
+  refine Field25519Block.Runs.reg (by decide) (by decide) ⟨?_, ?_, ?_⟩
   · simp [execAll, Instr.next, Instr.exec, addFlags, State.setReg, State.setNZCV, State.setNZ, h13]
   · simp [execAll, Instr.next, Instr.exec, addFlags, State.setReg, State.setNZCV, State.setNZ, hm]
   · show condPassed 11#4 ((Instr.cmpImm 0 3#8).next t) = _
@@ -202,7 +202,7 @@ theorem iter_w {Q : State → Prop} {n : Nat} (hn : n + 3 ≤ 254) {st : LadderS
   have hreg : M0Crypto.Release.InRegion Pc c.base (o + sz)
       (seqSize (decT ++ [Instr.cmpImm 0 3])) := hPO.inE (by omega) (by rw [h8]; omega)
   have hfalls : (decT ++ [Instr.cmpImm 0 3]).all Instr.falls = true := by decide
-  refine X25519Block.ReachW.blockRuns hb0 (decT ++ [.cmpImm 0 3]) (o + sz) pc1 ?g1 ?g2 ?g3 hrun ?g5 ?_
+  refine Field25519Block.ReachW.blockRuns hb0 (decT ++ [.cmpImm 0 3]) (o + sz) pc1 ?g1 ?g2 ?g3 hrun ?g5 ?_
   case g1 => omega
   case g2 => exact hB
   case g3 => exact hfalls

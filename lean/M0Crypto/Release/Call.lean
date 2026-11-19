@@ -11,6 +11,8 @@ namespace M0Crypto.Release
 open M0Crypto.Armv6M (Word Reg State)
 open M0Crypto.Thumb
 
+variable {B : List (BitVec 8)} {BS : Nat} [CodeBytes B BS]
+
 /-- Byte offset reached by `bl imm` placed at `off`. -/
 def blTarget (off : Nat) (imm : BitVec 25) : Word := BitVec.ofNat 32 off + 4#32 + imm.signExtend 32
 
@@ -34,7 +36,7 @@ theorem lr_odd (y : Word) : (y ||| 1#32).getLsbD 0 = true := by
 theorem Reach.bl {base : Word} {Wr : Word → Prop} {s : State} {Q : State → Prop}
     (hb : base.toNat % 2 = 0) (off tgt : Nat) (imm : BitVec 25)
     (hpc : s.pc = base + BitVec.ofNat 32 off) (ho : off % 2 = 0)
-    (hi : instrAt B off = some (.bl imm)) (hsz : off + 4 ≤ Artifacts.Release.size)
+    (hi : instrAt B off = some (.bl imm)) (hsz : off + 4 ≤ BS)
     (ht : blTarget off imm = BitVec.ofNat 32 tgt)
     (hq : Reach base Wr ((s.setReg 14 ((base + BitVec.ofNat 32 (off + 4)) ||| 1#32)).setReg 15
       (base + BitVec.ofNat 32 tgt)) Q) : Reach base Wr s Q := by

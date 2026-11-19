@@ -13,14 +13,16 @@ bytes the artifact the asset's proofs bind to:
   `$t` code range and ends inside .text;
 
 and writes the asset's assets/ASSET/artifact/M0Crypto/Artifacts/Release.lean with the bytes, their sha256,
-the offsets of the function symbols (global: exported; local: internal), and the code/data ranges given by the
+the offsets of the function symbols (global: exported; local: internal), the offsets of the named data
+labels (local untyped `m0c_*` symbols, each inside a `$d` range), and the code/data ranges given by the
 ARM mapping symbols ($t / $d; ELF for the Arm Architecture §5.5.5). `--check` regenerates in memory and
-fails if the checked-in file differs.
+fails if the checked-in file differs. An asset with several builds (ed25519) has one module per build,
+named with `--module` (default `M0Crypto.Artifacts.Release`).
 
 Standard library only.
 
 Usage:
-  extract_release.py OBJECT OUT.lean [--check]
+  extract_release.py OBJECT OUT.lean [--module NAME] [--check]
 """
 import hashlib
 import os
@@ -29,7 +31,8 @@ import sys
 
 SHF_ALLOC = 0x2
 SHT_REL, SHT_RELA, SHT_SYMTAB, SHT_NOBITS = 9, 4, 2, 8
-STB_LOCAL, STB_GLOBAL, STT_FUNC = 0, 1, 2
+STB_LOCAL, STB_GLOBAL, STT_NOTYPE, STT_FUNC = 0, 1, 0, 2
+CHUNK = 16384  # bytes per list literal in the generated module
 
 
 def fail(msg):
@@ -63,10 +66,16 @@ def parse(data):
 
 
 def main(argv):
-    if len(argv) not in (3, 4) or (len(argv) == 4 and argv[3] != "--check"):
+    args = argv[3:]
+    check = "--check" in args
+    if check:
+        args.remove("--check")
+    module = "M0Crypto.Artifacts.Release"
+    if args[:1] == ["--module"] and len(args) >= 2:
+        module, args = args[1], args[2:]
+    if len(argv) < 3 or args:
         sys.exit(__doc__)
     obj, out = argv[1], argv[2]
-    check = len(argv) == 4
     data = open(obj, "rb").read()
     secs = parse(data)
     for s in secs:
@@ -83,6 +92,7 @@ def main(argv):
         fail(f".text alignment is {text['align']}, expected 4")
     code = data[text["off"]:text["off"] + text["size"]]
     syms = []
+    labels = []
     maps = []
     for s in secs:
         if s["type"] != SHT_SYMTAB:
@@ -104,6 +114,9 @@ def main(argv):
                 if not value & 1:
                     fail(f"function {name} lacks the Thumb bit: callers would BLX to ARM state")
                 syms.append((value & ~1, size, name, info >> 4 == STB_GLOBAL))
+            if (shndx == ti and info >> 4 == STB_LOCAL and info & 0xF == STT_NOTYPE
+                    and name.startswith("m0c_")):
+                labels.append((value, name))
     syms.sort()
     maps.sort()
     if not maps or maps[0] != (0, "$t"):
@@ -129,6 +142,10 @@ def main(argv):
         if not size or value + size > len(code) or not any(a <= value < b for a, b in code_ranges):
             fail(f"function {name} (0x{value:x}, {size} B) does not start in a code range")
     data_ranges = [(a, b) for a, b, k in ranges if k == "$d"]
+    labels.sort()
+    for value, name in labels:
+        if value % 4 or not any(a <= value < b for a, b in data_ranges):
+            fail(f"data label {name} (0x{value:x}) is not word aligned inside a data range")
     digest = hashlib.sha256(code).hexdigest()
     unit = os.path.splitext(os.path.basename(obj))[0]
     lines = [
@@ -139,7 +156,7 @@ def main(argv):
         f"/-! The release artifact: the exact `.text` bytes of the relocation-free object {unit}.o.",
         "They are the same at any 4-byte-aligned link address. -/",
         "",
-        "namespace M0Crypto.Artifacts.Release",
+        f"namespace {module}",
         "",
         f"/-- sha256 of `bytes`: {digest}. -/",
         f"def sha256 : String := \"{digest}\"",
@@ -150,6 +167,10 @@ def main(argv):
     for value, size, name, exported in syms:
         kind = "exported" if exported else "internal"
         lines.append(f"def {name.removeprefix('m0c_')} : Nat := 0x{value:x}  -- {name}, {size} bytes, {kind}")
+    if labels:
+        lines += ["", "/-- Byte offsets of the named data labels (tables and constants, internal). -/"]
+        for value, name in labels:
+            lines.append(f"def {name.removeprefix('m0c_')} : Nat := 0x{value:x}  -- {name}, data")
     fmt = lambda rs: ", ".join(f"(0x{a:x}, 0x{b:x})" for a, b in rs)
     lines += ["", "/-- Half-open offset ranges of Thumb code (`$t`) and of literal data (`$d`),",
               "from the assembler's mapping symbols. Together they cover `bytes`. -/",
@@ -157,12 +178,30 @@ def main(argv):
               f"def dataRanges : List (Nat × Nat) := [{fmt(data_ranges)}]"]
     lines += ["", "/-- Length of `bytes` in bytes. Statements and proofs name this, not a literal. -/",
               f"def size : Nat := {len(code)}"]
-    lines += ["", "set_option maxRecDepth 100000 in", "/-- The bytes of `.text` (`size` of them). -/", "def bytes : List (BitVec 8) := ["]
-    rows = [", ".join(f"0x{b:02x}#8" for b in code[i:i + 16]) for i in range(0, len(code), 16)]
-    lines.append(",\n".join("  " + r for r in rows) + "]")
-    lines += ["", "set_option maxRecDepth 100000 in",
-              "theorem bytes_length : bytes.length = size := by decide", "",
-              "end M0Crypto.Artifacts.Release", ""]
+    def literal(chunk):
+        rows = [", ".join(f"0x{b:02x}#8" for b in chunk[i:i + 16]) for i in range(0, len(chunk), 16)]
+        return ",\n".join("  " + r for r in rows) + "]"
+    if len(code) <= CHUNK:
+        lines += ["", "set_option maxRecDepth 100000 in", "/-- The bytes of `.text` (`size` of them). -/",
+                  "def bytes : List (BitVec 8) := [", literal(code)]
+        lines += ["", "set_option maxRecDepth 100000 in",
+                  "theorem bytes_length : bytes.length = size := by decide"]
+    else:
+        # One list literal of more than CHUNK bytes exceeds the compiler's default heartbeats:
+        # the bytes are the concatenation of literals of at most CHUNK bytes each.
+        parts = [code[i:i + CHUNK] for i in range(0, len(code), CHUNK)]
+        for k, part in enumerate(parts):
+            lines += ["", "set_option maxRecDepth 100000 in",
+                      f"/-- Bytes {k * CHUNK} to {k * CHUNK + len(part) - 1} of `.text`. -/",
+                      f"def bytes{k} : List (BitVec 8) := [", literal(part)]
+            lines += ["", "set_option maxRecDepth 100000 in",
+                      f"theorem bytes{k}_length : bytes{k}.length = {len(part)} := by decide"]
+        lines += ["", "/-- The bytes of `.text` (`size` of them). -/",
+                  "def bytes : List (BitVec 8) := " + " ++ ".join(f"bytes{k}" for k in range(len(parts))),
+                  "", "theorem bytes_length : bytes.length = size := by",
+                  "  simp only [bytes, List.length_append, "
+                  + ", ".join(f"bytes{k}_length" for k in range(len(parts))) + ", size]"]
+    lines += ["", f"end {module}", ""]
     text_out = "\n".join(lines)
     if check:
         try:

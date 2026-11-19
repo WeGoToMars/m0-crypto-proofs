@@ -21,7 +21,7 @@ open M0Crypto.Thumb
 open M0Crypto.Release (ReachW InRegion Region B)
 open M0Crypto.Release.Frame (Disj toNat_add_ofNat)
 open M0Crypto.Release.X25519Bytes (storeLe32 storeLe32_run_w toReg_ne)
-open M0Crypto.Release.X25519Routines (feVal)
+open M0Crypto.Release.Field25519Routines (feVal)
 open M0Crypto.Release.X25519Layout
 open M0Crypto.Release.X25519EntryCode
 
@@ -173,18 +173,18 @@ theorem storeOut_run_w {base src dst sp : Word} (hb : base.toNat % 2 = 0) {Pc Wr
     have um : u.mem = s.mem := by rw [← hu]; exact execAll_mem _ _ rfl
     have u2 : u.regs (LowReg.toReg 2) = dst := by
       rw [← hu, ← hout]
-      simp [execAll, Instr.next, Instr.exec, State.setReg, State.sp, hsp, lvOut_off, lvOut_off', X25519Mem.toReg2]
+      simp [execAll, Instr.next, Instr.exec, State.setReg, State.sp, hsp, lvOut_off, lvOut_off', Field25519Mem.toReg2]
     have uo : ∀ r : Reg, r ≠ 2 → r.val ≠ 15 → u.regs r = s.regs r := fun r h2 h15 => by
       rw [← hu]
       have h15' : r ≠ 15 := fun e => h15 (by rw [e]; rfl)
-      simp [execAll, Instr.next, Instr.exec, State.setReg, X25519Mem.toReg2, h2, h15']
+      simp [execAll, Instr.next, Instr.exec, State.setReg, Field25519Mem.toReg2, h2, h15']
     have u0 : u.regs (LowReg.toReg 0) = src := by
-      rw [X25519Mem.toReg0, uo 0 (by decide) (by decide), h0]
+      rw [Field25519Mem.toReg0, uo 0 (by decide) (by decide), h0]
     refine words_run_w hb (rv := 1) (rs := 0) (rd := 2) (by decide) (by decide) hal hdj hwr 8 (off + 2) u
       (Nat.le_refl _) hseq'.2 (by omega) upc u0 u2 (hr.sub (by omega)) ?_
     intro t tpc treg tbytes toth
     refine cont t (by rw [tpc, Nat.add_assoc]) (fun r h1 h2 h15 => ?_) (fun k hk => ?_) (fun y hy => ?_)
-    · rw [treg r (by rw [X25519Mem.toReg1]; exact h1) h15, uo r h2 h15]
+    · rw [treg r (by rw [Field25519Mem.toReg1]; exact h1) h15, uo r h2 h15]
     · have e := tbytes (k / 4) (by omega) (k % 4) (by omega)
       rw [um, feVal_byte _ _ (by omega) (by omega), show 4 * (k / 4) + k % 4 = k by omega] at e
       exact e

@@ -132,6 +132,11 @@ def fpLine (l : String) : FpM Nat := do
   modify fun s => { s with lines := s.lines.push l, ids := s.ids.insert l i }
   return i
 
+/-- The generated artifact modules, which `printTrusted` does not print: their bytes, offsets
+and sizes are compared with the library object by `extract_release.py --check`. -/
+def artifactModules : List Name :=
+  [`M0Crypto.Artifacts.Release, `M0Crypto.Artifacts.Ed25519Compact, `M0Crypto.Artifacts.Ed25519Fast]
+
 /-- A compiler-generated helper (matcher, recursion helper, auxiliary recursor, projection,
 constructor index). A `private` declaration's name starts with `_private`, which
 `isInternalDetail` alone counts as generated, so the test reads the name without that prefix. -/
@@ -147,7 +152,7 @@ def fpHelper (env : Environment) (n : Name) : Bool :=
   | none => false
   | some mi =>
     let m := env.header.moduleNames[mi.toNat]!
-    (`M0Crypto).isPrefixOf m && m != `M0Crypto.Artifacts.Release && generated env n
+    (`M0Crypto).isPrefixOf m && !artifactModules.contains m && generated env n
 
 partial def fpExpr (e : Expr) : FpM Nat := do
   if let some i := (← get).memo[FpKey.mk e]? then return i
@@ -221,7 +226,7 @@ def printTrusted (roots : List Name) : MetaM Unit := do
   for n in (closure env roots).toList do
     let some mi := env.getModuleIdxFor? n | continue
     let m := env.header.moduleNames[mi.toNat]!
-    if !(`M0Crypto).isPrefixOf m || m == `M0Crypto.Artifacts.Release then continue
+    if !(`M0Crypto).isPrefixOf m || artifactModules.contains m then continue
     if generated env n then continue
     let some ci := env.find? n | continue
     match ci with

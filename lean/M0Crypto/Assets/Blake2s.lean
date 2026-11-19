@@ -186,6 +186,14 @@ import M0Crypto.Thumb.ReleaseCheck.Blake2sShard0
 import M0Crypto.Thumb.ReleaseCheck.Blake2sShard1
 import M0Crypto.Thumb.ReleaseCheck.Blake2sShard2
 import M0Crypto.Thumb.ReleaseCheck.Blake2sShard3
+-- The generic routine and call tooling (docs/ROUTINES.md). No BLAKE2s proof uses it: this root
+-- is the lightest that builds it until an asset does.
+import M0Crypto.Release.Footprint
+import M0Crypto.Release.ReachTrace
+import M0Crypto.Release.Routine
+import M0Crypto.Release.RoutinePieces
+import M0Crypto.Release.RoutineBranch
+import M0Crypto.Release.RoutineDiagnose
 
 /-! Root of the BLAKE2s-256 (RFC 7693) release asset: every proof about the bytes of
 `src/m0crypto_blake2s.S` in the library. Built by the asset's Lake workspace

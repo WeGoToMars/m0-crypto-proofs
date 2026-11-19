@@ -14,6 +14,8 @@ namespace M0Crypto.Release.Frame
 open M0Crypto.Armv6M (Word Reg LowReg State Mem read32 write32 slot)
 open M0Crypto.Thumb
 
+variable {B : List (BitVec 8)} {BS : Nat} [CodeBytes B BS]
+
 /-- A stack-relative word store advances the PC and writes its selected slot. -/
 theorem strSp_next (t : State) (src : LowReg) (k : Nat) (hk : k < 256) :
     (Instr.strSp src (BitVec.ofNat 8 k)).next t =
@@ -164,10 +166,10 @@ theorem lit_addr (base : Word) (hb : base.toNat % 4 = 0) (off imm : Nat)
   omega
 
 /-- The little-endian word of the artifact at offset `off`. -/
-def codeWord (off : Nat) : Word :=
+def codeWord [CodeBytes B BS] (off : Nat) : Word :=
   B.getD (off + 3) 0 ++ B.getD (off + 2) 0 ++ B.getD (off + 1) 0 ++ B.getD off 0
 
-theorem read32_code {m : Mem} {base : Word} (hc : CodeAt m base B) (off : Nat) (h : off + 4 ≤ Artifacts.Release.size) :
+theorem read32_code {m : Mem} {base : Word} (hc : CodeAt m base B) (off : Nat) (h : off + 4 ≤ BS) :
     read32 m (base + BitVec.ofNat 32 off) = codeWord off := by
   have hl := B_len
   simp only [read32, codeWord]

@@ -17,6 +17,8 @@ Obligations: SP stays in the window; every memory address is public, and stack-r
 accesses lie in the window; literal loads lie in the artifact; conditional branches test
 only public flags (except at the declassified branch); calls are at most one level deep;
 a return goes to one of the addresses the calls left, or at top level to the entry LR.
+The checker has no transfer for `LSLS`/`LSRS` by register, `ASRS` (immediate), `REV` and
+`ADD Rdn, PC`: it rejects them.
 
 `bl` saves `ret [off + 4]` in LR, joins merge return lists, and a return has one successor
 per listed return offset. The callee's context is `callCtx`: by default the return offset,
@@ -338,6 +340,8 @@ def xferCore (env : Env) (off : Nat) (ctx : Option Nat) (i : Instr) (st : AbsSta
     | .rors =>
       fall off ctx i
         { st.set dn.val (AbsVal.ofPub p) with fl := setNZC st.fl p (p && st.fl.c.pub) }
+    | .lsls | .lsrs => .error "instruction outside the checker"
+  | .asrImm .. | .addPc _ | .rev .. => .error "instruction outside the checker"
   | .movHi d m =>
     if d.val == 13 || d.val == 15 || m.val == 13 || m.val == 15 then
       .error "register move uses SP or PC"

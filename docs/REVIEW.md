@@ -1,22 +1,24 @@
-# Reviewing the m0-crypto proofs: ChaCha20-Poly1305, X25519, BLAKE2s and the ARMv6-M model
+# Reviewing the m0-crypto proofs: ChaCha20-Poly1305, X25519, BLAKE2s, Ed25519 and the ARMv6-M model
 
-This guide lists exactly which parts of the Lean code a person has to read to trust the proofs of ChaCha20, Poly1305, the ChaCha20-Poly1305 AEAD, X25519 and BLAKE2s, which document each part must be checked against, and how to keep that true as the proofs change. It assumes no background in formal verification.
+This guide lists exactly which parts of the Lean code a person has to read to trust the proofs of ChaCha20, Poly1305, the ChaCha20-Poly1305 AEAD, X25519, BLAKE2s and Ed25519, which document each part must be checked against, and how to keep that true as the proofs change. It assumes no background in formal verification.
 
-**Scope.** This guide describes the proofs of library 0.3.3, three release assets:
+**Scope.** This guide describes the proofs of library 0.4.0, four release assets:
 
 | Asset | Object | `.text` | sha256 | Sections |
 |---|---|---:|---|---|
 | ChaCha20, ChaCha20-Poly1305 | `m0crypto_chacha20poly1305.o` | 3,030 bytes | `b85f137f8356ea1d290578ce03616b3e00cff08aac7cc1104b3e9fdadfc990d3` | 2 to 8 |
 | X25519 | `m0crypto_x25519.o` | 7,022 bytes | `bb9c315f5a91a6fb35f81859c1c7562a8e084efef1bddfef2ef949dbd37fec94` | 9 |
 | BLAKE2s-256 | `m0crypto_blake2s.o` | 4,748 bytes | `baf869bf5a30e81fc79956d2d61fde332555816d1cc0b0b0daede80a3dd4c68b` | 10 |
+| Ed25519, compact build | `m0crypto_ed25519_compact.o` | 15,876 bytes | `db1033944e67123e8be472c88a7defd05c0bb0c9ce4254aae354a202d9b42c3f` | 11 |
+| Ed25519, fast build | `m0crypto_ed25519_fast.o` | 26,628 bytes | `079ce6dc6db559ca7c432574cbde43edf8043a03bfa7cb92ab67a9a198a7c53e` | 11 |
 
-The sizes and hashes are those in the header of each asset's `assets/ASSET/artifact/M0Crypto/Artifacts/Release.lean`. The ChaCha20-Poly1305 bytes are those of 0.2.0. The declaration and line counts in sections 3, 9.2 and 10.2 are the output of [`tools/trusted_defs.lean`](../tools/trusted_defs.lean), which computes them from the theorem statements themselves (section 6).
+The sizes and hashes are those in the header of each asset's `assets/ASSET/artifact/M0Crypto/Artifacts/Release.lean` (for Ed25519, `Ed25519Compact.lean` and `Ed25519Fast.lean`). The ChaCha20-Poly1305 bytes are those of 0.2.0. The declaration and line counts in sections 3, 9.2 and 10.2 are the output of [`tools/trusted_defs.lean`](../tools/trusted_defs.lean), which computes them from the theorem statements themselves (section 6).
 
-**Release assets.** The three assets are released and verified separately. Each is a relocation-free object with its own Lake workspace `assets/ASSET`, which compiles the shared sources in `lean/` against that asset's artifact file and holds its `Audit.lean` (its claims) and `statements.golden`. In an asset's theorems, `Artifacts.Release` (and its abbreviation `B`) is that asset's `.text`. Sections 2 to 8 cover the ChaCha20-Poly1305 asset and the parts every asset shares: the machine model and decoder (3.1, 3.2), the artifact tooling (3.3), the shared statement vocabulary (3.5), the trusted tools (4), the assumptions (5) and the review habits (6). Section 9 covers what X25519 adds, section 10 what BLAKE2s adds.
+**Release assets.** The four assets are released and verified separately. Each is a relocation-free object with its own Lake workspace `assets/ASSET`, which compiles the shared sources in `lean/` against that asset's artifact file and holds its `Audit.lean` (its claims) and `statements.golden`. In an asset's theorems, `Artifacts.Release` (and its abbreviation `B`) is that asset's `.text`. Sections 2 to 8 cover the ChaCha20-Poly1305 asset and the parts every asset shares: the machine model and decoder (3.1, 3.2), the artifact tooling (3.3), the shared statement vocabulary (3.5), the trusted tools (4), the assumptions (5) and the review habits (6). Section 9 covers what X25519 adds, section 10 what BLAKE2s adds, section 11 what Ed25519 adds.
 
 ## 1. What a proof gives you, and what it does not
 
-A Lean theorem has two parts: a **statement** (what is claimed) and a **proof** (why it holds). Lean's kernel checks every proof mechanically, so you never need to read a proof to know it is valid. That is the whole point: of about 80,000 lines of Lean in `lean/`, the ChaCha20-Poly1305 asset trusts 1,046 hand-written lines in 12 files. 945 of them need a careful human reading. The other 101 are the instruction decoding functions, which are compared with LLVM on every instruction of the code instead (section 3.2). The X25519 and BLAKE2s assets share the model, the decoder and the shared vocabulary, and add their own specification and statement files (sections 9.2 and 10.2).
+A Lean theorem has two parts: a **statement** (what is claimed) and a **proof** (why it holds). Lean's kernel checks every proof mechanically, so you never need to read a proof to know it is valid. That is the whole point: of about 80,000 lines of Lean in `lean/`, the ChaCha20-Poly1305 asset trusts 1,082 hand-written lines in 12 files. 975 of them need a careful human reading. The other 107 are the instruction decoding functions, which are compared with LLVM on every instruction of the code instead (section 3.2). The X25519 and BLAKE2s assets share the model, the decoder and the shared vocabulary, and add their own specification and statement files (sections 9.2 and 10.2).
 
 What you *do* have to read is the statement, and every definition the statement mentions, recursively. Together these are the **trusted base**. If a definition in the trusted base is wrong, the theorem can be proved and still say something other than what you think.
 
@@ -49,7 +51,7 @@ These are the roots from which the trusted base is computed. A reviewer reads ea
 | `Aead.decrypt_constant_time`, `_reads`, `_stack` | [`AeadDecryptConstantTime.lean`](../lean/M0Crypto/Release/AeadDecryptConstantTime.lean), [`AeadReads.lean`](../lean/M0Crypto/Release/AeadReads.lean), [`AeadDecryptStack.lean`](../lean/M0Crypto/Release/AeadDecryptStack.lean) | Same, decryption (320 bytes; the verdict bit is public) |
 | `ChaCha20Xor.xor_stack_discipline`, `_interrupted`; `Aead.encrypt_…`, `Aead.decrypt_…` | [`ChaCha20XorDiscipline.lean`](../lean/M0Crypto/Release/ChaCha20XorDiscipline.lean), [`AeadDiscipline.lean`](../lean/M0Crypto/Release/AeadDiscipline.lean) | `StackDiscipline` and `InterruptedCall` (section 3.5) |
 
-All eighteen are in `assets/chacha20poly1305/Audit.lean`, with the composition claim `Aead.rejected_writes` and the nine non-vacuity witnesses (28 claims), so their axioms are checked. The X25519 claims (section 9.1) are in `assets/x25519/Audit.lean`, the BLAKE2s claims (section 10.1) in `assets/blake2s/Audit.lean`.
+All eighteen are in `assets/chacha20poly1305/Audit.lean`, with the composition claim `Aead.rejected_writes` and the nine non-vacuity witnesses (28 claims), so their axioms are checked. The X25519 claims (section 9.1) are in `assets/x25519/Audit.lean`, the BLAKE2s claims (section 10.1) in `assets/blake2s/Audit.lean`, the Ed25519 claims (section 11.1) in `assets/ed25519/Audit.lean`.
 
 The correctness statements are Props: `Correct` in [`ChaCha20Contract.lean`](../lean/M0Crypto/Release/ChaCha20Contract.lean), `EncryptCorrect`, `DecryptCorrect` and `RejectedWrites` in [`AeadContract.lean`](../lean/M0Crypto/Release/AeadContract.lean). The fifteen trace, read and stack statements are written once, as Props, in [`ChaCha20TraceSpec.lean`](../lean/M0Crypto/Release/ChaCha20TraceSpec.lean) (shared vocabulary in [`TraceSpec.lean`](../lean/M0Crypto/Release/TraceSpec.lean)); those theorems only say `: TraceSpec.X`.
 
@@ -61,8 +63,8 @@ All six theorems about one function assume the same thing, a valid call: `ChaCha
 
 | Order | Part | Files | Hand-written lines | Main reference |
 |---|---|---:|---:|---|
-| 1 | [Machine model](#31-machine-model) | 4 | 289 | ARMv6-M Architecture Reference Manual |
-| 2 | [Decoder](#32-decoder) | 1 | 66 to read, 101 cross-checked | `Instr.exec`; `llvm-objdump` |
+| 1 | [Machine model](#31-machine-model) | 4 | 314 | ARMv6-M Architecture Reference Manual |
+| 2 | [Decoder](#32-decoder) | 1 | 71 to read, 107 cross-checked | `Instr.exec`; `llvm-objdump` |
 | 3 | [Artifact](#33-artifact) | 1 | generated (196) | the build; review the generator instead |
 | 4 | [Specifications](#34-specifications) | 2 | 117 | RFC 8439 |
 | 5 | [Contracts and statements](#35-contracts-and-statements) | 5 | 473 | public headers, AAPCS, README claims |
@@ -73,9 +75,9 @@ All six theorems about one function assume the same thing, a valid call: `ChaCha
 
 The model is what "the code runs on a Cortex-M0+" means inside Lean. Every theorem relies on it, and nothing else checks it against hardware, so it deserves the most careful reading.
 
-**Check against:** *ARMv6-M Architecture Reference Manual* (Arm DDI 0419), mainly §A2.2 (`AddWithCarry`, `LSL_C`, `LSR_C`, `ROR_C` pseudocode), §A2.3 (`BXWritePC`, for `pop {..., pc}`), §A3 (alignment, endianness), §A6.3 (condition codes), §A6.4 (shifts applied to a register: `DecodeImmShift`, `Shift_C`) and the §A6.7 page of each instruction. The module headers of [`Thumb/Exec.lean`](../lean/M0Crypto/Thumb/Exec.lean) and [`Armv6M/State.lean`](../lean/M0Crypto/Armv6M/State.lean) state the scope; read them first.
+**Check against:** *ARMv6-M Architecture Reference Manual* (Arm DDI 0419), mainly §A2.2 (`AddWithCarry`, `LSL_C`, `LSR_C`, `ASR_C`, `ROR_C` pseudocode), §A2.3 (`BXWritePC`, for `pop {..., pc}`), §A3 (alignment, endianness), §A6.3 (condition codes), §A6.4 (shifts applied to a register: `DecodeImmShift`, `Shift_C`) and the §A6.7 page of each instruction. The module headers of [`Thumb/Exec.lean`](../lean/M0Crypto/Thumb/Exec.lean) and [`Armv6M/State.lean`](../lean/M0Crypto/Armv6M/State.lean) state the scope; read them first.
 
-- For every instruction in `Instr.exec` (94 lines, the core of the model): result value, flags written (and flags *not* written: `muls` sets only N and Z), destination and writeback registers, as on its A6.7 page.
+- For every instruction in `Instr.exec` (106 lines, the core of the model): result value, flags written (and flags *not* written: `muls` sets only N and Z), destination and writeback registers, as on its A6.7 page.
 - Immediate scaling, which happens here and not in the decoder: `imm5 × width` for `ldr`/`ldrh`/`ldrb` and their stores, `imm8 × 4` for SP-relative and literal forms, `imm7 × 4` for `add sp`/`sub sp`. The one exception is `bl`, whose offset the decoder delivers already scaled.
 - `Instr.accesses` and `Instr.exec` compute each address separately. The trace records the first; the memory changes by the second. Two proved lemmas tie them together. Read their statements instead of comparing the addresses: `exec_mem_other` ([`Thumb/Program.lean`](../lean/M0Crypto/Thumb/Program.lean)), an instruction changes memory only at the bytes of its write accesses, and `exec_reads_only` ([`Thumb/ExecReads.lean`](../lean/M0Crypto/Thumb/ExecReads.lean)), its result depends on memory only at the bytes of its read accesses. So no byte an instruction uses is missing from the trace.
 - The lemmas do not show the converse, that the trace records no more than the instruction uses. Check in `Instr.accesses` that each access has the instruction's size: 1, 2 or 4 bytes, and one 4-byte access per register for `push`, `pop`, `ldm` and `stm`. The alignment fault in `step` uses the same sizes. With the right size, a wrong address or direction would contradict the lemmas.
@@ -84,6 +86,17 @@ The model is what "the code runs on a Cortex-M0+" means inside Lean. Every theor
 - `bl` writes LR = return address | 1; `pop {pc}` faults if bit 0 of the loaded value is clear.
 - Carry on subtraction is NOT borrow (ARM convention). This includes `sbcs`, which computes `Rdn + NOT(Rm) + C`, so C = 0 on entry subtracts one more. `addWithCarry` transcribes the manual's pseudocode: carry = unsigned overflow, V = signed overflow. `cmp` is `addFlags` with `write := false`: only the flags change.
 - Shifts: `lslC` with n = 0 is `movs Rd, Rm` (31 sites in the code), value and carry unchanged; `lsrs #0` encodes a shift by 32; `rorC` by 0 leaves value and carry, by a non-zero multiple of 32 leaves the value and sets carry = bit 31.
+- Forms only the Ed25519 unit uses, each against its §A6.7 page:
+
+  | Form | Model | Manual pseudocode |
+  |---|---|---|
+  | `lsls Rdn, Rm` | `.dp .lsls`, `lslRegC`; N, Z, C | LSL (register): `Shift_C(R[n], SRType_LSL, UInt(R[m]<7:0>), APSR.C)`, `LSL_C` |
+  | `lsrs Rdn, Rm` | `.dp .lsrs`, `lsrRegC`; N, Z, C | LSR (register): `Shift_C(R[n], SRType_LSR, UInt(R[m]<7:0>), APSR.C)`, `LSR_C` |
+  | `asrs Rd, Rm, #imm5` | `.asrImm`, `asrC`; N, Z, C | ASR (immediate): `DecodeImmShift('10', imm5)` (0 is 32), `ASR_C` |
+  | `rev Rd, Rm` | `.rev`, `revBytes`; no flags | REV: `result<31:24> = R[m]<7:0>` … `result<7:0> = R[m]<31:24>` |
+  | `add Rdn, pc` | `.addPc`, `R[dn] + (PC + 4)`; no flags | ADD (register) T2 with DN = 0, Rm = PC: `AddWithCarry(R[n], R[m], '0')`, `setflags = FALSE` |
+
+  A register amount of 0 keeps value and carry. At 32 the carry is bit 0 (LSL) or bit 31 (LSR), above 32 it is 0. ASR by 32 fills with bit 31. The constant-time checker rejects these forms. QEMU runs each of them in [`fixtures/ed25519_forms_steps.S`](../fixtures/ed25519_forms_steps.S) (step 7b).
 - `condPassed`: each of the 14 conditions of the A6.3 table, especially HI (C ∧ ¬Z), LS, GE (N = V), GT, LT, LE.
 - Memory is little-endian (`read32`, `write32`: the byte at `a` is bits 7:0, and a write changes its four bytes only); unaligned accesses fault (ARMv6-M has no unaligned access). The model has no `ldrsh`/`ldrsb`; the code uses neither, or the listing comparison of section 3.2 would fail.
 - `Event` contains everything the constant-time claim should observe: PC, instruction, and the address, width and kind of every access. If something the hardware leaks is not in it, the proofs say nothing about it.
@@ -103,7 +116,7 @@ The two models handle code differently. The early fragment model keeps code in a
 | [`Armv6M/State.lean`](../lean/M0Crypto/Armv6M/State.lean) | 9 | 21 |
 | [`Armv6M/Memory.lean`](../lean/M0Crypto/Armv6M/Memory.lean) | 4: `Mem`, `read32`, `write32`, `slot` | 11 |
 | [`Armv6M/Step.lean`](../lean/M0Crypto/Armv6M/Step.lean) | 2: `addWithCarry`, `rorC` | 15 |
-| [`Thumb/Exec.lean`](../lean/M0Crypto/Thumb/Exec.lean) | 29 | 242 |
+| [`Thumb/Exec.lean`](../lean/M0Crypto/Thumb/Exec.lean) | 33 | 267 |
 
 The rest of `Armv6M/Memory.lean` and `Armv6M/Step.lean` belongs to the fragment model and to proofs. In `Thumb/Exec.lean` everything above the closing "Helper checks" examples is trusted.
 
@@ -111,13 +124,13 @@ The rest of `Armv6M/Memory.lean` and `Armv6M/Step.lean` belongs to the fragment 
 
 [`Thumb/Decode.lean`](../lean/M0Crypto/Thumb/Decode.lean) has two parts, and they are reviewed differently.
 
-**The instruction set: read it.** `Instr` (47 lines, with the width of every field), `DpOp`, `MemOp` with `width` and `isLoad`, and `Instr.size` (4 bytes for `bl`, 2 for everything else) are what `Instr.exec` is defined over: 66 lines. Read them together with section 3.1.
+**The instruction set: read it.** `Instr` (52 lines, with the width of every field), `DpOp`, `MemOp` with `width` and `isLoad`, and `Instr.size` (4 bytes for `bl`, 2 for everything else) are what `Instr.exec` is defined over: 71 lines. Read them together with section 3.1.
 
-**The decoding functions: cross-checked, not read.** These turn bytes into an `Instr`: `decode`, `decode16`, `decodeBL`, `decodeDp`, `memOpOfRegForm` and three bit helpers, 101 lines. `check.sh` step 4b decodes every instruction of the release code with them, prints the result with `render` in [`Thumb/Listing.lean`](../lean/M0Crypto/Thumb/Listing.lean), and requires the text to equal `llvm-objdump`'s at every instruction offset (1,459 in the ChaCha20-Poly1305 asset; the step runs on each asset's object). `render` prints every field of every `Instr` constructor: register names, scaled immediates, branch targets, literal addresses. So a decoding that differs from LLVM's in any field, at any instruction of the code, fails the check. A wrong line of the decoder that affects no instruction of the code is harmless, because the theorems are about this code only.
+**The decoding functions: cross-checked, not read.** These turn bytes into an `Instr`: `decode`, `decode16`, `decodeBL`, `decodeDp`, `memOpOfRegForm` and three bit helpers, 107 lines. `check.sh` step 4b decodes every instruction of the release code with them, prints the result with `render` in [`Thumb/Listing.lean`](../lean/M0Crypto/Thumb/Listing.lean), and requires the text to equal `llvm-objdump`'s at every instruction offset (1,459 in the ChaCha20-Poly1305 asset; the step runs on each asset's object). `render` prints every field of every `Instr` constructor: register names, scaled immediates, branch targets, literal addresses. So a decoding that differs from LLVM's in any field, at any instruction of the code, fails the check. A wrong line of the decoder that affects no instruction of the code is harmless, because the theorems are about this code only.
 
-What this argument rests on, and what a reviewer checks instead of the 101 lines:
+What this argument rests on, and what a reviewer checks instead of the 107 lines:
 
-- `render` and its helpers (67 lines) print each field of each constructor, in the role `Instr.exec` gives it. Read the two side by side: `render` has its own copy of the immediate scaling and of the branch-target arithmetic, and the comparison validates the decoder only as far as the two agree. This includes the `bl` offset, which the decoder delivers already scaled and both add as is.
+- `render` and its helpers (70 lines) print each field of each constructor, in the role `Instr.exec` gives it. Read the two side by side: `render` has its own copy of the immediate scaling and of the branch-target arithmetic, and the comparison validates the decoder only as far as the two agree. This includes the `bl` offset, which the decoder delivers already scaled and both add as is.
 - No two instructions that `exec` treats differently print alike. `condName` prints each of the 16 conditions as LLVM's printer does, including `al` (14) and `<und>` (15), which the decoder never produces.
 - The comparison covers every offset `llvm-objdump` lists, which is every instruction boundary: two `#guard`s in `Listing.lean` require the model's sweep to tile each code range exactly and the code and data ranges to cover the artifact. It does not cover an offset inside a `bl` or inside a literal pool. Execution never gets there if every jump lands on a listed offset. Step 4b requires that of every direct branch (`b`, conditional `b`, `bl`) and of the instruction after every `bl`, where its callee returns. In the ChaCha20-Poly1305 asset there are 55 direct branches, and the only other jumps are six `pop {..., pc}`, which return to the instruction after a `bl` or to the caller. In the `llvm-objdump` listings of the other objects: X25519 has 59 direct branches and four `pop {..., pc}`, BLAKE2s 38 and five, and neither has another instruction that writes PC.
 - `llvm-objdump` is the independent decoder and is trusted as such, together with [`tools/check_listing.py`](../tools/check_listing.py), which normalises both texts (for branches it keeps the target address and drops the symbol name).
@@ -178,6 +191,7 @@ Two definitions carry most of the weight, so read them first:
 - **ChaCha20-Poly1305** (`Aead.APre`, `N = 320`): `sp0` 8-byte aligned and `sp0 + 16 <= 2^32`; `[sp0 - 320, sp0 + 16)` (`W` plus the four stack arguments) disjoint from `code`, `out` and `tag`; `W` disjoint from `in`, `aad`, `key` and `nonce`; `out` and `tag` each disjoint from `code`; `aad` and `tag` each disjoint from `out`; `in = out` or disjoint from `out` (`key` and `nonce` may overlap `out`, `aad`, `tag` and `code`; `in` and `aad` may overlap `code`).
 - **X25519** (`X25519.Pre`, `N = 516`): `sp0` 4-byte aligned; `W` disjoint from `code`, `out`, `scalar` and `point`; `out` disjoint from `code` (`scalar` and `point` may overlap `code`, each other and `out`).
 - **BLAKE2s-256** (`Blake2s.{Init,Update,Final}.Pre`, `N = 4` for `init`, `160` for `update` and `final`): `sp0` and `c` 4-byte aligned; `c[112]`, `W` and `code` pairwise disjoint; for `update` and `final`, `*c` holds a stream state produced by `init; update*` with cumulative bytes (plus `n` for `update`) below `2^64`; for `update`, `[p, p + n)` disjoint from `c[112]` and `W` (may overlap `code`); for `final`, `out[32]` disjoint from `code`, `W` and `c[112]`.
+- **Ed25519** (`Ed25519.{Pubkey,Sign,Verify}.Pre`, for both builds, `N = 1060` for `pubkey`, `1260` for `sign`, `1764` for `verify`): `sp0` 4-byte aligned; `W` disjoint from `code` and from every buffer (`pk[32]` and `seed[32]` for `pubkey`, `sig[64]`, `m[n]` unless `n = 0`, and `sk[64]` or `pk[32]` for `sign` and `verify`); the output (`pk` for `pubkey`, `sig` for `sign`) disjoint from `code`; for `sign` and `verify`, `n < 2^32 - 64` (buffers may be unaligned and may overlap each other, and inputs may overlap `code`).
 
 The C headers state idiomatic C rules, which may be stricter (for example, they forbid `key` or `nonce` from overlapping `out`).
 
@@ -238,21 +252,21 @@ These files decide whether the proofs are about the shipped library and whether 
 
 | File | Lines | What it guarantees |
 |---|---:|---|
-| [`tools/check.sh`](../tools/check.sh) | 186 | The release gate, per asset (`tools/check.sh [ASSET...]`). Step 2b: rebuilds each asset and compares the regenerated artifact file with the checked-in one. Step 4: builds each asset's proofs in its workspace. Step 4b: compares the decoder with `llvm-objdump`. Step 4c: runs the ChaCha20-Poly1305, BLAKE2s and X25519 specifications on the library's test vectors. Step 5: rejects `sorry`/`admit`/`axiom`/`native_decide`/`implemented_by`/`extern` in sources. Step 6: audits axioms. Step 6b: compares statements with the golden file. Step 7: runs the QEMU tests. Step 7b: compares the model with QEMU instruction by instruction. |
-| [`../tools/build_lib.sh`](https://github.com/WeGoToMars/m0-crypto-lib/blob/main/tools/build_lib.sh) | 63 | Builds each asset's object, whose `.text` is proved, with the pinned toolchain. |
-| [`tools/extract_release.py`](../tools/extract_release.py) | 181 | Generates an asset's `Artifacts/Release.lean` from its built object. |
-| [`tools/check_listing.py`](../tools/check_listing.py), [`lean/DumpListing.lean`](../lean/DumpListing.lean), [`lean/M0Crypto/Thumb/Listing.lean`](../lean/M0Crypto/Thumb/Listing.lean) | 93 + 5 + 130 | The decoder-versus-LLVM comparison, including `render`, which prints the model's decoding. This is what stands in for reading the decoding functions (section 3.2). |
+| [`tools/check.sh`](../tools/check.sh) | 220 | The release gate, per asset (`tools/check.sh [ASSET...]`). Step 2b: rebuilds each asset and compares the regenerated artifact file with the checked-in one. Step 4: builds each asset's proofs in its workspace. Step 4b: compares the decoder with `llvm-objdump`. Step 4c: runs the ChaCha20-Poly1305, BLAKE2s and X25519 specifications on the library's test vectors. Step 4d: runs the Ed25519 entries and internal routines of both builds in the model (tests, native executable). Step 5: rejects `sorry`/`admit`/`axiom`/`native_decide`/`implemented_by`/`extern` in sources. Step 6: audits axioms. Step 6b: compares statements with the golden file. Step 7: runs the QEMU tests. Step 7b: compares the model with QEMU instruction by instruction. |
+| [`../tools/build_lib.sh`](https://github.com/WeGoToMars/m0-crypto-lib/blob/main/tools/build_lib.sh) | 95 | Builds each asset's object (one per build; `ed25519` has two, `compact` and `fast`), whose `.text` is proved, with the pinned toolchain, and requires it to be relocation-free and to export exactly the asset's public functions. |
+| [`tools/extract_release.py`](../tools/extract_release.py) | 220 | Generates an asset's `Artifacts/Release.lean` from its built object (for `ed25519`, `Artifacts/Ed25519Compact.lean` and `Ed25519Fast.lean`, one per build; the workspace's `Release.lean` is empty and hand-written). |
+| [`tools/check_listing.py`](../tools/check_listing.py), [`lean/DumpListing.lean`](../lean/DumpListing.lean), [`lean/DumpListingEd25519.lean`](../lean/DumpListingEd25519.lean), [`lean/M0Crypto/Thumb/Listing.lean`](../lean/M0Crypto/Thumb/Listing.lean) | 95 + 5 + 12 + 144 | The decoder-versus-LLVM comparison, including `render`, which prints the model's decoding. This is what stands in for reading the decoding functions (section 3.2). |
 | [`tools/spec_vectors.py`](../tools/spec_vectors.py), [`lean/SpecVectors.lean`](../lean/SpecVectors.lean), [`lean/SpecVectorsX25519.lean`](../lean/SpecVectorsX25519.lean), [`lean/SpecVectorsBlake2s.lean`](../lean/SpecVectorsBlake2s.lean) | 135 + 77 + 55 + 55 | Runs the specification on the library's test vectors (sections 3.4, 9.2 and 10.2). A test: an error here could hide a specification bug, not create a false theorem. |
-| [`tools/qemu_steps.py`](../tools/qemu_steps.py), [`tools/qemu_x25519_windows.py`](../tools/qemu_x25519_windows.py), [`lean/StepTrace.lean`](../lean/StepTrace.lean) | 285 + 421 + 84 | Compares the model with QEMU after every instruction of traced calls that reach every instruction a call can execute (sections 3.1, 9.3, 10.4). Also a test. |
+| [`tools/qemu_steps.py`](../tools/qemu_steps.py), [`tools/qemu_x25519_windows.py`](../tools/qemu_x25519_windows.py), [`lean/StepTrace.lean`](../lean/StepTrace.lean) | 314 + 421 + 84 | Compares the model with QEMU after every instruction of traced calls that reach every instruction a call can execute, of sampled X25519 windows and of test programs for instruction forms (sections 3.1, 9.3, 10.4, 11.3). Also a test. |
 | `assets/ASSET/Audit.lean` | | Per asset: the claims (section 6, "Claim policy"). `check.sh` requires one axiom report per claim, drawn only from `propext`, `Classical.choice`, `Quot.sound`. |
 | [`tools/statements.sh`](../tools/statements.sh), [`tools/claims.sh`](../tools/claims.sh) + `assets/ASSET/statements.golden` | | Per asset: printed statement and term hash of every claim and trusted definition. See section 2. |
 | [`lean-toolchain`](../lean-toolchain), [`tools/versions.txt`](../tools/versions.txt), [`../tools/versions.txt`](https://github.com/WeGoToMars/m0-crypto-lib/blob/main/tools/versions.txt) | — | Pinned Lean, LLVM and QEMU versions. |
-| [`tools/trusted_defs.lean`](../tools/trusted_defs.lean) | 261 | Computes the reading list (section 6) and the definitions printed into the golden files. An error here would hide trusted code from the reviewer. `check.sh` runs it through `statements.sh`. |
+| [`tools/trusted_defs.lean`](../tools/trusted_defs.lean) | 266 | Computes the reading list (section 6) and the definitions printed into the golden files. An error here would hide trusted code from the reviewer. `check.sh` runs it through `statements.sh`. |
 | [`tools/comparator.sh`](../tools/comparator.sh) + `assets/ASSET/challenge/Challenge.lean` | 32 | Run by the library's CI ([`ci.yml`](https://github.com/WeGoToMars/m0-crypto-lib/blob/main/.github/workflows/ci.yml)) whenever its workflow runs. Each challenge, a statement file, states the asset's claims (no witnesses) with `sorry`. `lake comparator` requires each claim of the asset root to state the same term, reaching the same declarations, with only the three axioms; `lake check` replays every declaration the root reaches. |
 
 Also trusted, outside this repository:
 
-- The Lean kernel and the Lean core library (`BitVec`, `List`; `omega`'s proof output is kernel-checked). Whenever its workflow runs, the library's CI requires [`tools/comparator.sh`](../tools/comparator.sh) to accept the three asset roots against their challenges, and Lean's kernel to accept every declaration each root reaches, Lean core included, replayed into an empty environment.
+- The Lean kernel and the Lean core library (`BitVec`, `List`; `omega`'s proof output is kernel-checked). Whenever its workflow runs, the library's CI requires [`tools/comparator.sh`](../tools/comparator.sh) to accept the four asset roots against their challenges, and Lean's kernel to accept every declaration each root reaches, Lean core included, replayed into an empty environment.
 - Lean's elaborator, for the meaning of what you read: the kernel checks the elaborated statement, and you read its source text.
 - Whatever puts the library on the chip (linker, image conversion, flashing): the proofs are about each asset's `.text` bytes at a 4-byte-aligned address. The objects have no relocations, so a linker has nothing to patch.
 
@@ -263,8 +277,8 @@ The assembler is *not* trusted. The proofs are about its output bytes, whatever 
 These are stated in the [library README](https://github.com/WeGoToMars/m0-crypto-lib/blob/main/README.md#proofs-and-scope). A reviewer checks that they are stated, not that they hold:
 
 - Execution is sequential, and nothing but the modelled handlers modifies memory a function uses while it runs (another bus master such as DMA could). The interrupted-call theorems model an interrupt by its effect alone: exception entry, handler and exception return together restore every register and flag and preserve the call's buffers and every byte the call may read or write outside the `K` bytes below SP. The exception entry stores r0-r3, r12, LR, PC and xPSR there, and the handler sees the call's working state. Clearing covers uninterrupted calls.
-- Memory is ordinary RAM: no faults, no device side effects.
-- Execution time depends only on the trace (instructions, addresses, branches): the constant-time claims are about the model's trace. The decoder rejects a conditional branch to the next instruction, so every accepted conditional branch reaches a different PC when taken and the trace records its outcome. The Cortex-M0+ has no cache and no branch prediction, and its multiplier (`muls`, used by X25519) is single-cycle or 32-cycle iterative by build option, with a fixed time either way, per Arm's documentation.
+- Memory is ordinary RAM: no faults, no device side effects, and distinct addresses are distinct bytes (on the MSPM0L2228, SRAM reached through one of its three aliases).
+- Execution time depends only on the trace (instructions, addresses, branches): the constant-time claims are about the model's trace. The decoder rejects a conditional branch to the next instruction, so every accepted conditional branch reaches a different PC when taken and the trace records its outcome. The Cortex-M0+ core has no cache and no branch prediction, and the MSPM0's flash prefetch and instruction and literal caches respond only to the addresses fetched, which the trace includes. The core's multiplier (`muls`, used by X25519) is single-cycle or 32-cycle iterative by build option, with a fixed time either way, per Arm's documentation.
 - Physical side channels and fault injection (power analysis, electromagnetic leakage, glitching) are out of scope.
 
 ## 6. Keeping the proofs robust
@@ -330,7 +344,7 @@ If all three are fine, the proof changes need no correctness review.
 
 - The golden file locks every claim statement and trusted definition as printed text and as the hash of its kernel terms. The Lean core definitions they use (`List`, `BitVec`) are trusted with Lean (section 4).
 - The decoding functions are trusted through the comparison with LLVM, not through reading (section 3.2).
-- The model is compared instruction by instruction with QEMU, on calls that execute every instruction a call can execute (section 3.1). It is compared with the chip only through the outputs and cycle counts of whole function calls.
+- The model is compared instruction by instruction with QEMU on traced calls, sampled X25519 windows and instruction-form test programs (section 3.1). It is compared with the chip only through the outputs and cycle counts of whole function calls.
 
 ## 7. Learning by breaking things
 
@@ -359,6 +373,8 @@ Background reading: [Theorem Proving in Lean 4](https://lean-lang.org/theorem_pr
 | [`include/m0crypto/x25519.h`](https://github.com/WeGoToMars/m0-crypto-lib/blob/main/include/m0crypto/x25519.h) | X25519 contract (section 9) |
 | [RFC 7693](https://www.rfc-editor.org/rfc/rfc7693), The BLAKE2 Cryptographic Hash and Message Authentication Code | `Spec/Blake2s.lean` (RFC sections 2 and 3), vector (appendix B) |
 | [`include/m0crypto/blake2s.h`](https://github.com/WeGoToMars/m0-crypto-lib/blob/main/include/m0crypto/blake2s.h), [`src/blake2s_internal.h`](https://github.com/WeGoToMars/m0-crypto-lib/blob/main/src/blake2s_internal.h) | BLAKE2s contract and context layout (section 10) |
+| [RFC 8032](https://www.rfc-editor.org/rfc/rfc8032), Edwards-Curve Digital Signature Algorithm (EdDSA) | `Spec/Ed25519.lean`, `Spec/Ed25519Sha512.lean` (RFC sections 5.1 and 6), vectors (section 7.1) |
+| [`include/m0crypto/ed25519.h`](https://github.com/WeGoToMars/m0-crypto-lib/blob/main/include/m0crypto/ed25519.h) | Ed25519 contract (section 11) |
 
 ## 9. X25519 (`m0c_x25519`)
 
@@ -386,7 +402,7 @@ All six assume `X25519.Pre c s`. They are the claims in `assets/x25519/Audit.lea
 | Model | `sbcs` in `Thumb.DpOp` and `Instr.exec` (section 3.1) | 1 | 4 | ARMv6-M manual, SBC (register) |
 | Artifact | `Artifacts.Release.x25519`, `size`, `bytes` | 3 | generated (444) | `llvm-nm -S` of the built object; section 3.3 |
 
-Produced by `tools/trusted_defs.sh x25519`. With the model (287 lines), the decoder (167) and the shared vocabulary (102), the X25519 asset trusts 757 hand-written lines in 10 files, of which 201 are its own.
+Produced by `tools/trusted_defs.sh x25519`. With the model (312 lines: section 3.1's 314 without `Armv6M.slot`), the decoder (178) and the shared vocabulary (102), the X25519 asset trusts 793 hand-written lines in 10 files, of which 201 are its own.
 
 **Specification.** `Spec/X25519.lean` follows RFC 7748 section 5 in the RFC's own names and order. Check:
 
@@ -459,7 +475,7 @@ Produced by `tools/trusted_defs.sh blake2s`. The model, decoder and shared vocab
 | Composition statements | [`Blake2sStatements.lean`](../lean/M0Crypto/Release/Blake2sStatements.lean) | 17 | 91 | the claims of section 10.1 |
 | Artifact | `Artifacts.Release.blake2s_init`, `_update`, `_final`, `size`, `bytes` | 5 | generated (304) | `llvm-nm -S` of the built object; section 3.3 |
 
-With the model (287 lines), the decoder (167) and the shared vocabulary (98), the BLAKE2s asset trusts 1,170 hand-written lines in 11 files, of which 618 are its own.
+With the model (312 lines: section 3.1's 314 without `Armv6M.slot`), the decoder (178) and the shared vocabulary (98), the BLAKE2s asset trusts 1,206 hand-written lines in 11 files, of which 618 are its own.
 
 **Specification.** **Check against:** [RFC 7693](https://www.rfc-editor.org/rfc/rfc7693) (§2.1 parameters and rotation constants, §2.4 byte order, §2.5 parameter block, §2.6 IV, §2.7 SIGMA, §3.1 G, §3.2 F, §3.3 padding, counter and digest). `Spec/Blake2s.lean` imports nothing from the model; check that this stays true.
 
@@ -498,3 +514,53 @@ Vectors, as `#guard`s in [`Spec/Blake2sVectors.lean`](../lean/M0Crypto/Spec/Blak
 - The executable release checks ([`Thumb/ReleaseCheck/Blake2sCases.lean`](../lean/M0Crypto/Thumb/ReleaseCheck/Blake2sCases.lean) and its shards `Blake2sShard0`-`3`, `Blake2sPairwise`) run `init; update*; final` on the real bytes in the model and check read and write ranges, restored registers, the stack bound and the digest against `Spec.Blake2s.blake2s`. As for the other two assets, the asset root `M0Crypto.Assets.Blake2s` imports them, so `check.sh` step 4 builds them. A failing case throws, so a successful build is a pass.
 - [`../tests/test_blake2s.c`](https://github.com/WeGoToMars/m0-crypto-lib/blob/main/tests/test_blake2s.c), run by `check.sh` step 7 (`tools/test_qemu.sh blake2s`): the release object on QEMU's Cortex-M0 against `hashlib.blake2s` digests at 204 lengths (0 to 200, 1024, 1025, 4096; `tests/blake2s_vectors.h`); one update at input and output offsets 0 to 3 with guard bytes around the output; chunked updates (nine chunk sizes from 1 to 200 bytes) with an empty `NULL` update after each chunk; and, through `tests/check_call8.S`, r4-r11 and SP restored and the stack depth within 4 and 160 bytes.
 - [`tools/mutate_blake2s.py`](../tools/mutate_blake2s.py): 13 deliberate bugs in `src/blake2s_*.S`, each rebuilt and run through the QEMU tests, the executable checks and the BLAKE2s proofs. Whenever its workflow runs, the library's CI requires the proofs to reject all 13.
+
+## 11. Ed25519 (`m0c_ed25519_pubkey`, `_sign`, `_verify`)
+
+The Ed25519 asset has two builds, compact and fast, which export the same three functions and differ in the size of the base-point table. Their field, group, scalar and SHA-512 routines are local symbols. Every Ed25519 statement is quantified over the build `b : Build` ([`Ed25519Build.lean`](../lean/M0Crypto/Release/Ed25519Build.lean)): the code is `b.bytes`, from the artifact module `Artifacts.Ed25519Compact` or `Artifacts.Ed25519Fast`, and the workspace's `Artifacts.Release` is empty. Sections 3.1 to 3.3, 4, 5 and 6 apply; the model's forms that only Ed25519 uses are in section 3.1.
+
+### 11.1 Top-level theorems
+
+All in `M0Crypto.Release.Ed25519`, in [`Ed25519Claims.lean`](../lean/M0Crypto/Release/Ed25519Claims.lean), for both builds:
+
+| Theorem | Claim |
+|---|---|
+| `pubkey_correct : Pubkey.Correct` | `pk` holds the RFC 8032 §5.1.5 public key of `seed`; other memory outside the 1,060-byte stack window unchanged; r4-r11 and SP restored, r1-r3 and r12 zero, the window below the saved registers zero and the 36 bytes above them the caller's r4-r11 and LR |
+| `sign_correct : Sign.Correct` | `sig` holds the RFC 8032 §5.1.6 signature of the message under `sk[0..32)` with `sk[32..64)` as the public key; registers and the 1,260-byte window as for pubkey |
+| `sign_correct_rfc : Sign.CorrectRfc` | When `sk[32..64)` is the public key of `sk[0..32)`, `sig` is `Spec.Ed25519.sign`, the RFC 8032 signature |
+| `verify_correct : Verify.Correct` | r0 = 0 exactly when `Spec.Ed25519.verify` accepts, else `0xffffffff`; memory outside the 1,764-byte window unchanged; r4-r11 and SP restored |
+| `pubkey_constant_time`, `sign_constant_time`, `verify_constant_time` | Pubkey and sign: the trace depends only on the code base, SP, LR, the pointers and `n`. Verify: on those and the bytes of `sig`, `m` and `pk` |
+| `pubkey_reads`, `sign_reads`, `verify_reads` | Reads only the inputs, the code and the stack window |
+| `*_stack`, `*_stack_discipline`, `*_interrupted` | `StackIn`, `DisciplineIn` and `InterruptedIn` over 1,060, 1,260 and 1,764 bytes (section 3.5) |
+
+Each assumes its entry's `Pre`. With the nine witnesses of [`Ed25519NonVacuity.lean`](../lean/M0Crypto/Release/Ed25519NonVacuity.lean) (`pubkey_`, `sign_` and `verify_` `pre_nonvacuous`, `constant_time_nonvacuous` and `interrupted_nonvacuous`), these 19 theorems are the 28 claims of `assets/ed25519/Audit.lean`. The witnesses use RFC 8032 section 7.1 vectors at odd addresses. The pubkey constant-time witness differs in the seed, sign's in the secret key and the message, and verify's in a byte outside its inputs.
+
+### 11.2 What to read
+
+`tools/trusted_defs.sh ed25519` lists the trusted declarations. Beyond the model, the decoder and the shared vocabulary of section 3:
+
+| Part | File | Declarations | Lines | Reference |
+|---|---|---:|---:|---|
+| Specification | [`Spec/Ed25519.lean`](../lean/M0Crypto/Spec/Ed25519.lean) | 23 | 132 | RFC 8032 sections 5.1 and 6 |
+| Specification | [`Spec/Ed25519Sha512.lean`](../lean/M0Crypto/Spec/Ed25519Sha512.lean) | 22 | 97 | FIPS 180-4 |
+| Builds | [`Ed25519Build.lean`](../lean/M0Crypto/Release/Ed25519Build.lean) | 3 | 11 | the two artifact modules |
+| Contract | [`Ed25519Contract.lean`](../lean/M0Crypto/Release/Ed25519Contract.lean) | 53 | 181 | `include/m0crypto/ed25519.h`, AAPCS32 |
+| Trace statements | [`Ed25519TraceSpec.lean`](../lean/M0Crypto/Release/Ed25519TraceSpec.lean) | 26 | 57 | the claims of section 11.1 |
+| Artifact | `Artifacts.Ed25519Compact.ed25519_pubkey`, `_sign`, `_verify`, `size`, `bytes` | 5 | generated (1,000) | `llvm-nm -S` of the compact build's object; section 3.3 |
+| Artifact | `Artifacts.Ed25519Fast.ed25519_pubkey`, `_sign`, `_verify`, `size`, `bytes`, `bytes0`, `bytes1` | 7 | generated (1,676) | `llvm-nm -S` of the fast build's object; section 3.3 |
+
+Produced by `tools/trusted_defs.sh ed25519`. With the model (312 lines: section 3.1's 314 without `Armv6M.slot`), the decoder (178) and the shared vocabulary (100), the Ed25519 asset trusts 1,068 hand-written lines in 12 files, of which 478 are its own.
+
+Points to check:
+
+- `Spec.Ed25519.verify` decodes R and A as in RFC 8032 §5.1.3 (rejecting y ≥ p, no square root, and x = 0 with the sign bit set), requires S < L, and checks the cofactorless [S]B = R + [k]A' with k = SHA-512(R ‖ A ‖ M) reduced modulo L, as `sha512_modq` in RFC 8032 §6. For R or A with a small-order component its verdict can differ from either equation of §5.1.7, which use the unreduced k; the header states this predicate.
+- `Sign.Ctx.sigOut` signs with the caller's `sk[32..64)` as the public key, unchecked; `CorrectRfc` covers the case where it is the seed's public key.
+- `Verify.Ctx.pub` lists every input byte: verify is variable time by design. `Pubkey.Ctx.pub` and `Sign.Ctx.pub` list only addresses, `n`, SP, LR and the base.
+- `Pubkey.Result` and `Sign.Result` include `Wiped`; `Verify.Result` does not, and verify clears nothing.
+
+### 11.3 Checks and evidence specific to Ed25519
+
+- `src/ed25519_compact.S` and `src/ed25519_fast.S` are generated by [`../tools/gen_ed25519.py`](https://github.com/WeGoToMars/m0-crypto-lib/blob/main/tools/gen_ed25519.py). `check.sh` regenerates both and requires the checked-in files to be equal.
+- `check.sh` step 4d runs the native `release_check` executable, which runs the three entries and the internal routines of both builds in the model against the specification.
+- `check.sh` step 7 runs the library's `tests/test_ed25519.c` and `tests/test_irq_ed25519.c` on QEMU's Cortex-M0 with each build: RFC 8032 vectors and derived rejections, the verdict cases of `Spec/Ed25519Vectors.lean`, every pointer alignment, the allowed overlaps, guard bytes, restored registers, the stack bounds, the clearing of pubkey and sign, and SysTick interrupts with a handler that overwrites the stack below the interrupted SP.
+- `check.sh` step 7b runs the five Ed25519-only instruction forms in [`fixtures/ed25519_forms_steps.S`](../fixtures/ed25519_forms_steps.S) on QEMU and compares the model after every instruction.

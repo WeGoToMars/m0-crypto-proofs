@@ -5,10 +5,11 @@
 # specification vs external vectors, axiom audit, QEMU tests, model vs QEMU instruction by
 # instruction. Exits non-zero on any failure.
 #
-# Usage: tools/check.sh [ASSET...]     (default: all; ASSET: chacha20poly1305 blake2s x25519)
+# Usage: tools/check.sh [ASSET...]     (default: all; ASSET: chacha20poly1305 blake2s x25519 ed25519)
 # Each asset is checked on its own: its object, its Lake workspace assets/ASSET (which
 # compiles the shared sources in lean/ against that asset's artifact), its audit and its
-# statements. Steps for one asset only run when that asset is selected.
+# statements. Steps for one asset only run when that asset is selected. The asset ed25519 has two
+# builds, compact and fast, each with its own object and artifact module.
 set -eu
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -18,7 +19,7 @@ cd "$ROOT"
 LIB=${M0C_LIB:-$ROOT/..}
 export M0C_LIB="$LIB"
 [ -f "$LIB/src/m0crypto_chacha20poly1305.S" ] || { echo "library sources not found at $LIB (set M0C_LIB)" >&2; exit 1; }
-ALL_ASSETS="chacha20poly1305 blake2s x25519"
+ALL_ASSETS="chacha20poly1305 blake2s x25519 ed25519"
 ASSETS=${*:-$ALL_ASSETS}
 for a in $ASSETS; do
     case " $ALL_ASSETS " in *" $a "*) ;; *) echo "usage: tools/check.sh [$ALL_ASSETS]" >&2; exit 2 ;; esac
@@ -27,6 +28,16 @@ has() { case " $ASSETS " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 PATH="$HOME/.elan/bin:$PATH"
 KERNELS=$(grep -v '^#' tools/kernels.txt | grep .)
 artifact_path() { echo "lean/$(echo "$1" | tr . /).lean"; }
+# An asset's builds as OBJECT:ARTIFACT_MODULE:BUILD (BUILD empty for a single-build asset).
+units() {
+    case $1 in
+        ed25519) for b in compact fast; do
+            B=$(echo "$b" | sed 's/^c/C/; s/^f/F/')
+            echo "$LIB/build/lib/ed25519/$b/m0crypto_ed25519_$b.o:Ed25519$B:$b"
+        done ;;
+        *) echo "$LIB/build/lib/$1/m0crypto_$1.o:Release:" ;;
+    esac
+}
 
 if has chacha20poly1305; then
 echo "== 1. pinned build (ChaCha20 kernel fixtures)"
@@ -48,11 +59,22 @@ if has x25519; then
     cmp build/x25519.S "$LIB/src/x25519.S" || {
         echo "FAIL: src/x25519.S differs from tools/gen_x25519.py output" >&2; exit 1; }
 fi
+if has ed25519; then
+    # src/ed25519_compact.S and src/ed25519_fast.S are generated, like src/x25519.S.
+    for b in compact fast; do
+        python3 -I "$LIB/tools/gen_ed25519.py" "$b" "build/ed25519_$b.S"
+        cmp "build/ed25519_$b.S" "$LIB/src/ed25519_$b.S" || {
+            echo "FAIL: src/ed25519_$b.S differs from tools/gen_ed25519.py output" >&2; exit 1; }
+    done
+fi
 "$LIB/tools/build_lib.sh" $ASSETS > build/lib-check.txt 2>&1 || {
     cat build/lib-check.txt; echo "FAIL: release library" >&2; exit 1; }
 for a in $ASSETS; do
-    python3 -I tools/extract_release.py "$LIB/build/lib/$a/m0crypto_$a.o" \
-        "assets/$a/artifact/M0Crypto/Artifacts/Release.lean" --check
+    for u in $(units "$a"); do
+        m=$(echo "$u" | cut -d: -f2)
+        python3 -I tools/extract_release.py "${u%%:*}" "assets/$a/artifact/M0Crypto/Artifacts/$m.lean" \
+            --module "M0Crypto.Artifacts.$m" --check
+    done
 done
 grep -E '^(m0-crypto release asset|text_sha256|text_bytes)' build/lib-check.txt
 
@@ -85,7 +107,9 @@ done
 
 echo "== 4b. model decoder agrees with llvm-objdump on every release instruction"
 for a in $ASSETS; do
-    python3 -I tools/check_listing.py llvm-objdump "$LIB/build/lib/$a/m0crypto_$a.o" "$a"
+    for u in $(units "$a"); do
+        python3 -I tools/check_listing.py llvm-objdump "${u%%:*}" "$a" ${u##*:}
+    done
 done
 
 if has chacha20poly1305; then
@@ -100,6 +124,10 @@ if has x25519; then
 echo "== 4c. X25519 specification agrees with the library's test vectors (RFC 7748, Wycheproof)"
 python3 -I tools/spec_vectors.py "$LIB/tests/x25519_vectors.h"
 fi
+if has ed25519; then
+echo "== 4d. Ed25519 entries and internal routines of both builds in the model (tests, native)"
+(cd assets/ed25519 && lake build release_check && .lake/build/bin/release_check 2)
+fi
 
 echo "== 5. no admissions or custom axioms in sources"
 if grep -rnE '\b(sorry|admit|axiom|native_decide|implemented_by|extern)\b' lean/M0Crypto assets/*/artifact; then
@@ -113,8 +141,11 @@ echo "== 6. axiom audit"
 ALLOWED="(propext|Classical\.choice|Quot\.sound)"
 for a in $ASSETS; do
     echo "-- $a"
-    (cd "assets/$a" && lake env lean Audit.lean) > "$TMP/axioms-$a.txt"
-    cat "$TMP/axioms-$a.txt"
+    (cd "assets/$a" && lake env lean Audit.lean) > "$TMP/axioms-raw-$a.txt"
+    cat "$TMP/axioms-raw-$a.txt"
+    # Lean wraps a long report over several lines: join each continuation line to its report.
+    awk '/^\047/ && NR > 1 {print r; r = ""} {l = $0; if (r != "") {sub(/^ +/, "", l); r = r " " l} else r = l}
+         END {if (NR) print r}' "$TMP/axioms-raw-$a.txt" > "$TMP/axioms-$a.txt"
     for name in $(sed -n 's/^#print axioms \(M0Crypto[^ ]*\)$/\1/p' "assets/$a/Audit.lean"); do
         n=$(grep -c -F "'$name' " "$TMP/axioms-$a.txt" || true)
         if [ "$n" != 1 ]; then
@@ -152,17 +183,20 @@ if has blake2s; then
         "$LIB/build/lib/blake2s/text.bin" \
         "$LIB/build/test/test_blake2s.elf" m0c_blake2s_init,m0c_blake2s_update,m0c_blake2s_final
 fi
-# SBCS has no traced release call short enough to single-step, so a fixture covers it:
-# carry in and out 0 and 1, signed overflow, zero, Rdn = Rm.
-for src in fixtures/sbcs_steps.S "$LIB/tests/startup.S"; do
+# Fixtures cover forms no traced release call executes in a short call: SBCS (carry in and
+# out 0 and 1, signed overflow, zero, Rdn = Rm), and LSLS/LSRS by register, ASRS (immediate),
+# REV and ADD Rdn, PC (edge shift amounts, carries, register classes, both PC alignments).
+clang --target=thumbv6m-none-eabi -mcpu=cortex-m0plus -mthumb \
+    -c "$LIB/tests/startup.S" -o "$TMP/startup.S.o"
+for fx in sbcs ed25519_forms; do
     clang --target=thumbv6m-none-eabi -mcpu=cortex-m0plus -mthumb \
-        -c "$src" -o "$TMP/$(basename "$src").o"
+        -c "fixtures/${fx}_steps.S" -o "$TMP/$fx.o"
+    ld.lld -T "$LIB/tests/microbit.ld" --build-id=none \
+        -o "$TMP/$fx.elf" "$TMP/startup.S.o" "$TMP/$fx.o"
+    llvm-objcopy -O binary -j ".text.${fx}_fixture" "$TMP/$fx.o" "$TMP/$fx.bin"
+    python3 -I tools/qemu_steps.py "$FIRST" "${QEMU:-qemu-system-arm}" llvm-nm "$TMP/$fx.bin" \
+        "$TMP/$fx.elf" "${fx}_fixture"
 done
-ld.lld -T "$LIB/tests/microbit.ld" --build-id=none \
-    -o "$TMP/sbcs.elf" "$TMP/startup.S.o" "$TMP/sbcs_steps.S.o"
-llvm-objcopy -O binary -j .text.sbcs_fixture "$TMP/sbcs_steps.S.o" "$TMP/sbcs.bin"
-python3 -I tools/qemu_steps.py "$FIRST" "${QEMU:-qemu-system-arm}" llvm-nm "$TMP/sbcs.bin" \
-    "$TMP/sbcs.elf" sbcs_fixture
 # A whole m0c_x25519 call is too long to single-step: sampled windows instead
 # (prologue, one ladder step, each loop exit, epilogue).
 if has x25519; then

@@ -9,7 +9,7 @@ The contract of `m0c_fe_mulc_add`:
 The run (`run`) chains the piece lemmas: `pre` (push, `r12 = dst`, the literal `60833`
 read from the code bytes, `r6 = 0`), word 7 (`mulcWord 7 none 3 4 5`), `fold`, the seven
 chain steps (`chain_step_w`), `fin` (word 7 stored) and `pop {pc}`. The value comes from
-`X25519Reduce.mulc_add_nat`. `dst = a` or `dst = b` is covered by `Ok.dstA` / `Ok.dstB`
+`Field25519Reduce.mulc_add_nat`. `dst = a` or `dst = b` is covered by `Ok.dstA` / `Ok.dstB`
 (`X25519MulcChain.read_src`).
 
 Writes go to the pushed word and to `dst` only (`Wr`). The return address lies outside the
@@ -22,14 +22,16 @@ open M0Crypto.Armv6M (Word Reg LowReg State Mem addWithCarry read32 write32 slot
 open M0Crypto.Thumb
 open M0Crypto.Release (ReachW InRegion Region)
 open M0Crypto.Release.Frame (Disj InFrame toNat_add_ofNat sub_ofNat_toNat)
-open M0Crypto.Release.X25519Frame (FrameOk upd slot_byte)
+open M0Crypto.Release.Field25519Frame (FrameOk upd slot_byte)
 open M0Crypto.Release.X25519MulcWord (wAddr kVal mulcWord_run_w)
 open M0Crypto.Release.X25519MulcStep (sAddr)
-open M0Crypto.Release.X25519MulcEnds (pre_run_w fold_run_w fin_run_w pop_run_w)
+open M0Crypto.Release.X25519MulcEnds (pre_run_w fold_run_w fin_run_w)
 open M0Crypto.Release.X25519MulcChain
 open M0Crypto.Release.X25519MulcFacts
-open M0Crypto.Release.X25519Routines (Call Pre Post MulcAddSpec feVal mulcFrame)
-open M0Crypto.Release.X25519Carry (adc_nat)
+open M0Crypto.Release.Field25519Facts
+open M0Crypto.Release.Field25519Routines (Call Pre Post feVal)
+open M0Crypto.Release.X25519Routines (MulcAddSpec mulcFrame)
+open M0Crypto.Release.Field25519Carry (adc_nat)
 open M0Crypto.Thumb.ReleaseCheck.X25519 (feMulcAdd feMulcAddSize)
 
 /-- The routine's PCs. -/
@@ -228,7 +230,7 @@ theorem run (c : Call) (s : State) (hp : Pre feMulcAdd feMulcAddSize mulcFrame t
   obtain ⟨pb1, pb2⟩ := psum8 (ctx c (x3.regs 8)).B (fun _ => BitVec.isLt _)
   have hv' : psum (fun i => (F i).toNat) 7 + 2 ^ 224 * (y.reg 0).toNat =
       121666 * psum (ctx c (x3.regs 8)).A 7 + psum (ctx c (x3.regs 8)).B 7 + (x3.reg 3).toNat := hv
-  have hm := X25519Reduce.mulc_add_nat (feVal c.m0 c.a) (feVal c.m0 c.b) (x2.reg 4).toNat
+  have hm := Field25519Reduce.mulc_add_nat (feVal c.m0 c.a) (feVal c.m0 c.b) (x2.reg 4).toNat
     (x2.reg 3).toNat (psum (fun i => (F i).toNat) 7) (y.reg 0).toNat (feVal_lt _ _) (feVal_lt _ _)
     (by rw [fa, fb, pa1, pb1]; exact v2) (by rw [fa, fb, pa2, pb2, ← v3]; exact hv')
     (psum_lt (fun _ => BitVec.isLt _) 7)
@@ -253,7 +255,7 @@ theorem run (c : Call) (s : State) (hp : Pre feMulcAdd feMulcAddSize mulcFrame t
     rw [mt]; exact post_mem hF8 y h1 h2⟩
   have e1 : ((121666 * feVal c.m0 c.a + feVal c.m0 c.b : Nat) : Int) =
       121666 * (feVal c.m0 c.a : Int) + (feVal c.m0 c.b : Int) := by omega
-  show X25519Congr.ModP (feVal t.mem c.dst : Int) (121666 * (feVal c.m0 c.a : Int) + feVal c.m0 c.b)
+  show Field25519Congr.ModP (feVal t.mem c.dst : Int) (121666 * (feVal c.m0 c.a : Int) + feVal c.m0 c.b)
   rw [mt, fv, ← e1]
   exact hm.2
 

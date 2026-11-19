@@ -1,5 +1,6 @@
 import M0Crypto.Release.X25519MulcEnds
-import M0Crypto.Release.X25519Frame
+import M0Crypto.Release.Field25519Frame
+import M0Crypto.Release.Field25519Facts
 
 set_option linter.unusedSimpArgs false
 
@@ -26,32 +27,11 @@ open M0Crypto.Armv6M (Word Reg LowReg State Mem addWithCarry read32 write32 slot
 open M0Crypto.Thumb
 open M0Crypto.Release (ReachW InRegion)
 open M0Crypto.Release.Frame (Disj)
-open M0Crypto.Release.X25519Frame (FrameOk upd)
+open M0Crypto.Release.Field25519Frame (FrameOk upd)
 open M0Crypto.Release.X25519MulcWord (wAddr)
 open M0Crypto.Release.X25519MulcStep (sAddr SDist mulcStep_run_w)
 open M0Crypto.Release.X25519Macros (mulcStep)
-
-/-- Little-endian partial sum of `j` words. -/
-def psum (f : Nat → Nat) : Nat → Nat
-  | 0 => 0
-  | j + 1 => psum f j + 2 ^ (32 * j) * f j
-
-theorem psum_congr {f g : Nat → Nat} : ∀ {j : Nat}, (∀ i < j, f i = g i) → psum f j = psum g j
-  | 0, _ => rfl
-  | j + 1, h => by
-    simp only [psum]
-    rw [psum_congr (fun i hi => h i (by omega)), h j (by omega)]
-
-theorem psum_lt {f : Nat → Nat} (hf : ∀ i, f i < 2 ^ 32) : ∀ j, psum f j < 2 ^ (32 * j)
-  | 0 => by simp [psum]
-  | j + 1 => by
-    simp only [psum]
-    have ih := psum_lt hf j
-    have hj := hf j
-    have : 2 ^ (32 * j) * f j + 2 ^ (32 * j) ≤ 2 ^ (32 * j) * 2 ^ 32 := by
-      rw [← Nat.mul_succ]; exact Nat.mul_le_mul_left _ hj
-    rw [show 32 * (j + 1) = 32 * j + 32 by omega, Nat.pow_add]
-    omega
+open M0Crypto.Release.Field25519Facts (psum psum_congr psum_lt)
 
 /-- One chain step on the partial sums. -/
 theorem chain_nat (P S K L H Aj Bj SA SB q : Nat) (hinv : S + P * K = 121666 * SA + SB + q)
@@ -148,9 +128,9 @@ theorem chain_step_w {base : Word} (hb : base.toNat % 2 = 0) {Pc Wr : Word → P
   simp only [SDist, List.nodup_cons, List.mem_cons, List.mem_nil_iff, or_false, not_or] at hd'
   obtain ⟨-, ⟨-, -, a1, a2, a6, a7⟩, -⟩ := hd'
   have keep : ∀ x' : LowReg, x' ≠ a → x' ≠ 4 → x' ≠ 5 → y.reg x' = x.reg x' := fun x' h1 h2 h3 =>
-    ho' x'.toReg (toReg_ne_15 x') (by rw [ne_eq, X25519Mul.toReg_inj]; exact h1)
-      (by rw [ne_eq, show (4 : Reg) = LowReg.toReg 4 from rfl, X25519Mul.toReg_inj]; exact h2)
-      (by rw [ne_eq, show (5 : Reg) = LowReg.toReg 5 from rfl, X25519Mul.toReg_inj]; exact h3)
+    ho' x'.toReg (toReg_ne_15 x') (by rw [ne_eq, Field25519Mul.toReg_inj]; exact h1)
+      (by rw [ne_eq, show (4 : Reg) = LowReg.toReg 4 from rfl, Field25519Mul.toReg_inj]; exact h2)
+      (by rw [ne_eq, show (5 : Reg) = LowReg.toReg 5 from rfl, Field25519Mul.toReg_inj]; exact h3)
   have keepH : ∀ r : Reg, 8 ≤ r.val → r ≠ 15 → y.regs r = x.regs r := fun r h8 h15 =>
     ho' r h15 (lo_ne r h8 a) (lo_ne r h8 4) (lo_ne r h8 5)
   -- the two inputs read as at entry

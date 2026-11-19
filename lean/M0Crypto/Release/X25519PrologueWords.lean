@@ -21,8 +21,8 @@ open M0Crypto.Armv6M (Word Reg LowReg State Mem read32 write32 slot)
 open M0Crypto.Thumb
 open M0Crypto.Release (ReachW ReachS InRegion Region B)
 open M0Crypto.Release.Frame (Disj InFrame)
-open M0Crypto.Release.X25519Block
-open M0Crypto.Release.X25519Frame (FrameOk upd slot_byte)
+open M0Crypto.Release.Field25519Block
+open M0Crypto.Release.Field25519Frame (FrameOk upd slot_byte)
 open M0Crypto.Release.X25519Layout
 open M0Crypto.Release.X25519EntryCode
 open M0Crypto.Release.X25519Bytes (loadLe32)
@@ -46,7 +46,7 @@ theorem seqSize_even' : ∀ is : List Instr, seqSize is % 2 = 0
 /-- Code offsets below the end of the artifact are in the executed-PC region. -/
 theorem code_reg {base : Word} {o n : Nat} (h : o + n ≤ Artifacts.Release.size) :
     InRegion (Region base Artifacts.Release.size) base o n := fun j hj => by
-  have := X25519MulcFacts.inReg (base := base) (F := 0) (S := Artifacts.Release.size) (off := o) (n := n)
+  have := Field25519Facts.inReg (base := base) (F := 0) (S := Artifacts.Release.size) (off := o) (n := n)
     ⟨Nat.zero_le _, by omega, by have := X25519Op.size_lt; omega⟩ j hj
   rwa [BitVec.add_zero] at this
 
@@ -101,10 +101,10 @@ theorem loadLe32_reads {c : X25519.Ctx} {t : State} {i : Nat} (hi : i < 8) {rb :
   rcases hrb with ⟨rfl, -⟩ | ⟨rfl, -⟩
   · refine blockReads_chk _ (X25519Bytes.loadLe32_falls _ _ _ _) (loadLe32_chk i hi).1 fun q hq o ho => ?_
     rcases List.mem_singleton.mp hq with rfl
-    rw [← X25519Mem.toReg1, hp]; exact hreg o ho
+    rw [← Field25519Mem.toReg1, hp]; exact hreg o ho
   · refine blockReads_chk _ (X25519Bytes.loadLe32_falls _ _ _ _) (loadLe32_chk i hi).2 fun q hq o ho => ?_
     rcases List.mem_singleton.mp hq with rfl
-    rw [← X25519Mem.toReg2, hp]; exact hreg o ho
+    rw [← Field25519Mem.toReg2, hp]; exact hreg o ho
 
 /-- `X25519Bytes.loadLe32_run_w` with the read bound. -/
 theorem loadLe32_run_r {base p : Word} (hb : base.toNat % 2 = 0) {Pc Wr Rd : Word → Prop} {t : State}
@@ -142,7 +142,7 @@ theorem in_byte {p : Word} (hd : Disj p 32 c.fp X25519.stackBytes) {F : Nat → 
     (fr : FrameOk (E c) NW (mP c) F m) {j : Nat} (hj : j < 32) :
     m (p + BitVec.ofNat 32 j) = c.m0 (p + BitVec.ofNat 32 j) := by
   have hn : ¬ Region c.fp X25519.stackBytes (p + BitVec.ofNat 32 j) :=
-    fun h => X25519MulcFacts.region_ne hd h j hj rfl
+    fun h => Field25519Facts.region_ne hd h j hj rfl
   rw [fr.out _ fun hi => hn (frame_inwin hi), mP_out hn]
 
 /-- The four loaded bytes of input word `i` are `leWord` of the input bytes. -/
@@ -177,15 +177,15 @@ theorem scalarWord_w {i : Nat} (hi : i < 8) {off : Nat} {s : State} {F : Nat →
   rw [seqSize_append] at hend
   obtain ⟨hL, hA⟩ := hseq
   refine loadLe32_run_r hb0 (by decide) (by decide) (by decide) (by omega) hL ho hpc
-    (p := c.scalar) (by rw [X25519Mem.toReg1]; exact r1)
-    (loadLe32_reads hi (Or.inl ⟨rfl, rfl⟩) (by rw [X25519Mem.toReg1]; exact r1))
+    (p := c.scalar) (by rw [Field25519Mem.toReg1]; exact r1)
+    (loadLe32_reads hi (Or.inl ⟨rfl, rfl⟩) (by rw [Field25519Mem.toReg1]; exact r1))
     (hPc _ _ (by omega) (by omega)) fun t1 pc1 m1 o1 v1 => ?_
   have hw : (t1.regs 4).toNat = X25519Decode.leWord c.scalarB i := by
-    rw [X25519Mem.toReg4] at v1; rw [v1]; exact load_word hv.scalarS fr hi
+    rw [Field25519Mem.toReg4] at v1; rw [v1]; exact load_word hv.scalarS fr hi
   have ho1 : (off + seqSize (loadLe32 4 3 1 (4 * i))) % 2 = 0 := by
     have := seqSize_even' (loadLe32 4 3 1 (4 * i)); omega
   have o1' : ∀ r : Reg, r ≠ 3 → r ≠ 4 → r ≠ 15 → t1.regs r = s.regs r := fun r h3 h4 h15 =>
-    o1 r (by rw [X25519Mem.toReg4]; exact h4) (by rw [X25519Mem.toReg3]; exact h3) fun e => h15 (Fin.ext e)
+    o1 r (by rw [Field25519Mem.toReg4]; exact h4) (by rw [Field25519Mem.toReg3]; exact h3) fun e => h15 (Fin.ext e)
   have sp1 : (execAll (adjK i) t1).regs 13 = E c := by
     rw [adjK_other _ _ (by decide) (by decide) (by decide), o1' 13 (by decide) (by decide) (by decide), sp]
   refine ReachR.blockRuns hb0 _ _ pc1 ho1 hA (by rw [List.all_append, adjK_falls]; rfl)
@@ -196,7 +196,7 @@ theorem scalarWord_w {i : Nat} (hi : i < 8) {off : Nat} {s : State} {F : Nat →
     (hPc _ _ (by omega) (by omega)) fun t pct ⟨spt, ot, frt⟩ => ?_
   · subst hu
     exact strE hv hWr _ fr (by rw [execAll_mem _ _ (adjK_reg i).2, m1]) 4 (k := sK / 4 + i) (is := [])
-      (by simp only [sK, NW, LFRAME]; omega) sp1 (by rw [X25519Mem.toReg4])
+      (by simp only [sK, NW, LFRAME]; omega) sp1 (by rw [Field25519Mem.toReg4])
       fun t spt frt ot => ⟨accAll_nil _ _, spt, ot, frt⟩
   · refine cont t _ ?_ ?_ spt ?_ frt
     · rw [seqSize_append, ← Nat.add_assoc]; exact pct
@@ -222,15 +222,15 @@ theorem pointWord_w {i : Nat} (hi : i < 8) {off : Nat} {s : State} {F : Nat → 
   rw [seqSize_append] at hend
   obtain ⟨hL, hA⟩ := hseq
   refine loadLe32_run_r hb0 (by decide) (by decide) (by decide) (by omega) hL ho hpc
-    (p := c.point) (by rw [X25519Mem.toReg2]; exact r2)
-    (loadLe32_reads hi (Or.inr ⟨rfl, rfl⟩) (by rw [X25519Mem.toReg2]; exact r2))
+    (p := c.point) (by rw [Field25519Mem.toReg2]; exact r2)
+    (loadLe32_reads hi (Or.inr ⟨rfl, rfl⟩) (by rw [Field25519Mem.toReg2]; exact r2))
     (hPc _ _ (by omega) (by omega)) fun t1 pc1 m1 o1 v1 => ?_
   have hw : (t1.regs 4).toNat = X25519Decode.leWord c.pointB i := by
-    rw [X25519Mem.toReg4] at v1; rw [v1]; exact load_word hv.pointS fr hi
+    rw [Field25519Mem.toReg4] at v1; rw [v1]; exact load_word hv.pointS fr hi
   have ho1 : (off + seqSize (loadLe32 4 3 2 (4 * i))) % 2 = 0 := by
     have := seqSize_even' (loadLe32 4 3 2 (4 * i)); omega
   have o1' : ∀ r : Reg, r ≠ 3 → r ≠ 4 → r ≠ 15 → t1.regs r = s.regs r := fun r h3 h4 h15 =>
-    o1 r (by rw [X25519Mem.toReg4]; exact h4) (by rw [X25519Mem.toReg3]; exact h3) fun e => h15 (Fin.ext e)
+    o1 r (by rw [Field25519Mem.toReg4]; exact h4) (by rw [Field25519Mem.toReg3]; exact h3) fun e => h15 (Fin.ext e)
   have sp1 : (execAll (adjU i) t1).regs 13 = E c := by
     rw [adjU_other _ _ (by decide) (by decide), o1' 13 (by decide) (by decide) (by decide), sp]
   refine ReachR.blockRuns hb0 _ _ pc1 ho1 hA (by rw [List.all_append, adjU_falls]; rfl)
@@ -242,10 +242,10 @@ theorem pointWord_w {i : Nat} (hi : i < 8) {off : Nat} {s : State} {F : Nat → 
     (hPc _ _ (by omega) (by omega)) fun t pct ⟨spt, ot, frt⟩ => ?_
   · subst hu
     refine strE hv hWr _ fr (by rw [execAll_mem _ _ (adjU_reg i).2, m1]) 4 (k := sX1 / 4 + i)
-      (by simp only [sX1, NW, LFRAME]; omega) sp1 (by rw [X25519Mem.toReg4])
+      (by simp only [sX1, NW, LFRAME]; omega) sp1 (by rw [Field25519Mem.toReg4])
       fun t2 sp2 fr2 o2 => ?_
     exact strE hv hWr _ fr2 rfl 4 (k := sX3 / 4 + i) (is := [])
-      (by simp only [sX3, NW, LFRAME]; omega) sp2 (by rw [X25519Mem.toReg4, o2 4 (by decide)])
+      (by simp only [sX3, NW, LFRAME]; omega) sp2 (by rw [Field25519Mem.toReg4, o2 4 (by decide)])
       fun t spt frt ot => ⟨accAll_nil _ _, spt, fun r h15 => by show t.regs r = _; rw [ot r h15, o2 r h15], frt⟩
   · refine cont t _ ?_ ?_ spt ?_ frt
     · rw [seqSize_append, ← Nat.add_assoc]; exact pct

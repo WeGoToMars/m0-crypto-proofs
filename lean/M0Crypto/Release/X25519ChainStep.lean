@@ -22,8 +22,8 @@ namespace M0Crypto.Release.X25519ChainStep
 open M0Crypto.Armv6M (Word State Mem)
 open M0Crypto.Thumb
 open M0Crypto.Release (ReachW Region B)
-open M0Crypto.Release.X25519Routines (feVal)
-open M0Crypto.Release.X25519Congr (ModP)
+open M0Crypto.Release.Field25519Routines (feVal)
+open M0Crypto.Release.Field25519Congr (ModP)
 open M0Crypto.Release.X25519Layout
 open M0Crypto.Release.X25519Op
 open M0Crypto.Release.X25519OpRun
@@ -102,7 +102,7 @@ theorem stepChain_w {Q : State → Prop} {s : State} {o : Nat} (st : CStep) (hok
       rw [if_neg (by decide), if_neg (by decide)] at k
       refine k u (by rw [upc]; rfl) e.body ?_ k1
       show ModP _ (cv c s.mem a ^ (2 ^ 1))
-      exact v1.trans (ModP.of_eq (by rw [Nat.pow_one, X25519Congr.mul_self_eq_sq]))
+      exact v1.trans (ModP.of_eq (by rw [Nat.pow_one, Field25519Congr.mul_self_eq_sq]))
     · subst h
       rw [if_pos rfl] at hseq hend k
       refine sqr_opW hv hcode hWr hPO hseq.2 (by omega) (by omega)
@@ -113,7 +113,7 @@ theorem stepChain_w {Q : State → Prop} {s : State} {o : Nat} (st : CStep) (hok
       refine k t (by rw [tpc, Nat.add_assoc]; rfl) e2.body ?_ (KeepDT.trans k1 fun y h1 h2 _ => e2.keep y h1 h2)
       show ModP _ (cv c s.mem a ^ (2 ^ 2))
       refine v2.trans ((ModP.mul v1 v1).trans (ModP.of_eq ?_))
-      rw [← sq_pow _ 1, Nat.pow_one, X25519Congr.mul_self_eq_sq]
+      rw [← sq_pow _ 1, Nat.pow_one, Field25519Congr.mul_self_eq_sq]
     · rw [if_neg (by omega), if_pos h] at hseq hend k
       refine sqrLoop_w hv hcode hWr hPO (cslot_ok d) (by omega) hok.2 hseq.2 (by omega) (by omega)
         (by omega) upc e.body fun t tpc tb tv tk => k t (by rw [tpc, Nat.add_assoc]) tb ?_ (KeepDT.trans k1 tk)

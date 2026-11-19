@@ -19,7 +19,7 @@ open M0Crypto.Release (ReachW InRegion Region B)
 open M0Crypto.Release.Frame (toNat_add_ofNat)
 open M0Crypto.Release.X25519Layout
 open M0Crypto.Release.X25519EntryCode
-open M0Crypto.Release.X25519Block (AccAll AccOk accAll_cons accAll_nil wordAccesses_ok)
+open M0Crypto.Release.Field25519Block (AccAll AccOk accAll_cons accAll_nil wordAccesses_ok)
 
 /-! ## Zero stores -/
 
@@ -93,9 +93,9 @@ theorem stmZ_exec (s : State) (hz : Z5 s) :
     refine congrArg _ ?_
     simp only [List.cons.injEq]
     refine ⟨?_, ?_, ?_, ?_, ?_, trivial⟩ <;> first | rfl | exact hz _ (by decide) (by decide)
-  · simp [Instr.next, Instr.exec, bitCount_3e, bitCount_62, State.setReg, State.reg, X25519Mem.toReg0]
+  · simp [Instr.next, Instr.exec, bitCount_3e, bitCount_62, State.setReg, State.reg, Field25519Mem.toReg0]
   · have h15' : r ≠ 15 := fun e => h15 (by rw [e]; rfl)
-    simp [Instr.next, Instr.exec, State.setReg, X25519Mem.toReg0, h0, h15']
+    simp [Instr.next, Instr.exec, State.setReg, Field25519Mem.toReg0, h0, h15']
   · exact execAll_pc [stmZ] s rfl
 
 theorem replicate_falls (n : Nat) : (List.replicate n stmZ).all Instr.falls = true := by
@@ -130,9 +130,9 @@ theorem zeros_run_w {base : Word} (hb : base.toNat % 2 = 0) {Pc Wr : Word → Pr
     rw [hs1] at hseq'
     have hwa : ∀ y, Region a 20 y → Wr y := fun y hy =>
       hw y (by show (y - a).toNat < _; have : (y - a).toNat < 20 := hy; omega)
-    refine X25519Block.ReachW.blockAcc hb [stmZ] off hpc ho hseq'.1 rfl
+    refine Field25519Block.ReachW.blockAcc hb [stmZ] off hpc ho hseq'.1 rfl
       (accAll_cons (fun x hx => ?_) (accAll_nil _ _)) (hr.prefix (by omega)) ?_
-    · simp only [Instr.accesses, bitCount_3e, State.reg, X25519Mem.toReg0, h0] at hx
+    · simp only [Instr.accesses, bitCount_3e, State.reg, Field25519Mem.toReg0, h0] at hx
       refine wordAccesses_ok ha (fun _ i hi q hq => hwa _ ?_) x hx
       rw [ofNat_add_assoc]
       show ((a + BitVec.ofNat 32 (4 * i + q)) - a).toNat < 20
@@ -187,24 +187,24 @@ theorem wipePre_exec (s : State) :
     (∀ r : Reg, 6 ≤ r.val → r.val ≠ 13 → r.val ≠ 15 → (execAll wipePre s).regs r = s.regs r) := by
   have hc : (37 : Nat) = CALLEE / 4 := rfl
   refine ⟨?_, ?_, fun r h1 h5 => ?_, fun r h6 h13 h15 => ?_⟩
-  · simp [wipePre, execAll, Instr.next, Instr.exec, State.setReg, State.sp, X25519Mem.toReg0,
-      X25519Mem.toReg1, X25519Mem.toReg2, X25519Mem.toReg3, X25519Mem.toReg4, X25519Mem.toReg5, CALLEE]
-  · simp [wipePre, execAll, Instr.next, Instr.exec, State.setReg, State.sp, X25519Mem.toReg0,
-      X25519Mem.toReg1, X25519Mem.toReg2, X25519Mem.toReg3, X25519Mem.toReg4, X25519Mem.toReg5, CALLEE]
+  · simp [wipePre, execAll, Instr.next, Instr.exec, State.setReg, State.sp, Field25519Mem.toReg0,
+      Field25519Mem.toReg1, Field25519Mem.toReg2, Field25519Mem.toReg3, Field25519Mem.toReg4, Field25519Mem.toReg5, CALLEE]
+  · simp [wipePre, execAll, Instr.next, Instr.exec, State.setReg, State.sp, Field25519Mem.toReg0,
+      Field25519Mem.toReg1, Field25519Mem.toReg2, Field25519Mem.toReg3, Field25519Mem.toReg4, Field25519Mem.toReg5, CALLEE]
   · have hr : r = 1 ∨ r = 2 ∨ r = 3 ∨ r = 4 ∨ r = 5 := by
       rcases r with ⟨v, hv⟩
       simp only at h1 h5
       rcases (by omega : v = 1 ∨ v = 2 ∨ v = 3 ∨ v = 4 ∨ v = 5) with rfl | rfl | rfl | rfl | rfl <;>
         simp [Fin.ext_iff]
     rcases hr with rfl | rfl | rfl | rfl | rfl <;>
-      simp [wipePre, execAll, Instr.next, Instr.exec, State.setReg, X25519Mem.toReg0, X25519Mem.toReg1,
-        X25519Mem.toReg2, X25519Mem.toReg3, X25519Mem.toReg4, X25519Mem.toReg5]
+      simp [wipePre, execAll, Instr.next, Instr.exec, State.setReg, Field25519Mem.toReg0, Field25519Mem.toReg1,
+        Field25519Mem.toReg2, Field25519Mem.toReg3, Field25519Mem.toReg4, Field25519Mem.toReg5]
   · have ne : ∀ k : Reg, k.val < 6 → r ≠ k := fun k hk e => by
       rw [e] at h6; omega
     have n13 : r ≠ 13 := fun e => h13 (by rw [e]; rfl)
     have n15 : r ≠ 15 := fun e => h15 (by rw [e]; rfl)
-    simp [wipePre, execAll, Instr.next, Instr.exec, State.setReg, X25519Mem.toReg0, X25519Mem.toReg1,
-      X25519Mem.toReg2, X25519Mem.toReg3, X25519Mem.toReg4, X25519Mem.toReg5,
+    simp [wipePre, execAll, Instr.next, Instr.exec, State.setReg, Field25519Mem.toReg0, Field25519Mem.toReg1,
+      Field25519Mem.toReg2, Field25519Mem.toReg3, Field25519Mem.toReg4, Field25519Mem.toReg5,
       ne 0 (by decide), ne 1 (by decide), ne 2 (by decide), ne 3 (by decide), ne 4 (by decide),
       ne 5 (by decide), n13, n15]
 
@@ -227,7 +227,7 @@ theorem wipe_run_w {base lo : Word} (hb : base.toNat % 2 = 0) {Pc Wr : Word → 
   rw [seqAt_append, Bool.and_eq_true] at hseq
   rw [seqSize_append] at hr cont
   have hpre : seqSize wipePre = 14 := rfl
-  refine ReachW.block hb wipePre off hpc ho hseq.1 rfl (X25519Mul.alignedAll_regOnly _ _ rfl)
+  refine ReachW.block hb wipePre off hpc ho hseq.1 rfl (Field25519Mul.alignedAll_regOnly _ _ rfl)
     (WritesTo.of_noWritesMem _ _ rfl Wr) (hr.prefix (by omega)) ?_
   obtain ⟨u13, u0, uz, uo⟩ := wipePre_exec s
   have um : (execAll wipePre s).mem = s.mem := execAll_mem _ _ rfl

@@ -12,7 +12,7 @@
 # The sandbox hides /home, /root and /tmp, and the asset workspaces read ../../lean, so under
 # bwrap the proofs tree has to lie outside those directories. It judges one asset at a time.
 #
-# Usage: tools/comparator.sh [ASSET...]     (default: chacha20poly1305 blake2s x25519)
+# Usage: tools/comparator.sh [ASSET...]     (default: chacha20poly1305 blake2s x25519 ed25519)
 set -eu
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 . "$ROOT/tools/claims.sh"
@@ -21,7 +21,7 @@ SANDBOX=--inadvisably-no-sandbox
 command -v "${COMPARATOR_BWRAP:-bwrap}" > /dev/null 2>&1 && SANDBOX=
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
-for a in ${*:-chacha20poly1305 blake2s x25519}; do
+for a in ${*:-chacha20poly1305 blake2s x25519 ed25519}; do
     audit="$ROOT/assets/$a/Audit.lean"
     quote() { sed 's/.*/"&"/' | paste -s -d, -; }
     printf '{"challenge_module": "Challenge", "solution_module": "%s",\n "theorem_names": [%s],\n "permitted_axioms": [%s]}\n' \

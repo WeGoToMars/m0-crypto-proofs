@@ -14,7 +14,7 @@ save area holds `savedReg i`.
 `epilogue_run_w` runs the segment, generic in its SP: the eight registers come back from the
 save area, SP ends at `F + SAVED`, `r0` and `r12` are zero, `r1`-`r3` are unchanged, memory is
 unchanged, and the PC is the saved `lr` with bit 0 cleared (the return; the `pop {pc}` is the
-last instruction executed in the region, as in `X25519MulcEnds.pop_run_w`).
+last instruction executed in the region, as in `Field25519Facts.pop_run_w`).
 -/
 
 namespace M0Crypto.Release.X25519OutEpi
@@ -177,10 +177,10 @@ theorem epilogue_run_w {base F : Word} (hb : base.toNat % 2 = 0) {Pc Wr : Word �
     have hsplit : epiA = [.addSp (BitVec.ofNat 7 ((CALLEE + LFRAME) / 4)), .movImm 0 0, .movHi 12 0] ++
         [.pop 0xf0 false] ++ [.movHi 8 4, .movHi 9 5, .movHi 10 6, .movHi 11 7] := rfl
     rw [hsplit, alignedAll_append, alignedAll_append,
-      X25519Mul.alignedAll_regOnly [.addSp (BitVec.ofNat 7 ((CALLEE + LFRAME) / 4)), .movImm 0 0, .movHi 12 0] _ rfl,
-      X25519Mul.alignedAll_regOnly [.movHi 8 4, .movHi 9 5, .movHi 10 6, .movHi 11 7] _ rfl]
+      Field25519Mul.alignedAll_regOnly [.addSp (BitVec.ofNat 7 ((CALLEE + LFRAME) / 4)), .movImm 0 0, .movHi 12 0] _ rfl,
+      Field25519Mul.alignedAll_regOnly [.movHi 8 4, .movHi 9 5, .movHi 10 6, .movHi 11 7] _ rfl]
     simp only [Bool.true_and, Bool.and_true, alignedAll, Instr.accesses, State.sp, e3]
-    exact X25519Block.wordAccesses_aligned hF4
+    exact Field25519Block.wordAccesses_aligned hF4
   · obtain ⟨u0, u12, u13, u1, u2, u3, u8, u9, u10, u11⟩ := epiA_regs s hF
     have um := epiA_mem s
     have upc : (execAll epiA s).pc = base + BitVec.ofNat 32 (off + 16) := by
@@ -194,7 +194,7 @@ theorem epilogue_run_w {base F : Word} (hb : base.toNat % 2 = 0) {Pc Wr : Word �
       rw [u13, BitVec.toNat_add]; have := F.isLt
       simp only [BitVec.toNat_ofNat]; omega
     refine ReachW.step hb (off + 16) (.pop 0xf0 true) upc (by omega) hs2.1 hs2.2
-      (by simpa [Instr.accesses, State.sp, bitCount_240] using X25519Block.wordAccesses_aligned (k := .read) (n := 5) hu4)
+      (by simpa [Instr.accesses, State.sp, bitCount_240] using Field25519Block.wordAccesses_aligned (k := .read) (n := 5) hu4)
       (popPC_exec u hlr')
       (fun y ⟨a, ha, hw, _⟩ => by
         simp [Instr.accesses, wordAccesses] at ha; obtain ⟨_, _, rfl⟩ := ha; cases hw)

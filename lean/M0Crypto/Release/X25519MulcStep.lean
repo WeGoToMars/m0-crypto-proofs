@@ -13,9 +13,9 @@ to word `i` from the pointer in `r12`, and the high word is left in `a` as the n
 namespace M0Crypto.Release.X25519MulcStep
 open M0Crypto.Armv6M (Word Reg LowReg State addWithCarry read32 write32)
 open M0Crypto.Thumb
-open M0Crypto.Release.X25519Mem (regs_strImm mem_strImm)
+open M0Crypto.Release.Field25519Mem (regs_strImm mem_strImm)
 open M0Crypto.Release.InstrNext (regs_movHi)
-open M0Crypto.Release.X25519Block
+open M0Crypto.Release.Field25519Block
 open M0Crypto.Release.X25519MulcWord
 open M0Crypto.Release.X25519Macros (mulcWord mulcStep)
 
@@ -101,7 +101,7 @@ theorem mulcStep_run_w {base : Word} (hb : base.toNat % 2 = 0) {Pc Wr : Word →
   have ha5 : a.toReg ≠ 5 := by
     have h := hd'
     simp only [Dist, List.nodup_cons, List.mem_cons, List.mem_nil_iff, or_false, not_or] at h
-    exact fun e => h.1.2.1 (by rw [← X25519Mul.toReg_inj]; exact e)
+    exact fun e => h.1.2.1 (by rw [← Field25519Mul.toReg_inj]; exact e)
   refine cont _ (x1.reg 4) ?_ ?_ ?_ ?_
   · rw [execAll_pc _ _ (by rfl), ← hx1, execAll_pc _ _ hfw, hpc, ofNat_add_assoc, ofNat_add_assoc,
       seqSize_append]

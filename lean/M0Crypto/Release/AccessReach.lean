@@ -7,6 +7,8 @@ open M0Crypto.Armv6M (Word State)
 open M0Crypto.Thumb
 open M0Crypto.Release
 
+variable {B : List (BitVec 8)} {BS : Nat} [CodeBytes B BS]
+
 /-- Every accessed byte obeys a condition on its source instruction and kind. -/
 def EventAccessesTo (allowed : Word → Kind → Word → Prop) (tr : List Event) : Prop :=
   ∀ e ∈ tr, ∀ a ∈ e.accesses, ∀ k < a.width,
@@ -40,7 +42,7 @@ theorem traceAll_pcBetween (base : Word) (lower upper off : Nat) (is : List Inst
   refine ⟨off + j, by omega, by omega, ?_⟩
   rw [hpc, hp, ofNat_add_assoc]
 
-def ReachEvents (base : Word) (allowed : Word → Kind → Word → Prop)
+def ReachEvents [CodeBytes B BS] (base : Word) (allowed : Word → Kind → Word → Prop)
     (s : State) (Q : State → Prop) : Prop :=
   ∃ n t tr, runH B base n s = .ok (t, tr) ∧ EventAccessesTo allowed tr ∧ Q t
 
@@ -110,7 +112,7 @@ theorem ReachEvents.block {base : Word} {allowed : Word → Kind → Word → Pr
     (hq : ReachEvents base allowed (execAll is s) Q) : ReachEvents base allowed s Q := by
   obtain ⟨n, u, tr, hr, ht, hq⟩ := hq
   refine ⟨is.length + n, u, traceAll is s ++ tr, ?_, ?_, hq⟩
-  · rw [runH_block hb (by rw [B_len]; decide) is off s hpc ho hseq hf ha, hr]
+  · rw [runH_block hb B_lt is off s hpc ho hseq hf ha, hr]
   · intro e he a ha k hk
     rcases List.mem_append.mp he with he | he
     · exact hacc e he a ha k hk
@@ -155,7 +157,7 @@ theorem ReachEvents.step {base : Word} {allowed : Word → Kind → Word → Pro
       allowed s.pc a.kind (a.addr + BitVec.ofNat 32 k))
     (hq : ReachEvents base allowed s1 Q) : ReachEvents base allowed s Q := by
   obtain ⟨n, u, tr, hr, ht, hq⟩ := hq
-  have hs := stepH_of_instr hb (by rw [B_len]; decide) hpc ho hi hsz ha hex
+  have hs := stepH_of_instr hb B_lt hpc ho hi hsz ha hex
   refine ⟨n + 1, u, ⟨s.pc, i, i.accesses s⟩ :: tr, ?_, ?_, hq⟩
   · rw [runH_one_step n hs, hr]
   · intro e he a ha k hk
@@ -166,7 +168,7 @@ theorem ReachEvents.step {base : Word} {allowed : Word → Kind → Word → Pro
 /-- A conditional branch at `off` with target offset `tgt` for `ReachEvents`. -/
 theorem ReachEvents.bcond {base : Word} {allowed : Word → Kind → Word → Prop} {s : State} {Q : State → Prop} (hb : base.toNat % 2 = 0) (off tgt : Nat)
     (cond : BitVec 4) (imm : BitVec 8) (hpc : s.pc = base + BitVec.ofNat 32 off) (ho : off % 2 = 0)
-    (hi : instrAt B off = some (.bcond cond imm)) (hsz : off + 2 ≤ Artifacts.Release.size)
+    (hi : instrAt B off = some (.bcond cond imm)) (hsz : off + 2 ≤ BS)
     (ht : BitVec.ofNat 32 off + 4#32 + (imm ++ 0#1).signExtend 32 = BitVec.ofNat 32 tgt)
     (hT : condPassed cond s = true → ReachEvents base allowed (s.setReg 15 (base + BitVec.ofNat 32 tgt)) Q)
     (hF : condPassed cond s = false → ReachEvents base allowed (s.setReg 15 (base + BitVec.ofNat 32 (off + 2))) Q) :
@@ -188,7 +190,7 @@ theorem ReachEvents.bcond {base : Word} {allowed : Word → Kind → Word → Pr
 /-- An unconditional branch at `off` with target offset `tgt` for `ReachEvents`. -/
 theorem ReachEvents.b {base : Word} {allowed : Word → Kind → Word → Prop} {s : State} {Q : State → Prop} (hb : base.toNat % 2 = 0) (off tgt : Nat)
     (imm : BitVec 11) (hpc : s.pc = base + BitVec.ofNat 32 off) (ho : off % 2 = 0)
-    (hi : instrAt B off = some (.b imm)) (hsz : off + 2 ≤ Artifacts.Release.size)
+    (hi : instrAt B off = some (.b imm)) (hsz : off + 2 ≤ BS)
     (ht : BitVec.ofNat 32 off + 4#32 + (imm ++ 0#1).signExtend 32 = BitVec.ofNat 32 tgt)
     (hq : ReachEvents base allowed (s.setReg 15 (base + BitVec.ofNat 32 tgt)) Q) : ReachEvents base allowed s Q := by
   apply ReachEvents.step hb off _ hpc ho hi (by rw [B_len]; exact hsz) (by simp [Instr.accesses])
@@ -199,7 +201,7 @@ theorem ReachEvents.b {base : Word} {allowed : Word → Kind → Word → Prop} 
 /-- A branch-with-link at `off` with target offset `tgt` for `ReachEvents`. -/
 theorem ReachEvents.bl {base : Word} {allowed : Word → Kind → Word → Prop} {s : State} {Q : State → Prop} (hb : base.toNat % 2 = 0) (off tgt : Nat)
     (imm : BitVec 25) (hpc : s.pc = base + BitVec.ofNat 32 off) (ho : off % 2 = 0)
-    (hi : instrAt B off = some (.bl imm)) (hsz : off + 4 ≤ Artifacts.Release.size)
+    (hi : instrAt B off = some (.bl imm)) (hsz : off + 4 ≤ BS)
     (ht : BitVec.ofNat 32 off + 4#32 + imm.signExtend 32 = BitVec.ofNat 32 tgt)
     (hq : ReachEvents base allowed ((s.setReg 14 ((base + BitVec.ofNat 32 (off + 4)) ||| 1#32)).setReg 15
       (base + BitVec.ofNat 32 tgt)) Q) : ReachEvents base allowed s Q := by

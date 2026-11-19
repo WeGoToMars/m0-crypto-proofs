@@ -2,7 +2,8 @@
 """Compare the Lean model's decoding of the release artifact with llvm-objdump.
 
 Runs lean/DumpListing.lean (the model's decoder and renderer, Thumb/Listing.lean) in the
-asset's Lake workspace (assets/ASSET, whose artifact is that object's .text) and
+asset's Lake workspace (assets/ASSET, whose artifact is that object's .text), or for an
+asset with several builds lean/DumpListingASSET.lean with the build's name, and
 `llvm-objdump -d` on the asset's release object, normalises both, and requires
 the same instruction at the same offset for every instruction of every code range.
 Branch lines compare the target address only; PC-relative loads also compare the
@@ -13,7 +14,7 @@ It also requires every direct branch to target a listed instruction. The compari
 does not cover an offset inside a `bl` or a literal pool, and with this no branch
 leads to one.
 
-Usage: check_listing.py OBJDUMP OBJECT ASSET
+Usage: check_listing.py OBJDUMP OBJECT ASSET [BUILD]
 """
 import re
 import subprocess
@@ -49,8 +50,9 @@ def objdump_lines(objdump, obj):
     return res
 
 
-def lean_lines(asset):
-    out = subprocess.run(["lake", "env", "lean", "--run", str(ROOT / "lean/DumpListing.lean")],
+def lean_lines(asset, build):
+    dump = f"lean/DumpListing{asset.capitalize()}.lean" if build else "lean/DumpListing.lean"
+    out = subprocess.run(["lake", "env", "lean", "--run", str(ROOT / dump)] + ([build] if build else []),
                          cwd=ROOT / "assets" / asset,
                          check=True, capture_output=True, text=True).stdout
     res = {}
@@ -63,9 +65,9 @@ def lean_lines(asset):
 
 
 def main(argv):
-    if len(argv) != 4 or not (ROOT / "assets" / argv[3]).is_dir():
+    if len(argv) not in (4, 5) or not (ROOT / "assets" / argv[3]).is_dir():
         sys.exit(__doc__)
-    want, got = objdump_lines(argv[1], argv[2]), lean_lines(argv[3])
+    want, got = objdump_lines(argv[1], argv[2]), lean_lines(argv[3], argv[4] if len(argv) == 5 else None)
     bad = [o for o in sorted(set(want) | set(got)) if want.get(o) != got.get(o)]
     for o in bad[:20]:
         print(f"  0x{o:x}: objdump {want.get(o)!r}  model {got.get(o)!r}")

@@ -483,6 +483,8 @@ sha256 4cd0ad9f849b29435dcf34656b3590f5db5e7e7a3d5d4744e2c9551e44d59f16
 inductive M0Crypto.Thumb.DpOp : Type
   | M0Crypto.Thumb.DpOp.ands : M0Crypto.Thumb.DpOp
   | M0Crypto.Thumb.DpOp.eors : M0Crypto.Thumb.DpOp
+  | M0Crypto.Thumb.DpOp.lsls : M0Crypto.Thumb.DpOp
+  | M0Crypto.Thumb.DpOp.lsrs : M0Crypto.Thumb.DpOp
   | M0Crypto.Thumb.DpOp.adcs : M0Crypto.Thumb.DpOp
   | M0Crypto.Thumb.DpOp.sbcs : M0Crypto.Thumb.DpOp
   | M0Crypto.Thumb.DpOp.rors : M0Crypto.Thumb.DpOp
@@ -492,7 +494,7 @@ inductive M0Crypto.Thumb.DpOp : Type
   | M0Crypto.Thumb.DpOp.orrs : M0Crypto.Thumb.DpOp
   | M0Crypto.Thumb.DpOp.muls : M0Crypto.Thumb.DpOp
   | M0Crypto.Thumb.DpOp.mvns : M0Crypto.Thumb.DpOp
-sha256 2e6dd65fd557904c63e4096ad5c54cef0f7cedf713f8350400f28a80b196a9de
+sha256 45b747affadc2716661178c6a8339be47a352dfe5fdc6c0c2056f5564a69e8b6
 inductive M0Crypto.Thumb.MemOp : Type
   | M0Crypto.Thumb.MemOp.str : M0Crypto.Thumb.MemOp
   | M0Crypto.Thumb.MemOp.strh : M0Crypto.Thumb.MemOp
@@ -522,6 +524,7 @@ sha256 176eca528c2bdab2b974b1bcc5aca31e6b787cfc55d74fecf4c9707022525f6f
 inductive M0Crypto.Thumb.Instr : Type
   | M0Crypto.Thumb.Instr.lslImm : M0Crypto.Armv6M.LowReg → M0Crypto.Armv6M.LowReg → BitVec 5 → M0Crypto.Thumb.Instr
   | M0Crypto.Thumb.Instr.lsrImm : M0Crypto.Armv6M.LowReg → M0Crypto.Armv6M.LowReg → BitVec 5 → M0Crypto.Thumb.Instr
+  | M0Crypto.Thumb.Instr.asrImm : M0Crypto.Armv6M.LowReg → M0Crypto.Armv6M.LowReg → BitVec 5 → M0Crypto.Thumb.Instr
   | M0Crypto.Thumb.Instr.addReg : M0Crypto.Armv6M.LowReg → M0Crypto.Armv6M.LowReg → M0Crypto.Armv6M.LowReg → M0Crypto.Thumb.Instr
   | M0Crypto.Thumb.Instr.subReg : M0Crypto.Armv6M.LowReg → M0Crypto.Armv6M.LowReg → M0Crypto.Armv6M.LowReg → M0Crypto.Thumb.Instr
   | M0Crypto.Thumb.Instr.addImm3 : M0Crypto.Armv6M.LowReg → M0Crypto.Armv6M.LowReg → BitVec 3 → M0Crypto.Thumb.Instr
@@ -532,6 +535,7 @@ inductive M0Crypto.Thumb.Instr : Type
   | M0Crypto.Thumb.Instr.subImm8 : M0Crypto.Armv6M.LowReg → BitVec 8 → M0Crypto.Thumb.Instr
   | M0Crypto.Thumb.Instr.dp : M0Crypto.Thumb.DpOp → M0Crypto.Armv6M.LowReg → M0Crypto.Armv6M.LowReg → M0Crypto.Thumb.Instr
   | M0Crypto.Thumb.Instr.movHi : M0Crypto.Armv6M.Reg → M0Crypto.Armv6M.Reg → M0Crypto.Thumb.Instr
+  | M0Crypto.Thumb.Instr.addPc : M0Crypto.Armv6M.LowReg → M0Crypto.Thumb.Instr
   | M0Crypto.Thumb.Instr.ldrLit : M0Crypto.Armv6M.LowReg → BitVec 8 → M0Crypto.Thumb.Instr
   | M0Crypto.Thumb.Instr.memReg : M0Crypto.Thumb.MemOp → M0Crypto.Armv6M.LowReg → M0Crypto.Armv6M.LowReg → M0Crypto.Armv6M.LowReg → M0Crypto.Thumb.Instr
   | M0Crypto.Thumb.Instr.memImm : M0Crypto.Thumb.MemOp → M0Crypto.Armv6M.LowReg → M0Crypto.Armv6M.LowReg → BitVec 5 → M0Crypto.Thumb.Instr
@@ -541,6 +545,7 @@ inductive M0Crypto.Thumb.Instr : Type
   | M0Crypto.Thumb.Instr.addSp : BitVec 7 → M0Crypto.Thumb.Instr
   | M0Crypto.Thumb.Instr.subSp : BitVec 7 → M0Crypto.Thumb.Instr
   | M0Crypto.Thumb.Instr.uxth : M0Crypto.Armv6M.LowReg → M0Crypto.Armv6M.LowReg → M0Crypto.Thumb.Instr
+  | M0Crypto.Thumb.Instr.rev : M0Crypto.Armv6M.LowReg → M0Crypto.Armv6M.LowReg → M0Crypto.Thumb.Instr
   | M0Crypto.Thumb.Instr.push : BitVec 8 → Bool → M0Crypto.Thumb.Instr
   | M0Crypto.Thumb.Instr.pop : BitVec 8 → Bool → M0Crypto.Thumb.Instr
   | M0Crypto.Thumb.Instr.stm : M0Crypto.Armv6M.LowReg → BitVec 8 → M0Crypto.Thumb.Instr
@@ -548,13 +553,13 @@ inductive M0Crypto.Thumb.Instr : Type
   | M0Crypto.Thumb.Instr.bcond : BitVec 4 → BitVec 8 → M0Crypto.Thumb.Instr
   | M0Crypto.Thumb.Instr.b : BitVec 11 → M0Crypto.Thumb.Instr
   | M0Crypto.Thumb.Instr.bl : BitVec 25 → M0Crypto.Thumb.Instr
-sha256 a2805dd35a223fa71779991cf707dff1ec5ab0ea9f18684a938aa394a7f20640
+sha256 23826d760f443c15962e45cbd0ae69954ae51aea6c4b1945619c5d519c1517e9
 def M0Crypto.Thumb.Instr.size : M0Crypto.Thumb.Instr → Nat :=
   fun x =>
   match x with
   | M0Crypto.Thumb.Instr.bl imm25 => 4
   | x => 2
-sha256 452da43a17402634303539adc9a63fc0698f23d316749def5f035e8e946c3e47
+sha256 1f8ae7f8b0a5d77c345ee371aa323f8686700b6dba5487596f41884132966361
 def M0Crypto.Thumb.low : BitVec 16 → Nat → M0Crypto.Armv6M.LowReg :=
   fun hw lo => ⟨hw.toNat >>> lo % 8, M0Crypto.Thumb.low._proof_1 hw lo⟩
 sha256 f489e79f902e0984793e0b9d1045b7bcf696163f41f594a5b8ba7f962f30ad0d
@@ -571,6 +576,8 @@ def M0Crypto.Thumb.decodeDp : BitVec 16 → Option M0Crypto.Thumb.Instr :=
   match hw.toNat >>> 6 % 16 with
   | 0 => Option.some (M0Crypto.Thumb.Instr.dp M0Crypto.Thumb.DpOp.ands dn m)
   | 1 => Option.some (M0Crypto.Thumb.Instr.dp M0Crypto.Thumb.DpOp.eors dn m)
+  | 2 => Option.some (M0Crypto.Thumb.Instr.dp M0Crypto.Thumb.DpOp.lsls dn m)
+  | 3 => Option.some (M0Crypto.Thumb.Instr.dp M0Crypto.Thumb.DpOp.lsrs dn m)
   | 5 => Option.some (M0Crypto.Thumb.Instr.dp M0Crypto.Thumb.DpOp.adcs dn m)
   | 6 => Option.some (M0Crypto.Thumb.Instr.dp M0Crypto.Thumb.DpOp.sbcs dn m)
   | 7 => Option.some (M0Crypto.Thumb.Instr.dp M0Crypto.Thumb.DpOp.rors dn m)
@@ -581,7 +588,7 @@ def M0Crypto.Thumb.decodeDp : BitVec 16 → Option M0Crypto.Thumb.Instr :=
   | 13 => Option.some (M0Crypto.Thumb.Instr.dp M0Crypto.Thumb.DpOp.muls dn m)
   | 15 => Option.some (M0Crypto.Thumb.Instr.dp M0Crypto.Thumb.DpOp.mvns dn m)
   | x => Option.none
-sha256 9b8d07224308cc637b75c8a2dcc716b9f632415eb0985f1a5d69a4836dd59521
+sha256 8e55b1c65198f5a047ffb6343b4ed0a8ea0502733381cf86b37337482d1bddfc
 def M0Crypto.Thumb.memOpOfRegForm : Nat → Option M0Crypto.Thumb.MemOp :=
   fun x =>
   match x with
@@ -765,8 +772,26 @@ def M0Crypto.Thumb.decode16 : BitVec 16 → Option M0Crypto.Thumb.Instr :=
                                                                     Option.some
                                                                       (M0Crypto.Thumb.Instr.b
                                                                         (M0Crypto.Thumb.bits hw 0 11))
-                                                                  else Option.none
-sha256 531ed5947c2a325d04c61adac165322aa76ecae724775e6ee6b97abbec58ed5c
+                                                                  else
+                                                                    if op >>> 11 = 2 then
+                                                                      Option.some
+                                                                        (M0Crypto.Thumb.Instr.asrImm
+                                                                          (M0Crypto.Thumb.low hw 0)
+                                                                          (M0Crypto.Thumb.low hw 3)
+                                                                          (M0Crypto.Thumb.bits hw 6 5))
+                                                                    else
+                                                                      if op >>> 3 = 2191 then
+                                                                        Option.some
+                                                                          (M0Crypto.Thumb.Instr.addPc
+                                                                            (M0Crypto.Thumb.low hw 0))
+                                                                      else
+                                                                        if op >>> 6 = 744 then
+                                                                          Option.some
+                                                                            (M0Crypto.Thumb.Instr.rev
+                                                                              (M0Crypto.Thumb.low hw 0)
+                                                                              (M0Crypto.Thumb.low hw 3))
+                                                                        else Option.none
+sha256 fc380b9cab5f1ebd7c4e61c21f7251d099512d6b93254a3adc9b2d47ce91cf38
 def M0Crypto.Thumb.decodeBL : BitVec 16 → BitVec 16 → Option M0Crypto.Thumb.Instr :=
   fun hw1 hw2 =>
   if hw1.toNat >>> 11 = 30 ∧ hw2.toNat >>> 14 % 4 = 3 ∧ hw2.toNat >>> 12 % 2 = 1 then
@@ -804,6 +829,18 @@ sha256 e6a140856a93170451b89688cffbf75bc1368997e180113260f031451c70a33b
 def M0Crypto.Thumb.lsrC : M0Crypto.Armv6M.Word → Nat → M0Crypto.Armv6M.Word × Bool :=
   fun x n => (x >>> n, BitVec.getLsbD x (n - 1))
 sha256 258805d2a9ae711965ad9086ffa93ff6eb6069e927018736c03dc18351fa36c0
+def M0Crypto.Thumb.lslRegC : M0Crypto.Armv6M.Word → Nat → Bool → M0Crypto.Armv6M.Word × Bool :=
+  fun x n c => if n = 0 then (x, c) else (x <<< n, (BitVec.toNat x <<< n).testBit 32)
+sha256 3341937e8ba4662bee289931ed9259b8da9bcb3c453f5869ca8ff80753488111
+def M0Crypto.Thumb.lsrRegC : M0Crypto.Armv6M.Word → Nat → Bool → M0Crypto.Armv6M.Word × Bool :=
+  fun x n c => if n = 0 then (x, c) else M0Crypto.Thumb.lsrC x n
+sha256 19078a4f2881ad49b2cabfee812a449eee0d7d8151b347cafc6149d09c956796
+def M0Crypto.Thumb.asrC : M0Crypto.Armv6M.Word → Nat → M0Crypto.Armv6M.Word × Bool :=
+  fun x n => (BitVec.sshiftRight x n, BitVec.getLsbD x (n - 1))
+sha256 431db4e25d228851b8ca62d9068a3b93066d30b86eb69184cef168197583448b
+def M0Crypto.Thumb.revBytes : M0Crypto.Armv6M.Word → M0Crypto.Armv6M.Word :=
+  fun x => BitVec.extractLsb' 0 8 x ++ BitVec.extractLsb' 8 8 x ++ BitVec.extractLsb' 16 8 x ++ BitVec.extractLsb' 24 8 x
+sha256 305d807402f17516c7f16b684c1b6e739d509dc35da789f07a9261453742239e
 def M0Crypto.Thumb.condPassed : BitVec 4 → M0Crypto.Armv6M.State → Bool :=
   fun cond s =>
   match cond.toNat with
@@ -921,7 +958,7 @@ def M0Crypto.Thumb.Instr.accesses : M0Crypto.Thumb.Instr → M0Crypto.Armv6M.Sta
   | M0Crypto.Thumb.Instr.ldm n l =>
     M0Crypto.Thumb.wordAccesses M0Crypto.Thumb.Kind.read (s.reg n) (M0Crypto.Thumb.bitCount l)
   | x => []
-sha256 a7547c80ad5c4624abef286b9bdfcbfaef9f50b53082b54b6352978b56ca107a
+sha256 6263cf1376787c3ed299331366d6f46afe8bb0a8dc9ba21cf962a514323651c0
 def M0Crypto.Thumb.Instr.exec : M0Crypto.Thumb.Instr → M0Crypto.Armv6M.State → Except M0Crypto.Thumb.Fault M0Crypto.Armv6M.State :=
   fun i s =>
   have pc := s.pc;
@@ -933,6 +970,9 @@ def M0Crypto.Thumb.Instr.exec : M0Crypto.Thumb.Instr → M0Crypto.Armv6M.State �
     | (x, c) => Except.ok ((next.setReg d.toReg x).setNZC x c)
   | M0Crypto.Thumb.Instr.lsrImm d m imm5 =>
     match M0Crypto.Thumb.lsrC (r m) (if imm5.toNat = 0 then 32 else imm5.toNat) with
+    | (x, c) => Except.ok ((next.setReg d.toReg x).setNZC x c)
+  | M0Crypto.Thumb.Instr.asrImm d m imm5 =>
+    match M0Crypto.Thumb.asrC (r m) (if imm5.toNat = 0 then 32 else imm5.toNat) with
     | (x, c) => Except.ok ((next.setReg d.toReg x).setNZC x c)
   | M0Crypto.Thumb.Instr.addReg d n m => Except.ok (M0Crypto.Thumb.addFlags next d.toReg (r n) (r m) Bool.false)
   | M0Crypto.Thumb.Instr.subReg d n m => Except.ok (M0Crypto.Thumb.addFlags next d.toReg (r n) (~~~r m) Bool.true)
@@ -974,7 +1014,14 @@ def M0Crypto.Thumb.Instr.exec : M0Crypto.Thumb.Instr → M0Crypto.Armv6M.State �
     | M0Crypto.Thumb.DpOp.rors =>
       match M0Crypto.Armv6M.rorC (r dn) (BitVec.toNat (r m) % 256) s.c with
       | (x, c) => Except.ok ((next.setReg dn.toReg x).setNZC x c)
+    | M0Crypto.Thumb.DpOp.lsls =>
+      match M0Crypto.Thumb.lslRegC (r dn) (BitVec.toNat (r m) % 256) s.c with
+      | (x, c) => Except.ok ((next.setReg dn.toReg x).setNZC x c)
+    | M0Crypto.Thumb.DpOp.lsrs =>
+      match M0Crypto.Thumb.lsrRegC (r dn) (BitVec.toNat (r m) % 256) s.c with
+      | (x, c) => Except.ok ((next.setReg dn.toReg x).setNZC x c)
   | M0Crypto.Thumb.Instr.movHi d m => Except.ok (next.setReg d (s.regs m))
+  | M0Crypto.Thumb.Instr.addPc dn => Except.ok (next.setReg dn.toReg (r dn + (pc + 4#32)))
   | M0Crypto.Thumb.Instr.ldrLit t imm8 =>
     have a := (pc + 4#32 &&& ~~~3#32) + BitVec.ofNat 32 (imm8.toNat * 4);
     Except.ok (next.setReg t.toReg (M0Crypto.Armv6M.read32 s.mem a))
@@ -991,6 +1038,7 @@ def M0Crypto.Thumb.Instr.exec : M0Crypto.Thumb.Instr → M0Crypto.Armv6M.State �
   | M0Crypto.Thumb.Instr.addSp imm7 => Except.ok (next.setReg 13 (s.sp + BitVec.ofNat 32 (imm7.toNat * 4)))
   | M0Crypto.Thumb.Instr.subSp imm7 => Except.ok (next.setReg 13 (s.sp - BitVec.ofNat 32 (imm7.toNat * 4)))
   | M0Crypto.Thumb.Instr.uxth d m => Except.ok (next.setReg d.toReg (BitVec.setWidth 32 (BitVec.setWidth 16 (r m))))
+  | M0Crypto.Thumb.Instr.rev d m => Except.ok (next.setReg d.toReg (M0Crypto.Thumb.revBytes (r m)))
   | M0Crypto.Thumb.Instr.push l lr =>
     have n := M0Crypto.Thumb.bitCount l + lr.toNat;
     have a := s.sp - BitVec.ofNat 32 (4 * n);
@@ -1025,7 +1073,7 @@ def M0Crypto.Thumb.Instr.exec : M0Crypto.Thumb.Instr → M0Crypto.Armv6M.State �
   | M0Crypto.Thumb.Instr.b imm11 => Except.ok (s.setReg 15 (pc + 4#32 + BitVec.signExtend 32 (imm11 ++ 0#1)))
   | M0Crypto.Thumb.Instr.bl imm25 =>
     Except.ok ((s.setReg 14 (pc + 4#32 ||| 1#32)).setReg 15 (pc + 4#32 + BitVec.signExtend 32 imm25))
-sha256 6b9c15b4e92f881f605ee9d81355e05dd643a35e206261d5ce9a7ac8733efbc4
+sha256 6f18339e3ae98cf455d79e2d57bc6a8ea3df6a208fff6822fb9385e721063b1f
 def M0Crypto.Thumb.Instr.exec.memOp : M0Crypto.Armv6M.State → M0Crypto.Thumb.MemOp → M0Crypto.Armv6M.LowReg → M0Crypto.Armv6M.Word → M0Crypto.Armv6M.State :=
   fun next op t a =>
   have v := next.reg t;

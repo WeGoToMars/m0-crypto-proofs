@@ -1,5 +1,5 @@
 import M0Crypto.Release.X25519InlChain
-import M0Crypto.Release.X25519Reduce
+import M0Crypto.Release.Field25519Reduce
 
 set_option linter.unusedSimpArgs false
 
@@ -14,7 +14,7 @@ set_option linter.unusedSimpArgs false
 * Passes: add `19 * bit` (stored); add `19` (not stored, only the top bit is used,
   `canonMid`); add `19 * that bit` (stored); `canonTail` clears bit 255.
 
-The arithmetic is `X25519Reduce.canon_nat`. Accesses: `cSafe` is a syntactic check of every
+The arithmetic is `Field25519Reduce.canon_nat`. Accesses: `cSafe` is a syntactic check of every
 instruction (no write to `r0`; memory only through `r0` at word offsets below 8),
 `cSafe_ok` its meaning.
 -/
@@ -22,13 +22,14 @@ instruction (no write to `r0`; memory only through `r0` at word offsets below 8)
 namespace M0Crypto.Release.X25519Inl
 open M0Crypto.Armv6M (Word Reg LowReg State Mem addWithCarry read32 write32 slot)
 open M0Crypto.Thumb
+open M0Crypto.Release.Field25519AddSubChain
 open M0Crypto.Release (B Region ReachW InRegion)
-open M0Crypto.Release.X25519Frame (FrameOk upd)
-open M0Crypto.Release.X25519MulcChain (psum psum_congr)
-open M0Crypto.Release.X25519Block (AccAll AccOk accAll_cons accAll_nil accAll_append)
-open M0Crypto.Release.X25519Mem (toReg0 toReg1 toReg2 toReg3 toReg4)
-open M0Crypto.Release.X25519Carry (adc_nat)
-open M0Crypto.Release.X25519Congr
+open M0Crypto.Release.Field25519Frame (FrameOk upd)
+open M0Crypto.Release.Field25519Facts (psum psum_congr)
+open M0Crypto.Release.Field25519Block (AccAll AccOk accAll_cons accAll_nil accAll_append)
+open M0Crypto.Release.Field25519Mem (toReg0 toReg1 toReg2 toReg3 toReg4)
+open M0Crypto.Release.Field25519Carry (adc_nat)
+open M0Crypto.Release.Field25519Congr
 
 /-! ## Instruction lists -/
 
@@ -92,13 +93,13 @@ theorem canonWord_exec (s : State) (st : Bool) {j : Nat} (hj : j < 32) :
     refine ⟨?_, ?_, ?_, ?_⟩
     all_goals simp (config := {decide := true}) only [t, v, canonWord, Bool.false_eq_true,
       ite_true, ite_false, List.append_nil, List.cons_append, List.nil_append, execAll,
-      X25519Mem.regs_ldrImm, X25519Mem.mem_ldrImm, X25519Mem.c_ldrImm, X25519Mem.regs_strImm,
-      X25519Mem.mem_strImm, c_strImm, X25519Mul.regs_adcs, X25519Mul.c_adcs, X25519MulcWord.mem_dp,
+      Field25519Mem.regs_ldrImm, Field25519Mem.mem_ldrImm, Field25519Mem.c_ldrImm, Field25519Mem.regs_strImm,
+      Field25519Mem.mem_strImm, c_strImm, Field25519Mul.regs_adcs, Field25519Mul.c_adcs, X25519MulcWord.mem_dp,
       State.reg, toReg0, toReg1, toReg2, addr_slot _ hj]
   all_goals
     try (intro r h15 hr
-         simp (config := {decide := true}) only [X25519Mem.regs_strImm _ _ _ _ _ h15,
-           X25519Mul.regs_adcs _ _ _ _ h15, X25519Mem.regs_ldrImm _ _ _ _ _ h15, toReg1,
+         simp (config := {decide := true}) only [Field25519Mem.regs_strImm _ _ _ _ _ h15,
+           Field25519Mul.regs_adcs _ _ _ _ h15, Field25519Mem.regs_ldrImm _ _ _ _ _ h15, toReg1,
            hr, ite_false])
 
 /-- Word 0 of a pass. -/
@@ -109,7 +110,7 @@ theorem canonFirst_exec (s : State) (c : LowReg) (hc : c ≠ 1) (st : Bool) :
       t.mem = (if st then write32 s.mem (slot (s.regs 0) 0) v.1 else s.mem) ∧
       ∀ r : Reg, r ≠ 15 → r ≠ 1 → t.regs r = s.regs r := by
   intro t v
-  have hc' : c.toReg ≠ LowReg.toReg 1 := by rw [ne_eq, X25519Mul.toReg_inj]; exact hc
+  have hc' : c.toReg ≠ LowReg.toReg 1 := by rw [ne_eq, Field25519Mul.toReg_inj]; exact hc
   have hc1 : c.toReg ≠ (1 : Reg) := by rw [← toReg1]; exact hc'
   have a0 : s.regs 0 + BitVec.ofNat 32 ((0 : BitVec 5).toNat * 4) = slot (s.regs 0) 0 := by
     simp [slot]
@@ -118,14 +119,14 @@ theorem canonFirst_exec (s : State) (c : LowReg) (hc : c ≠ 1) (st : Bool) :
     refine ⟨?_, ?_, ?_, ?_⟩
     all_goals simp (config := {decide := true}) only [t, v, canonFirst, Bool.false_eq_true,
       ite_true, ite_false, List.append_nil, List.cons_append, List.nil_append, execAll,
-      X25519Mem.regs_ldrImm, X25519Mem.mem_ldrImm, X25519Mem.c_ldrImm, X25519Mem.regs_strImm,
-      X25519Mem.mem_strImm, c_strImm, X25519Mul.regs_adds, X25519Mul.c_adds,
+      Field25519Mem.regs_ldrImm, Field25519Mem.mem_ldrImm, Field25519Mem.c_ldrImm, Field25519Mem.regs_strImm,
+      Field25519Mem.mem_strImm, c_strImm, Field25519Mul.regs_adds, Field25519Mul.c_adds,
       X25519MulcWord.mem_adds, State.reg, toReg0, toReg1, Ne.symm hc', hc', hc1, a0,
       InstrNext.toReg_ne15, ne_eq, not_false_eq_true]
   all_goals
     try (intro r h15 hr
-         simp (config := {decide := true}) only [X25519Mem.regs_strImm _ _ _ _ _ h15,
-           X25519Mul.regs_adds _ _ _ _ _ h15, X25519Mem.regs_ldrImm _ _ _ _ _ h15, toReg1,
+         simp (config := {decide := true}) only [Field25519Mem.regs_strImm _ _ _ _ _ h15,
+           Field25519Mul.regs_adds _ _ _ _ _ h15, Field25519Mem.regs_ldrImm _ _ _ _ _ h15, toReg1,
            hr, ite_false])
 
 /-! ## The chain of a pass -/
@@ -241,23 +242,23 @@ theorem canonHead_exec (s : State) :
   have a7 : s.regs 0 + BitVec.ofNat 32 ((7 : BitVec 5).toNat * 4) = slot (s.regs 0) 7 := by
     simp [slot]
   refine ⟨?_, ?_, ?_, ?_, ?_⟩
-  · simp (config := {decide := true}) only [t, canonHead, execAll, State.reg, X25519Mul.regs_lsl,
-      X25519Mul.regs_lsr, InstrNext.regs_movImm, X25519Mul.regs_muls, X25519Mem.regs_ldrImm,
-      X25519Mem.regs_strImm, toReg0, toReg1, toReg2, toReg3, toReg4, ite_true, ite_false, k0]
-  · simp (config := {decide := true}) only [t, canonHead, execAll, State.reg, X25519Mul.regs_lsl,
-      X25519Mul.regs_lsr, InstrNext.regs_movImm, X25519Mul.regs_muls, X25519Mem.regs_ldrImm,
-      X25519Mem.regs_strImm, toReg0, toReg1, toReg2, toReg3, toReg4, ite_true, ite_false, k19]
-  · simp (config := {decide := true}) only [t, canonHead, execAll, State.reg, X25519Mul.regs_lsl,
-      X25519Mul.regs_lsr, InstrNext.regs_movImm, X25519Mul.regs_muls, X25519Mem.regs_ldrImm,
-      X25519Mem.regs_strImm, X25519Mem.mem_ldrImm, X25519Mem.mem_strImm, mem_movImm,
+  · simp (config := {decide := true}) only [t, canonHead, execAll, State.reg, Field25519Mul.regs_lsl,
+      Field25519Mul.regs_lsr, InstrNext.regs_movImm, Field25519Mul.regs_muls, Field25519Mem.regs_ldrImm,
+      Field25519Mem.regs_strImm, toReg0, toReg1, toReg2, toReg3, toReg4, ite_true, ite_false, k0]
+  · simp (config := {decide := true}) only [t, canonHead, execAll, State.reg, Field25519Mul.regs_lsl,
+      Field25519Mul.regs_lsr, InstrNext.regs_movImm, Field25519Mul.regs_muls, Field25519Mem.regs_ldrImm,
+      Field25519Mem.regs_strImm, toReg0, toReg1, toReg2, toReg3, toReg4, ite_true, ite_false, k19]
+  · simp (config := {decide := true}) only [t, canonHead, execAll, State.reg, Field25519Mul.regs_lsl,
+      Field25519Mul.regs_lsr, InstrNext.regs_movImm, Field25519Mul.regs_muls, Field25519Mem.regs_ldrImm,
+      Field25519Mem.regs_strImm, Field25519Mem.mem_ldrImm, Field25519Mem.mem_strImm, mem_movImm,
       toReg0, toReg1, toReg2, toReg3, toReg4, ite_true, ite_false, k19, k31, a7]
     have := x.isLt
     simp only [x, BitVec.toNat_mul, BitVec.toNat_ushiftRight, BitVec.toNat_ofNat,
       Nat.shiftRight_eq_div_pow, Nat.reduceMod] at this ⊢
     omega
-  · simp (config := {decide := true}) only [t, canonHead, execAll, State.reg, X25519Mul.regs_lsl,
-      X25519Mul.regs_lsr, InstrNext.regs_movImm, X25519Mul.regs_muls, X25519Mem.regs_ldrImm,
-      X25519Mem.regs_strImm, X25519Mem.mem_ldrImm, X25519Mem.mem_strImm, mem_movImm,
+  · simp (config := {decide := true}) only [t, canonHead, execAll, State.reg, Field25519Mul.regs_lsl,
+      Field25519Mul.regs_lsr, InstrNext.regs_movImm, Field25519Mul.regs_muls, Field25519Mem.regs_ldrImm,
+      Field25519Mem.regs_strImm, Field25519Mem.mem_ldrImm, Field25519Mem.mem_strImm, mem_movImm,
       X25519MulcWord.mem_lsl, X25519MulcWord.mem_lsr, X25519MulcWord.mem_dp,
       toReg0, toReg1, toReg2, toReg3, toReg4, ite_true, ite_false, k1, k31, a7, x]
   · intro r h15 hr
@@ -283,8 +284,8 @@ theorem canonMid_exec (s : State) (h3 : s.regs 3 = 19#32) :
   intro t
   have k31 : (31 : BitVec 5).toNat = 31 := rfl
   refine ⟨?_, ?_, ?_⟩
-  · simp (config := {decide := true}) only [t, canonMid, execAll, State.reg, X25519Mul.regs_lsr,
-      X25519Mul.regs_muls, X25519MulcWord.mem_lsr, toReg1, toReg3, toReg4, ite_true, ite_false,
+  · simp (config := {decide := true}) only [t, canonMid, execAll, State.reg, Field25519Mul.regs_lsr,
+      Field25519Mul.regs_muls, X25519MulcWord.mem_lsr, toReg1, toReg3, toReg4, ite_true, ite_false,
       k31, h3]
     have := (s.regs 1).isLt
     simp only [BitVec.toNat_mul, BitVec.toNat_ushiftRight, BitVec.toNat_ofNat,
@@ -306,8 +307,8 @@ theorem canonTail_exec (s : State) :
   have a7 : s.regs 0 + BitVec.ofNat 32 ((7 : BitVec 5).toNat * 4) = slot (s.regs 0) 7 := by
     simp [slot]
   refine ⟨?_, ?_⟩
-  · simp (config := {decide := true}) only [t, canonTail, execAll, State.reg, X25519Mul.regs_lsl,
-      X25519Mul.regs_lsr, X25519Mem.mem_strImm, X25519MulcWord.mem_lsl, X25519MulcWord.mem_lsr,
+  · simp (config := {decide := true}) only [t, canonTail, execAll, State.reg, Field25519Mul.regs_lsl,
+      Field25519Mul.regs_lsr, Field25519Mem.mem_strImm, X25519MulcWord.mem_lsl, X25519MulcWord.mem_lsr,
       toReg0, toReg1, ite_true, ite_false, k1, a7]
   · intro r h15 h1
     have v1 : r.val ≠ 1 := fun e => h1 (Fin.ext e)
@@ -317,43 +318,13 @@ theorem canonTail_exec (s : State) :
 
 /-! ## Arithmetic -/
 
-/-- The three passes in numbers. The input is `L + 2^224 X7` (`L` the low seven words); pass
-`k` produces `Pk` with carry `ck`; `T2`, `T3` are the top words of passes 2 and 3 and `L3` the
-low words of pass 3. The result is `a mod p`. -/
-theorem canon_arith (L X7 P1 c1 P2 c2 L2 T2 P3 c3 L3 T3 : Nat)
-    (hL : L < 2 ^ 224) (hX : X7 < 2 ^ 32)
-    (h1 : P1 + 2 ^ 256 * c1 = L + 2 ^ 224 * (X7 % 2 ^ 31) + 19 * (X7 / 2 ^ 31))
-    (hP1 : P1 < 2 ^ 256)
-    (h2 : P2 + 2 ^ 256 * c2 = P1 + 19) (hP2 : P2 = L2 + 2 ^ 224 * T2) (hL2 : L2 < 2 ^ 224)
-    (hT2 : T2 < 2 ^ 32)
-    (h3 : P3 + 2 ^ 256 * c3 = P1 + 19 * (T2 / 2 ^ 31)) (hP3 : P3 = L3 + 2 ^ 224 * T3)
-    (hL3 : L3 < 2 ^ 224) (hT3 : T3 < 2 ^ 32) :
-    L3 + 2 ^ 224 * (T3 % 2 ^ 31) = (L + 2 ^ 224 * X7) % X25519Reduce.pN ∧
-      L3 + 2 ^ 224 * (T3 % 2 ^ 31) < X25519Reduce.pN := by
-  have c1z : c1 = 0 := by omega
-  have hq1 : (L + 2 ^ 224 * X7) / 2 ^ 255 = X7 / 2 ^ 31 := by omega
-  have hr1 : (L + 2 ^ 224 * X7) % 2 ^ 255 = L + 2 ^ 224 * (X7 % 2 ^ 31) := by omega
-  have c2z : c2 = 0 := by omega
-  have hq2 : P2 / 2 ^ 255 = T2 / 2 ^ 31 := by omega
-  have c3z : c3 = 0 := by omega
-  have hr3 : P3 % 2 ^ 255 = L3 + 2 ^ 224 * (T3 % 2 ^ 31) := by omega
-  subst c1z c2z c3z
-  exact X25519Reduce.canon_nat (L + 2 ^ 224 * X7) P1 (T2 / 2 ^ 31) P3 _ (by omega)
-    (by rw [hr1, hq1]; omega) (by rw [← hq2]; omega) (by omega) hr3.symm
-
-theorem toNat_clear (x : Word) : ((x <<< 1) >>> 1).toNat = x.toNat % 2 ^ 31 := by
-  have := x.isLt
-  simp only [BitVec.toNat_ushiftRight, BitVec.toNat_shiftLeft, Nat.shiftLeft_eq,
-    Nat.shiftRight_eq_div_pow]
-  omega
-
 theorem psum8 (f : Nat → Nat) : psum f 8 = psum f 7 + 2 ^ 224 * f 7 := rfl
 
 theorem psum7_lt (f : Nat → Word) : psum (fun i => (f i).toNat) 7 < 2 ^ 224 :=
-  X25519MulcChain.psum_lt (fun i => (f i).isLt) 7
+  Field25519Facts.psum_lt (fun i => (f i).isLt) 7
 
 theorem psum8_lt (f : Nat → Word) : psum (fun i => (f i).toNat) 8 < 2 ^ 256 :=
-  X25519MulcChain.psum_lt (fun i => (f i).isLt) 8
+  Field25519Facts.psum_lt (fun i => (f i).isLt) 8
 
 theorem psum_upd7 (f : Nat → Word) (v : Word) :
     psum (fun i => (upd f 7 [v] i).toNat) 8 =
@@ -377,9 +348,9 @@ theorem w8 : (2 : Nat) ^ (32 * 8) = 2 ^ 256 := rfl
 at `r0` and the registers other than `r1`..`r4` are unchanged. -/
 theorem canon_exec (s : State) (hf : (s.regs 0).toNat + 32 ≤ 2 ^ 32) :
     let t := execAll canonBody s
-    X25519Routines.feVal t.mem (s.regs 0) =
-        X25519Routines.feVal s.mem (s.regs 0) % X25519Reduce.pN ∧
-      X25519Routines.feVal t.mem (s.regs 0) < X25519Reduce.pN ∧
+    Field25519Routines.feVal t.mem (s.regs 0) =
+        Field25519Routines.feVal s.mem (s.regs 0) % Field25519Reduce.pN ∧
+      Field25519Routines.feVal t.mem (s.regs 0) < Field25519Reduce.pN ∧
       (∀ y, ¬ Region (s.regs 0) 32 y → t.mem y = s.mem y) ∧
       ∀ r : Reg, r ≠ 15 → r ∉ ([1, 2, 3, 4] : List Reg) → t.regs r = s.regs r := by
   intro t
@@ -427,7 +398,7 @@ theorem canon_exec (s : State) (hf : (s.regs 0).toNat + 32 ≤ 2 ^ 32) :
   -- the numbers
   have e1 : psum (fun i => (read32 s1.mem (slot p i)).toNat) 8 =
       psum (fun i => (read32 s.mem (slot p i)).toNat) 7 + 2 ^ 224 * (x7.toNat % 2 ^ 31) := by
-    rw [frame_psum F1 (fun _ _ => rfl), psum_upd7, toNat_clear]
+    rw [frame_psum F1 (fun _ _ => rfl), psum_upd7, Field25519Reduce.toNat_clear]
   have e2 : psum (fun i => (read32 s2.mem (slot p i)).toNat) 8 =
       psum (fun i => (W1 i).toNat) 8 :=
     frame_psum F2 fun i hi => by rw [hG1 i hi]; simp [hi]
@@ -440,13 +411,13 @@ theorem canon_exec (s : State) (hf : (s.regs 0).toNat + 32 ≤ 2 ^ 32) :
     psum_congr fun i hi => by rw [mm, e3 i hi]
   have e5 : ∀ i < 8, read32 s5.mem (slot p i) = W3 i := fun i hi => by
     rw [F5.slots i hi, hG3 i hi]; simp [hi]
-  have e6 : X25519Routines.feVal s6.mem p =
+  have e6 : Field25519Routines.feVal s6.mem p =
       psum (fun i => (W3 i).toNat) 7 + 2 ^ 224 * ((W3 7).toNat % 2 ^ 31) := by
-    rw [feVal_frame F6, psum_upd7, toNat_clear, r3]
+    rw [feVal_frame F6, psum_upd7, Field25519Reduce.toNat_clear, r3]
     rw [psum_congr fun i (hi : i < 7) => by rw [e5 i (by omega)]]
-  have ea : X25519Routines.feVal s.mem p =
+  have ea : Field25519Routines.feVal s.mem p =
       psum (fun i => (read32 s.mem (slot p i)).toNat) 7 + 2 ^ 224 * x7.toNat := by
-    rw [X25519MulcFacts.feVal_psum, psum8, hx]
+    rw [Field25519Facts.feVal_psum, psum8, hx]
   have r4 : (s1.reg 4).toNat = 19 * (x7.toNat / 2 ^ 31) := by rw [State.reg, toReg4, h4]
   have r33 : (s2.reg 3).toNat = 19 := by
     rw [State.reg, toReg3, k1 3 (by decide) (by decide), h3]; rfl
@@ -456,7 +427,7 @@ theorem canon_exec (s : State) (hf : (s.regs 0).toNat + 32 ≤ 2 ^ 32) :
   rw [e2, r33, w8] at v2
   rw [e4, r44, w8] at v3
   rw [psum8] at v2 v3
-  obtain ⟨hR, hlt⟩ := canon_arith _ _ _ _ _ _ _ _ _ _ _ _ (psum7_lt _) x7.isLt v1 (psum8_lt W1)
+  obtain ⟨hR, hlt⟩ := Field25519Reduce.canon_passes _ _ _ _ _ _ _ _ _ _ _ _ (psum7_lt _) x7.isLt v1 (psum8_lt W1)
     v2 rfl (psum7_lt W2) (W2 7).isLt v3 rfl (psum7_lt W3) (W3 7).isLt
   refine ⟨by rw [e6, ea]; exact hR, by rw [e6]; exact hlt, fun y hy => ?_, fun r h15 hr => ?_⟩
   · rw [frame_out F6 y hy, frame_out F5 y hy, mm, frame_out F3 y hy, frame_out F2 y hy,
@@ -475,7 +446,7 @@ def cMem : Instr → Bool
   | _ => false
 
 /-- Every instruction of the body keeps `r0` and accesses memory only as `cMem` says. -/
-def cSafe (i : Instr) : Bool := (X25519Mul.regOnly i && decide (0 ∉ i.dsts)) || cMem i
+def cSafe (i : Instr) : Bool := (Field25519Mul.regOnly i && decide (0 ∉ i.dsts)) || cMem i
 
 theorem cSafe_body : canonBody.all cSafe = true := by decide +kernel
 
@@ -489,7 +460,7 @@ theorem cSafe_ok {Wr : Word → Prop} {d : Word} (hd : d.toNat % 4 = 0)
   simp only [cSafe, Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq] at h
   rcases h with ⟨hr, hn⟩ | h
   · refine ⟨by rw [next_regs_other' i t 0 (by decide) hn, h0], ?_⟩
-    rw [X25519Mul.accesses_regOnly i t hr]; intro a ha; cases ha
+    rw [Field25519Mul.accesses_regOnly i t hr]; intro a ha; cases ha
   · cases i with
     | memImm op r n k =>
       simp only [cMem, Bool.and_eq_true, Bool.or_eq_true, beq_iff_eq, decide_eq_true_eq,
@@ -502,7 +473,7 @@ theorem cSafe_ok {Wr : Word → Prop} {d : Word} (hd : d.toNat % 4 = 0)
         intro a ha
         simp only [Instr.accesses, MemOp.isLoad, MemOp.width, List.mem_singleton] at ha
         subst ha
-        refine ⟨X25519Block.aligned_word (X25519Block.word_add_aligned hd' (by omega)), fun _ q (hq : q < 4) => ?_⟩
+        refine ⟨Field25519Block.aligned_word (Field25519Block.word_add_aligned hd' (by omega)), fun _ q (hq : q < 4) => ?_⟩
         rw [State.reg, toReg0, h0, ofNat_add_assoc]; exact hW _ (by omega)
       · have hr0' : (0 : Nat) ∉ (Instr.memImm .ldr r 0 k).dsts := by
           simp only [Instr.dsts, MemOp.isLoad, ite_true, List.mem_singleton]
@@ -511,7 +482,7 @@ theorem cSafe_ok {Wr : Word → Prop} {d : Word} (hd : d.toNat % 4 = 0)
         intro a ha
         simp only [Instr.accesses, MemOp.isLoad, MemOp.width, ite_true, List.mem_singleton] at ha
         subst ha
-        exact ⟨X25519Block.aligned_word (X25519Block.word_add_aligned hd' (by omega)), fun e => by cases e⟩
+        exact ⟨Field25519Block.aligned_word (Field25519Block.word_add_aligned hd' (by omega)), fun e => by cases e⟩
     | _ => simp [cMem] at h
 
 theorem accAll_keep {P : Access → Prop} (I : State → Prop) :
@@ -538,21 +509,21 @@ theorem canon_run_w {base : Word} (hb : base.toNat % 2 = 0) {Pc Wr : Word → Pr
     (h0 : t.regs 0 = p) (hd : p.toNat % 4 = 0) (hf : p.toNat + 32 ≤ 2 ^ 32)
     (hW : ∀ j < 32, Wr (p + BitVec.ofNat 32 j)) {Q : State → Prop}
     (k : ∀ t', t'.pc = base + BitVec.ofNat 32 (off + seqSize canonBody) →
-      (X25519Routines.feVal t'.mem p : Int) ≡p X25519Routines.feVal t.mem p →
-      X25519Routines.feVal t'.mem p < 2 ^ 255 - 19 →
+      (Field25519Routines.feVal t'.mem p : Int) ≡p Field25519Routines.feVal t.mem p →
+      Field25519Routines.feVal t'.mem p < 2 ^ 255 - 19 →
       (∀ y, ¬ Region p 32 y → t'.mem y = t.mem y) →
       (∀ r : Reg, r ≠ 15 → r ∉ ([1, 2, 3, 4] : List Reg) → t'.regs r = t.regs r) →
       ReachW base Pc Wr t' Q) :
     ReachW base Pc Wr t Q := by
   subst h0
   obtain ⟨ev, el, em, eo⟩ := canon_exec t hf
-  have ec : (X25519Routines.feVal (execAll canonBody t).mem (t.regs 0) : Int) ≡p
-      X25519Routines.feVal t.mem (t.regs 0) := by
+  have ec : (Field25519Routines.feVal (execAll canonBody t).mem (t.regs 0) : Int) ≡p
+      Field25519Routines.feVal t.mem (t.regs 0) := by
     rw [ev]
-    exact ModP.symm (X25519Reduce.congr_of_eq (Nat.mod_add_div _ _).symm)
-  have el' : X25519Routines.feVal (execAll canonBody t).mem (t.regs 0) < 2 ^ 255 - 19 := by
-    unfold X25519Reduce.pN at el; exact el
-  refine X25519Block.ReachW.blockAcc hb _ off hpc hoff hseq canonBody_falls (canon_acc t hd hW) hr
+    exact ModP.symm (Field25519Reduce.congr_of_eq (Nat.mod_add_div _ _).symm)
+  have el' : Field25519Routines.feVal (execAll canonBody t).mem (t.regs 0) < 2 ^ 255 - 19 := by
+    unfold Field25519Reduce.pN at el; exact el
+  refine Field25519Block.ReachW.blockAcc hb _ off hpc hoff hseq canonBody_falls (canon_acc t hd hW) hr
     (k _ ?_ ec el' em eo)
   rw [execAll_pc _ _ canonBody_falls, hpc, ofNat_add_assoc]
 

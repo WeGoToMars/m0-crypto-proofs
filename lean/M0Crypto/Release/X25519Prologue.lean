@@ -19,12 +19,12 @@ open M0Crypto.Armv6M (Word Reg LowReg State Mem read32 write32 slot)
 open M0Crypto.Thumb
 open M0Crypto.Release (ReachW InRegion Region B)
 open M0Crypto.Release.Frame (Disj InFrame)
-open M0Crypto.Release.X25519Block
-open M0Crypto.Release.X25519Frame (FrameOk upd slot_byte)
+open M0Crypto.Release.Field25519Block
+open M0Crypto.Release.Field25519Frame (FrameOk upd slot_byte)
 open M0Crypto.Release.X25519Layout
 open M0Crypto.Release.X25519EntryCode
 open M0Crypto.Release.X25519Val (val Words)
-open M0Crypto.Release.X25519Routines (feVal)
+open M0Crypto.Release.Field25519Routines (feVal)
 open M0Crypto.Release.X25519Op (Body)
 
 /-! ## The state at the ladder

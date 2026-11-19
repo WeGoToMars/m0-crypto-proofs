@@ -16,7 +16,7 @@ namespace M0Crypto.Release.X25519SlotEnv
 open M0Crypto.Armv6M (Word State Mem read32)
 open M0Crypto.Thumb
 open M0Crypto.Release (ReachW Region B)
-open M0Crypto.Release.X25519Routines (feVal)
+open M0Crypto.Release.Field25519Routines (feVal)
 open M0Crypto.Release.X25519Layout
 open M0Crypto.Release.X25519Op
 open M0Crypto.Release.X25519EntryCode

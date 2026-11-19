@@ -1,5 +1,5 @@
-import M0Crypto.Release.X25519FeMul
-import M0Crypto.Release.X25519FeSqr
+import M0Crypto.Release.Field25519FeMul
+import M0Crypto.Release.Field25519FeSqr
 import M0Crypto.Release.X25519MulcAdd
 import M0Crypto.Release.Call
 
@@ -19,7 +19,10 @@ open M0Crypto.Armv6M (Word Reg State Mem)
 open M0Crypto.Thumb
 open M0Crypto.Release (ReachW InRegion Region lr_mask lr_odd)
 open M0Crypto.Release.Frame (Disj)
-open M0Crypto.Release.X25519Routines (Call Pre Post feVal mulFrame mulcFrame)
+open M0Crypto.Release.Field25519Routines (Call Pre Post feVal mulFrame)
+open M0Crypto.Release.X25519Routines (mulcFrame)
+open M0Crypto.Release.Field25519Routines (MulSpec SqrSpec)
+open M0Crypto.Release.X25519Macros (feMul_at feMul_size feSqr_at feSqr_size)
 open M0Crypto.Thumb.ReleaseCheck.X25519 (feMul feMulSize feSqr feSqrSize feMulcAdd feMulcAddSize)
 
 /-- A routine at `off`, `size` bytes, run from a valid entry to its return. -/
@@ -29,10 +32,18 @@ def RoutineRun (off size frame : Nat) (useB : Bool) (f : Int → Int → Int) : 
       (fun y => Region (c.fp frame) frame y ∨ Region c.dst 32 y) s
       fun t => t.pc = c.ret ∧ Post frame f c t
 
-theorem mul_run : RoutineRun feMul feMulSize mulFrame true fun a b => a * b := X25519FeMul.run
-theorem sqr_run : RoutineRun feSqr feSqrSize mulFrame false fun a _ => a * a := X25519FeSqr.run
+theorem mul_run : RoutineRun feMul feMulSize mulFrame true fun a b => a * b := by
+  rw [← feMul_size]; exact Field25519FeMul.run feMul_at (by decide)
+theorem sqr_run : RoutineRun feSqr feSqrSize mulFrame false fun a _ => a * a := by
+  rw [← feSqr_size]; exact Field25519FeSqr.run feSqr_at (by decide)
 theorem mulcAdd_run : RoutineRun feMulcAdd feMulcAddSize mulcFrame true fun a b => 121666 * a + b :=
   X25519MulcAdd.run
+
+/-- The contracts of `m0c_fe_mul` and `m0c_fe_sqr` at their offsets in this artifact. -/
+theorem mul_spec : MulSpec feMul feMulSize := by
+  rw [← feMul_size]; exact Field25519FeMul.mul_spec feMul_at (by decide)
+theorem sqr_spec : SqrSpec feSqr feSqrSize := by
+  rw [← feSqr_size]; exact Field25519FeSqr.sqr_spec feSqr_at (by decide)
 
 theorem ReachW.bind {base : Word} {Pc Wr : Word → Prop} {s : State} {Q : State → Prop}
     (h : ReachW base Pc Wr s fun t => ReachW base Pc Wr t Q) : ReachW base Pc Wr s Q :=

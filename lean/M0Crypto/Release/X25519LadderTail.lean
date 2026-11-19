@@ -15,14 +15,14 @@ namespace M0Crypto.Release.X25519LadderTail
 open M0Crypto.Armv6M (Word State Mem read32 write32)
 open M0Crypto.Thumb
 open M0Crypto.Release (ReachW Region B)
-open M0Crypto.Release.X25519Congr (ModP)
+open M0Crypto.Release.Field25519Congr (ModP)
 open M0Crypto.Release.X25519Layout
 open M0Crypto.Release.X25519Op
 open M0Crypto.Release.X25519EntryCode
 open M0Crypto.Release.X25519OpRun
 open M0Crypto.Release.X25519SlotEnv
 open M0Crypto.Release.X25519LadderStep
-open M0Crypto.Release.X25519Block (Runs AccOk accAll_cons accAll_nil)
+open M0Crypto.Release.Field25519Block (Runs AccOk accAll_cons accAll_nil)
 open M0Crypto.Release.X25519Ladder (dbl dbl3)
 
 /-! ## Mask block -/
@@ -38,15 +38,15 @@ theorem mask_runs {Wr : Word → Prop} (u : State)
   refine ⟨accAll_cons ?_ (accAll_cons ?_ (accAll_nil _ _)), ?_⟩
   · simp only [Instr.accesses, List.mem_singleton, forall_eq]
     rw [lvSwap_off]
-    exact ⟨X25519Block.aligned_word hal, fun h => nomatch h⟩
+    exact ⟨Field25519Block.aligned_word hal, fun h => nomatch h⟩
   · simp [Instr.accesses]
   · refine ⟨?_, ?_, ?_⟩
-    · simp [execAll, X25519LadderBit.regs_rsbs, X25519Mem.regs_ldrSp,
-        X25519Mem.toReg7]
-    · simp [execAll, X25519LadderBit.mem_dp, X25519Mem.mem_ldrSp]
-    · simp [execAll, X25519LadderBit.regs_rsbs, X25519Mem.regs_ldrSp, X25519LadderBit.rsbs_val,
+    · simp [execAll, X25519LadderBit.regs_rsbs, Field25519Mem.regs_ldrSp,
+        Field25519Mem.toReg7]
+    · simp [execAll, X25519LadderBit.mem_dp, Field25519Mem.mem_ldrSp]
+    · simp [execAll, X25519LadderBit.regs_rsbs, Field25519Mem.regs_ldrSp, X25519LadderBit.rsbs_val,
            State.reg, State.sp,
-        lvSwap, X25519Mem.toReg7]
+        lvSwap, Field25519Mem.toReg7]
 
 /-! ## Final swap -/
 
@@ -118,7 +118,7 @@ theorem swap_w (hSel : OpW .sel) {s : State} {Q : State → Prop}
     rw [X25519Op.E_add hv (by decide)] at this
     rw [X25519Op.E_add hv (by decide)]; simp only [lvT, lvSwap] at *; omega
   -- mask
-  refine X25519Block.ReachW.blockRuns hb0 _ o hpc hev h1 (by decide)
+  refine Field25519Block.ReachW.blockRuns hb0 _ o hpc hev h1 (by decide)
     (mask_runs (Wr := Wr) s (by rw [ssp]; exact alS))
     (hPO.inE (by omega) (by rw [h4]; omega)) ?_
   rintro u1 pc1 ⟨u13, um, u7⟩
@@ -133,7 +133,7 @@ theorem swap_w (hSel : OpW .sel) {s : State} {Q : State → Prop}
   have u2sp : u2.sp = E c := hb2.sp
   -- t = 3
   have hS3 : seqSize (setT 3) = 4 := rfl
-  refine X25519Block.ReachW.blockRuns hb0 (setT 3) _ pc2 (by omega) h3 (by decide)
+  refine Field25519Block.ReachW.blockRuns hb0 (setT 3) _ pc2 (by omega) h3 (by decide)
     (X25519ChainLoop.setT_runs u2 (j := 3) (by decide) (by rw [u2sp]; exact al)
       (fun q hq => hWr _ (by rw [u2sp]; exact wr q hq)))
     (hPO.inE (by omega) (by rw [hS3]; omega)) ?_
@@ -227,7 +227,7 @@ theorem dbl_iter {Q : State → Prop} {j : Nat} (hj : j + 1 ≤ 3) {x z : Int} {
     rw [u1sp, ← ht]
     exact read32_congr' fun y hy => hK1 y (band_frame hv (by decide) hy)
       (band_disj hv (by decide) (by decide) (by decide) hy)
-  refine X25519Block.ReachW.blockRuns hb0 decT _ pc1 (by omega) h2 (by decide)
+  refine Field25519Block.ReachW.blockRuns hb0 decT _ pc1 (by omega) h2 (by decide)
     (X25519ChainLoop.decT_runs u1 (by rw [u1sp]; exact al)
       (fun q hq => hWr _ (by rw [u1sp]; exact wr q hq)))
     (hPO.inE (by omega) (by rw [h6]; omega)) ?_

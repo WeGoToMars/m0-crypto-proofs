@@ -1,4 +1,4 @@
-import M0Crypto.Release.X25519Congr
+import M0Crypto.Release.Field25519Congr
 
 /-!
 The Fermat inversion chain of `m0c_x25519`, as data, and its exponent.
@@ -17,7 +17,7 @@ the inverse.
 
 namespace M0Crypto.Release.X25519Chain
 
-open M0Crypto.Release.X25519Congr
+open M0Crypto.Release.Field25519Congr
 
 /-- Slots named in `INV_CHAIN`: four temporaries, the input and the output. -/
 inductive CSlot where

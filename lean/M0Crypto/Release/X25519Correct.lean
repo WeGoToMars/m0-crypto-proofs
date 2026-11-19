@@ -25,8 +25,8 @@ open M0Crypto.Armv6M (Word Reg State Mem read32)
 open M0Crypto.Thumb
 open M0Crypto.Release (ReachW ReachS Region B B_len)
 open M0Crypto.Release.Frame (Disj)
-open M0Crypto.Release.X25519Routines (feVal)
-open M0Crypto.Release.X25519Congr (ModP)
+open M0Crypto.Release.Field25519Routines (feVal)
+open M0Crypto.Release.Field25519Congr (ModP)
 open M0Crypto.Release.X25519Layout
 open M0Crypto.Release.X25519Op
 open M0Crypto.Release.X25519EntryCode
@@ -49,7 +49,7 @@ include hv
 /-- The code bytes survive any change inside the stack window. -/
 theorem code_of {m : Mem} (h : ∀ y, ¬ Region c.fp X25519.stackBytes y → m y = c.m0 y) :
     CodeAt m c.base B := fun i hi => by
-  rw [h _ fun hy => X25519MulcFacts.region_ne hv.codeS hy i (by rw [B_len] at hi; exact hi) rfl]
+  rw [h _ fun hy => Field25519Facts.region_ne hv.codeS hy i (by rw [B_len] at hi; exact hi) rfl]
   exact hv.code i hi
 
 /-- The 4 bytes of `LV_OUT` lie outside every band a segment after the prologue changes. -/
@@ -174,11 +174,11 @@ theorem x25519_run {c : X25519.Ctx} {s : State} (hp : X25519.Pre c s) :
   have hPO := X25519Ev.midPcOk c
   have hL : oLadder ≤ oLadder := Nat.le_refl _
   have hH : oStore ≤ oStore := Nat.le_refl _
-  refine X25519Block.seg (fun _ _ h => X25519Ev.liftPro h)
+  refine Field25519Block.seg (fun _ _ h => X25519Ev.liftPro h)
     (X25519Prologue.prologue_w hp (fun y h => h) (X25519Ev.proPc c) ?_)
   intro t1 t1pc P
   refine ReachS.done ?_
-  refine X25519Block.seg (fun _ _ h => X25519Ev.liftMid h) ?_
+  refine Field25519Block.seg (fun _ _ h => X25519Ev.liftMid h) ?_
   have hcode := code_of hv P.outside
   generalize hu : (Spec.X25519.decodeUCoordinate c.pointB : Int) = u
   -- the ladder over bits 254 to 3
@@ -260,7 +260,7 @@ theorem x25519_run {c : X25519.Ctx} {s : State} (hp : X25519.Pre c s) :
     intro i hi
     rw [save_fp hv i hi, savedRegs_get i hi, ← hsv i hi]
     exact read32_congr' fun y hy => tmem y (save_out hv i hi hy)
-      (Region.not (X25519MulcFacts.region_ne hv.outS (save_win hv i hi hy)))
+      (Region.not (Field25519Facts.region_ne hv.outS (save_win hv i hi hy)))
   refine ⟨tpc, tpc, tsp, tcal, t0, t1', t2', t3', t12, fun y hy => ?_, twipe, tsaved⟩
   by_cases ho : Region c.out 32 y
   · simp only [ho, ↓reduceIte]
@@ -283,9 +283,9 @@ theorem x25519_correct : X25519.Correct := by
     intro y hy i hi
     rw [B_len] at hi
     rcases hy with hy | hy
-    · exact X25519MulcFacts.region_ne hv.codeS hy i hi
-    · exact X25519MulcFacts.region_ne hv.codeO hy i hi
-  exact X25519MulcFacts.reachW_runUntil hc0 hwc hp.retOut
+    · exact Field25519Facts.region_ne hv.codeS hy i hi
+    · exact Field25519Facts.region_ne hv.codeO hy i hi
+  exact Field25519Facts.reachW_runUntil hc0 hwc hp.retOut
     ((x25519_run hp).mono (fun _ _ h => ⟨h.1, h.2.1⟩) fun _ h => h)
 
 end M0Crypto.Release.X25519Correct

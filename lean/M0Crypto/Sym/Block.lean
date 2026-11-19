@@ -117,6 +117,10 @@ theorem peel_sound (s0 : State) : ∀ (e : SExpr) (r : Reg) (k : Word),
   | .ld16 _ _, _, _, h => by simp [peel] at h
   | .ld8 _ _, _, _, h => by simp [peel] at h
   | .rotl _ _, _, _, h => by simp [peel] at h
+  | .lslR _ _ _, _, _, h => by simp [peel] at h
+  | .lsrR _ _ _, _, _, h => by simp [peel] at h
+  | .asr _ _, _, _, h => by simp [peel] at h
+  | .rev _, _, _, h => by simp [peel] at h
 
 /-- Divisibility of a word's value by `w` survives addition, for `w ∣ 2^32`. -/
 theorem add_toNat_mod_of_dvd (x y : Word) (w : Nat) (hw : w ∣ 2 ^ 32)

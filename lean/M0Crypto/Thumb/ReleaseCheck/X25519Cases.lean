@@ -14,7 +14,8 @@ about three million steps is too long for `runFast`'s trace.
   and `r12` zero, the 480 wiped stack bytes zero, every read in `scalar`, `point`, the code or
   the 516-byte stack window, and every write in `out` or the stack window (so all other memory
   is unchanged).
-* Routine cases check the contracts of `Release/X25519Routines.lean`: the result congruent
+* Routine cases check the contracts of `Release/Field25519Routines.lean` and
+  `Release/X25519Routines.lean`: the result congruent
   modulo `p` to the routine's function, SP restored, reads in the inputs, the code and the
   routine's stack bytes, writes in `dst` and those stack bytes.
 -/

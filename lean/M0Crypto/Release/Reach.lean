@@ -1,7 +1,7 @@
 import M0Crypto.Thumb.SpBlock
 import M0Crypto.Artifacts.Release
 import M0Crypto.Proofs.Common
-import M0Crypto.Release.Contract
+import M0Crypto.Release.CodeBytes
 
 set_option linter.unusedSimpArgs false
 
@@ -20,6 +20,8 @@ namespace M0Crypto.Release
 
 open M0Crypto.Armv6M (Word Reg State)
 open M0Crypto.Thumb
+
+variable {B : List (BitVec 8)} {BS : Nat} [CodeBytes B BS]
 
 /-- The word result of addition implemented with carry. -/
 theorem add_flags (x y : Word) : (M0Crypto.Armv6M.addWithCarry x y false).1 = x + y := by
@@ -40,7 +42,9 @@ theorem sub_carry (x y : Word) : (M0Crypto.Armv6M.addWithCarry x (~~~y) true).2.
   · simp only [h, decide_true, decide_eq_true_eq]; omega
   · simp only [h, decide_false, decide_eq_false_iff_not, Decidable.not_not]; omega
 
-theorem B_len : B.length = Artifacts.Release.size := Artifacts.Release.bytes_length
+theorem B_len : B.length = BS := CodeBytes.len
+
+theorem B_lt {B : List (BitVec 8)} {BS : Nat} [CodeBytes B BS] : B.length < 2 ^ 32 := B_len ▸ CodeBytes.lt
 
 theorem WritesTo.nil (Wr : Word → Prop) : WritesTo Wr [] := by intro e he; cases he
 
@@ -226,7 +230,7 @@ theorem rwAccessesTo_iff (Rd Wr : Word → Prop) (tr : List Event) :
   · intro ⟨hr, hw⟩ e he a ha
     exact ⟨hr e he a ha, hw e he a ha⟩
 
-def Reach (base : Word) (Wr : Word → Prop) (s : State) (Q : State → Prop) : Prop :=
+def Reach [CodeBytes B BS] (base : Word) (Wr : Word → Prop) (s : State) (Q : State → Prop) : Prop :=
   ∃ n s' tr, runH B base n s = .ok (s', tr) ∧ WritesTo Wr tr ∧ Q s'
 
 variable {base : Word} {Wr : Word → Prop}
@@ -261,14 +265,14 @@ theorem Reach.block {s : State} {Q : State → Prop} (hb : base.toNat % 2 = 0)
     (ha : alignedAll is s = true) (hw : WritesTo Wr (traceAll is s))
     (hq : Reach base Wr (execAll is s) Q) : Reach base Wr s Q := by
   apply Reach.runH (n := is.length) (tr := traceAll is s) _ hw hq
-  rw [runH_seq hb (by rw [B_len]; decide) is off s hpc ho hseq hf, runSeq_eq is s hf ha]
+  rw [runH_seq hb B_lt is off s hpc ho hseq hf, runSeq_eq is s hf ha]
 
 theorem Reach.step {s s1 : State} {Q : State → Prop} (hb : base.toNat % 2 = 0) (off : Nat)
     (i : Instr) (hpc : s.pc = base + BitVec.ofNat 32 off) (ho : off % 2 = 0)
     (hi : instrAt B off = some i) (hsz : off + i.size ≤ B.length)
     (ha : (i.accesses s).all Access.aligned = true) (hex : i.exec s = .ok s1)
     (hw : ∀ y, Writes (i.accesses s) y → Wr y) (hq : Reach base Wr s1 Q) : Reach base Wr s Q := by
-  have h := stepH_of_instr hb (by rw [B_len]; decide) hpc ho hi hsz ha hex
+  have h := stepH_of_instr hb B_lt hpc ho hi hsz ha hex
   apply Reach.runH (n := 1) (tr := [⟨s.pc, i, i.accesses s⟩]) _
     (WritesTo.cons hw (WritesTo.nil _)) hq
   rw [runH_one_step 0 h]; rfl
@@ -276,7 +280,7 @@ theorem Reach.step {s s1 : State} {Q : State → Prop} (hb : base.toNat % 2 = 0)
 /-- A conditional branch at `off` with target offset `tgt`. -/
 theorem Reach.bcond {s : State} {Q : State → Prop} (hb : base.toNat % 2 = 0) (off tgt : Nat)
     (cond : BitVec 4) (imm : BitVec 8) (hpc : s.pc = base + BitVec.ofNat 32 off) (ho : off % 2 = 0)
-    (hi : instrAt B off = some (.bcond cond imm)) (hsz : off + 2 ≤ Artifacts.Release.size)
+    (hi : instrAt B off = some (.bcond cond imm)) (hsz : off + 2 ≤ BS)
     (ht : BitVec.ofNat 32 off + 4#32 + (imm ++ 0#1).signExtend 32 = BitVec.ofNat 32 tgt)
     (hT : condPassed cond s = true → Reach base Wr (s.setReg 15 (base + BitVec.ofNat 32 tgt)) Q)
     (hF : condPassed cond s = false → Reach base Wr (s.setReg 15 (base + BitVec.ofNat 32 (off + 2))) Q) :
@@ -298,7 +302,7 @@ theorem Reach.bcond {s : State} {Q : State → Prop} (hb : base.toNat % 2 = 0) (
 /-- An unconditional branch at `off` with target offset `tgt`. -/
 theorem Reach.b {s : State} {Q : State → Prop} (hb : base.toNat % 2 = 0) (off tgt : Nat)
     (imm : BitVec 11) (hpc : s.pc = base + BitVec.ofNat 32 off) (ho : off % 2 = 0)
-    (hi : instrAt B off = some (.b imm)) (hsz : off + 2 ≤ Artifacts.Release.size)
+    (hi : instrAt B off = some (.b imm)) (hsz : off + 2 ≤ BS)
     (ht : BitVec.ofNat 32 off + 4#32 + (imm ++ 0#1).signExtend 32 = BitVec.ofNat 32 tgt)
     (hq : Reach base Wr (s.setReg 15 (base + BitVec.ofNat 32 tgt)) Q) : Reach base Wr s Q := by
   apply Reach.step hb off _ hpc ho hi (by rw [B_len]; exact hsz) (by simp [Instr.accesses])
@@ -310,7 +314,7 @@ theorem Reach.b {s : State} {Q : State → Prop} (hb : base.toNat % 2 = 0) (off 
 
 /-- `ReachA`: a Harvard run of the release bytes from `s` reaches a state satisfying `Q`,
 with every data access of the run satisfying the access predicate `ap`. -/
-def ReachA (base : Word) (ap : Access → Prop) (s : State) (Q : State → Prop) : Prop :=
+def ReachA [CodeBytes B BS] (base : Word) (ap : Access → Prop) (s : State) (Q : State → Prop) : Prop :=
   ∃ n s' tr, runH B base n s = .ok (s', tr) ∧ AccessesTo ap tr ∧ Q s'
 
 variable {ap : Access → Prop}
@@ -345,14 +349,14 @@ theorem ReachA.block {s : State} {Q : State → Prop} (hb : base.toNat % 2 = 0)
     (ha : alignedAll is s = true) (hacc : AccessesTo ap (traceAll is s))
     (hq : ReachA base ap (execAll is s) Q) : ReachA base ap s Q := by
   apply ReachA.runH (n := is.length) (tr := traceAll is s) _ hacc hq
-  rw [runH_seq hb (by rw [B_len]; decide) is off s hpc ho hseq hf, runSeq_eq is s hf ha]
+  rw [runH_seq hb B_lt is off s hpc ho hseq hf, runSeq_eq is s hf ha]
 
 theorem ReachA.step {s s1 : State} {Q : State → Prop} (hb : base.toNat % 2 = 0) (off : Nat)
     (i : Instr) (hpc : s.pc = base + BitVec.ofNat 32 off) (ho : off % 2 = 0)
     (hi : instrAt B off = some i) (hsz : off + i.size ≤ B.length)
     (ha : (i.accesses s).all Access.aligned = true) (hex : i.exec s = .ok s1)
     (hacc : ∀ a ∈ i.accesses s, ap a) (hq : ReachA base ap s1 Q) : ReachA base ap s Q := by
-  have h := stepH_of_instr hb (by rw [B_len]; decide) hpc ho hi hsz ha hex
+  have h := stepH_of_instr hb B_lt hpc ho hi hsz ha hex
   apply ReachA.runH (n := 1) (tr := [⟨s.pc, i, i.accesses s⟩]) _
     (AccessesTo.cons hacc (AccessesTo.nil _)) hq
   rw [runH_one_step 0 h]; rfl
@@ -360,7 +364,7 @@ theorem ReachA.step {s s1 : State} {Q : State → Prop} (hb : base.toNat % 2 = 0
 /-- A conditional branch at `off` with target offset `tgt` for `ReachA`. -/
 theorem ReachA.bcond {s : State} {Q : State → Prop} (hb : base.toNat % 2 = 0) (off tgt : Nat)
     (cond : BitVec 4) (imm : BitVec 8) (hpc : s.pc = base + BitVec.ofNat 32 off) (ho : off % 2 = 0)
-    (hi : instrAt B off = some (.bcond cond imm)) (hsz : off + 2 ≤ Artifacts.Release.size)
+    (hi : instrAt B off = some (.bcond cond imm)) (hsz : off + 2 ≤ BS)
     (ht : BitVec.ofNat 32 off + 4#32 + (imm ++ 0#1).signExtend 32 = BitVec.ofNat 32 tgt)
     (hT : condPassed cond s = true → ReachA base ap (s.setReg 15 (base + BitVec.ofNat 32 tgt)) Q)
     (hF : condPassed cond s = false → ReachA base ap (s.setReg 15 (base + BitVec.ofNat 32 (off + 2))) Q) :
@@ -382,7 +386,7 @@ theorem ReachA.bcond {s : State} {Q : State → Prop} (hb : base.toNat % 2 = 0) 
 /-- An unconditional branch at `off` with target offset `tgt` for `ReachA`. -/
 theorem ReachA.b {s : State} {Q : State → Prop} (hb : base.toNat % 2 = 0) (off tgt : Nat)
     (imm : BitVec 11) (hpc : s.pc = base + BitVec.ofNat 32 off) (ho : off % 2 = 0)
-    (hi : instrAt B off = some (.b imm)) (hsz : off + 2 ≤ Artifacts.Release.size)
+    (hi : instrAt B off = some (.b imm)) (hsz : off + 2 ≤ BS)
     (ht : BitVec.ofNat 32 off + 4#32 + (imm ++ 0#1).signExtend 32 = BitVec.ofNat 32 tgt)
     (hq : ReachA base ap (s.setReg 15 (base + BitVec.ofNat 32 tgt)) Q) : ReachA base ap s Q := by
   apply ReachA.step hb off _ hpc ho hi (by rw [B_len]; exact hsz) (by simp [Instr.accesses])
@@ -393,7 +397,7 @@ theorem ReachA.b {s : State} {Q : State → Prop} (hb : base.toNat % 2 = 0) (off
 /-- A branch-with-link at `off` with target offset `tgt` for `ReachA`. -/
 theorem ReachA.bl {s : State} {Q : State → Prop} (hb : base.toNat % 2 = 0) (off tgt : Nat)
     (imm : BitVec 25) (hpc : s.pc = base + BitVec.ofNat 32 off) (ho : off % 2 = 0)
-    (hi : instrAt B off = some (.bl imm)) (hsz : off + 4 ≤ Artifacts.Release.size)
+    (hi : instrAt B off = some (.bl imm)) (hsz : off + 4 ≤ BS)
     (ht : BitVec.ofNat 32 off + 4#32 + imm.signExtend 32 = BitVec.ofNat 32 tgt)
     (hq : ReachA base ap ((s.setReg 14 ((base + BitVec.ofNat 32 (off + 4)) ||| 1#32)).setReg 15
       (base + BitVec.ofNat 32 tgt)) Q) : ReachA base ap s Q := by
@@ -422,7 +426,7 @@ theorem reach_iff_reachA (base : Word) (Wr : Word → Prop) (s : State) (Q : Sta
   ⟨Reach.to_reachA, Reach.of_reachA⟩
 
 /-- `ReachRW`: Harvard run reaching `Q` with reads inside `Rd` and writes inside `Wr`. -/
-def ReachRW (base : Word) (Rd Wr : Word → Prop) (s : State) (Q : State → Prop) : Prop :=
+def ReachRW [CodeBytes B BS] (base : Word) (Rd Wr : Word → Prop) (s : State) (Q : State → Prop) : Prop :=
   ReachA base (RWAccess Rd Wr) s Q
 
 theorem ReachRW.done {Rd : Word → Prop} {s : State} {Q : State → Prop} (h : Q s) :
@@ -501,7 +505,7 @@ theorem ReachRW.step_rw {Rd : Word → Prop} {s s1 : State} {Q : State → Prop}
 
 theorem ReachRW.bcond {Rd : Word → Prop} {s : State} {Q : State → Prop} (hb : base.toNat % 2 = 0) (off tgt : Nat)
     (cond : BitVec 4) (imm : BitVec 8) (hpc : s.pc = base + BitVec.ofNat 32 off) (ho : off % 2 = 0)
-    (hi : instrAt B off = some (.bcond cond imm)) (hsz : off + 2 ≤ Artifacts.Release.size)
+    (hi : instrAt B off = some (.bcond cond imm)) (hsz : off + 2 ≤ BS)
     (ht : BitVec.ofNat 32 off + 4#32 + (imm ++ 0#1).signExtend 32 = BitVec.ofNat 32 tgt)
     (hT : condPassed cond s = true → ReachRW base Rd Wr (s.setReg 15 (base + BitVec.ofNat 32 tgt)) Q)
     (hF : condPassed cond s = false → ReachRW base Rd Wr (s.setReg 15 (base + BitVec.ofNat 32 (off + 2))) Q) :
@@ -510,7 +514,7 @@ theorem ReachRW.bcond {Rd : Word → Prop} {s : State} {Q : State → Prop} (hb 
 
 theorem ReachRW.b {Rd : Word → Prop} {s : State} {Q : State → Prop} (hb : base.toNat % 2 = 0) (off tgt : Nat)
     (imm : BitVec 11) (hpc : s.pc = base + BitVec.ofNat 32 off) (ho : off % 2 = 0)
-    (hi : instrAt B off = some (.b imm)) (hsz : off + 2 ≤ Artifacts.Release.size)
+    (hi : instrAt B off = some (.b imm)) (hsz : off + 2 ≤ BS)
     (ht : BitVec.ofNat 32 off + 4#32 + (imm ++ 0#1).signExtend 32 = BitVec.ofNat 32 tgt)
     (hq : ReachRW base Rd Wr (s.setReg 15 (base + BitVec.ofNat 32 tgt)) Q) : ReachRW base Rd Wr s Q :=
   ReachA.b hb off tgt imm hpc ho hi hsz ht hq
@@ -518,7 +522,7 @@ theorem ReachRW.b {Rd : Word → Prop} {s : State} {Q : State → Prop} (hb : ba
 /-- A branch-with-link at `off` with target offset `tgt` for `ReachRW`. -/
 theorem ReachRW.bl {Rd : Word → Prop} {s : State} {Q : State → Prop} (hb : base.toNat % 2 = 0) (off tgt : Nat)
     (imm : BitVec 25) (hpc : s.pc = base + BitVec.ofNat 32 off) (ho : off % 2 = 0)
-    (hi : instrAt B off = some (.bl imm)) (hsz : off + 4 ≤ Artifacts.Release.size)
+    (hi : instrAt B off = some (.bl imm)) (hsz : off + 4 ≤ BS)
     (ht : BitVec.ofNat 32 off + 4#32 + imm.signExtend 32 = BitVec.ofNat 32 tgt)
     (hq : ReachRW base Rd Wr ((s.setReg 14 ((base + BitVec.ofNat 32 (off + 4)) ||| 1#32)).setReg 15
       (base + BitVec.ofNat 32 tgt)) Q) : ReachRW base Rd Wr s Q :=

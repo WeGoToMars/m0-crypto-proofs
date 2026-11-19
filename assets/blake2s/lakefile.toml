@@ -3,7 +3,7 @@
 # tools/extract_release.py from the library's m0crypto_blake2s.o) and builds only the
 # asset root M0Crypto.Assets.Blake2s and its imports.
 name = "m0crypto_blake2s"
-version = "0.3.2"
+version = "0.4.0"
 defaultTargets = ["Asset"]
 
 # Makes every module under ../../lean local to this workspace (built here, not looked up).

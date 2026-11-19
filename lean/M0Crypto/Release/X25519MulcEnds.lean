@@ -19,14 +19,14 @@ namespace M0Crypto.Release.X25519MulcEnds
 open M0Crypto.Armv6M (Word Reg LowReg State Mem addWithCarry read32 write32)
 open M0Crypto.Thumb
 open M0Crypto.Release (ReachW InRegion)
-open M0Crypto.Release.X25519Mem (regs_strImm mem_strImm)
+open M0Crypto.Release.Field25519Mem (regs_strImm mem_strImm)
 open M0Crypto.Release.InstrNext (regs_movHi regs_movImm)
-open M0Crypto.Release.X25519Mul (regs_lsr regs_lsl regs_muls regs_adds toReg_inj)
-open M0Crypto.Release.X25519Block
+open M0Crypto.Release.Field25519Mul (regs_lsr regs_lsl regs_muls regs_adds toReg_inj)
+open M0Crypto.Release.Field25519Block
 open M0Crypto.Release.X25519MulcWord (mem_dp mem_lsl mem_lsr mem_adds)
 open M0Crypto.Release.X25519MulcStep (sAddr)
 open M0Crypto.Release.X25519Macros (mulcWord mulcStep feMulcAddList)
-open M0Crypto.Release.X25519Carry (adc_nat)
+open M0Crypto.Release.Field25519Carry (adc_nat)
 
 def pre2 : List Instr := [.push 0 true, .movHi 12 0]
 def pre (lit : BitVec 8) : List Instr := pre2 ++ [.ldrLit 7 lit, .movImm 6 0]
@@ -132,17 +132,17 @@ theorem pre_run_w {base : Word} (hb : base.toNat % 2 = 0) {Pc Wr : Word → Prop
     · simp (config := {decide := true}) only [execAll, regs_movImm, regs_ldrLit, ne_eq, ite_false, r13]
     · simp (config := {decide := true}) only [execAll, regs_movImm, regs_ldrLit, ne_eq, ite_false, r12]
     · simp (config := {decide := true}) only [execAll, State.reg, regs_movImm, ne_eq, ite_true,
-        X25519Mem.toReg6]
+        Field25519Mem.toReg6]
     · simp (config := {decide := true}) only [execAll, State.reg, regs_movImm, regs_ldrLit, ne_eq,
-        ite_true, ite_false, X25519Mem.toReg6, X25519Mem.toReg7, mem_movImm, pc2, hpc, m2,
+        ite_true, ite_false, Field25519Mem.toReg6, Field25519Mem.toReg7, mem_movImm, pc2, hpc, m2,
         ofNat_add_assoc]
     · intro r h15 h13 h12 h6 h7
-      simp only [execAll, regs_movImm _ _ _ _ h15, regs_ldrLit _ _ _ _ h15, X25519Mem.toReg6,
-        X25519Mem.toReg7, h6, h7, ite_false, ro r h15 h13 h12]
+      simp only [execAll, regs_movImm _ _ _ _ h15, regs_ldrLit _ _ _ _ h15, Field25519Mem.toReg6,
+        Field25519Mem.toReg7, h6, h7, ite_false, ro r h15 h13 h12]
 
 /-! ## `fold` -/
 
-open M0Crypto.Release.X25519Mem (toReg0 toReg1 toReg3 toReg4 toReg5) in
+open M0Crypto.Release.Field25519Mem (toReg0 toReg1 toReg3 toReg4 toReg5) in
 theorem fold_exec (s : State) (hh : (s.reg 3).toNat < 2 ^ 26) :
     let s' := execAll fold s
     (s'.reg 3).toNat = 19 * (2 * (s.reg 3).toNat + (s.reg 4).toNat / 2 ^ 31) ∧
@@ -190,7 +190,7 @@ theorem fold_exec (s : State) (hh : (s.reg 3).toNat < 2 ^ 26) :
 
 theorem fold_falls : fold.all Instr.falls = true := by simp [fold, Instr.falls]; decide
 
-theorem fold_regOnly : fold.all X25519Mul.regOnly = true := by simp [fold, X25519Mul.regOnly]
+theorem fold_regOnly : fold.all Field25519Mul.regOnly = true := by simp [fold, Field25519Mul.regOnly]
 
 theorem fold_run_w {base : Word} (hb : base.toNat % 2 = 0) {Pc Wr : Word → Prop} {x : State}
     {off : Nat} (hseq : seqAt B off fold = true) (ho : off % 2 = 0)
@@ -209,7 +209,7 @@ theorem fold_run_w {base : Word} (hb : base.toNat % 2 = 0) {Pc Wr : Word → Pro
 
 /-! ## `fin` and `pop {pc}` -/
 
-open M0Crypto.Release.X25519Mem (toReg0 toReg1) in
+open M0Crypto.Release.Field25519Mem (toReg0 toReg1) in
 theorem fin_exec (s : State) :
     let s' := execAll fin s
     s'.mem = write32 s.mem (sAddr s 7) (addWithCarry (s.regs 8) (s.reg 0) false).1 ∧
@@ -236,11 +236,11 @@ theorem fin_acc {Wr : Word → Prop} (s : State) (h12 : (s.regs 12).toNat % 4 = 
     (hW : ∀ q < 4, Wr (sAddr s 7 + BitVec.ofNat 32 q)) : AccAll (AccOk Wr) fin s := by
   have hpre : fin = [.movHi 1 8, .addReg 1 1 0, .movHi 0 12] ++ [.memImm .str 1 0 7] := rfl
   rw [hpre]
-  refine accAll_append (X25519MulcWord.accAll_regOnly _ _ (by simp [X25519Mul.regOnly]))
+  refine accAll_append (X25519MulcWord.accAll_regOnly _ _ (by simp [Field25519Mul.regOnly]))
     (accAll_cons (fun a ha => ?_) (accAll_nil _ _))
   have e : (execAll [.movHi 1 8, .addReg 1 1 0, .movHi 0 12] s).reg 0 = s.regs 12 := by
     simp (config := {decide := true}) only [execAll, State.reg, regs_movHi, regs_adds,
-      X25519Mem.toReg0, X25519Mem.toReg1, ite_true, ite_false, ne_eq, not_false_eq_true]
+      Field25519Mem.toReg0, Field25519Mem.toReg1, ite_true, ite_false, ne_eq, not_false_eq_true]
   simp only [Instr.accesses, MemOp.isLoad, MemOp.width, e, List.mem_singleton] at ha
   subst ha
   exact ⟨aligned_word (word_add_aligned h12 (by omega)), fun _ q hq => hW q hq⟩
@@ -258,36 +258,5 @@ theorem fin_run_w {base : Word} (hb : base.toNat % 2 = 0) {Pc Wr : Word → Prop
   refine ReachW.blockAcc hb _ off hpc ho hseq fin_falls (fin_acc x h12 hW) hr ?_
   obtain ⟨m, o⟩ := fin_exec x
   exact cont _ (by rw [execAll_pc _ _ fin_falls, hpc, ofNat_add_assoc]) m o
-
-/-- `pop {pc}`: return to the saved word at SP. -/
-theorem pop_run_w {base : Word} (hb : base.toNat % 2 = 0) {Pc Wr : Word → Prop} {x : State}
-    {off : Nat} (hat : instrAt B off = some (.pop 0 true)) (hsz : off + 2 ≤ B.length)
-    (ho : off % 2 = 0) (hpc : x.pc = base + BitVec.ofNat 32 off) (hr : Pc (base + BitVec.ofNat 32 off))
-    (hsp : (x.regs 13).toNat % 4 = 0) (hlr : (read32 x.mem (x.regs 13)).getLsbD 0 = true)
-    {Q : State → Prop}
-    (hq : ∀ y : State, y.pc = read32 x.mem (x.regs 13) &&& ~~~1#32 →
-      y.regs 13 = x.regs 13 + 4#32 → y.mem = x.mem → Q y) :
-    ReachW base Pc Wr x Q := by
-  have hb0 : bitCount (0 : BitVec 8) = 0 := by decide
-  have hl : listRegs (0 : BitVec 8) = [] := by decide
-  have hb0' : bitCount 0#8 = 0 := by decide
-  have hl' : listRegs 0#8 = [] := by decide
-  have ha : x.regs 13 + BitVec.ofNat 32 (4 * bitCount (0 : BitVec 8)) = x.regs 13 := by
-    rw [hb0]; simp
-  have hex : (Instr.pop 0 true).exec x = .ok
-      ((((loadRegs (x.setReg 15 (x.pc + BitVec.ofNat 32 (Instr.pop 0 true).size)) x.sp
-        ((listRegs 0).map LowReg.toReg)).setReg 13
-          (x.sp + BitVec.ofNat 32 (4 * (bitCount 0 + true.toNat))))).setReg 15
-          (read32 x.mem (x.regs 13) &&& ~~~1#32)) := by
-    simp only [Instr.exec, State.sp, ha, hlr, ite_true]
-  refine ReachW.step hb off (.pop 0 true) hpc ho hat hsz ?_ hex ?_ hr (ReachS.done (hq _ ?_ ?_ ?_))
-  · simp [Instr.accesses, wordAccesses, hb0, Access.aligned, State.sp, hsp]
-  · intro y ⟨a, ha', hw, _⟩
-    simp [Instr.accesses, wordAccesses, hb0] at ha'
-    obtain ⟨_, _, rfl⟩ := ha'
-    cases hw
-  · simp [State.setReg, State.pc]
-  · simp [State.setReg, hb0, hb0', loadRegs, hl, hl', State.sp]
-  · simp [State.setReg, loadRegs, hl, hl']
 
 end M0Crypto.Release.X25519MulcEnds

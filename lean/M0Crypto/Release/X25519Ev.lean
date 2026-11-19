@@ -25,7 +25,7 @@ open M0Crypto.Release (Region RegionWrites InRegion)
 open M0Crypto.Release.X25519Code (AtSite loadSites storeSites)
 open M0Crypto.Release.X25519EntryCode (oLadder oStore oWipe)
 open M0Crypto.Release.X25519Prologue (InpR)
-open M0Crypto.Release.X25519Block (RegionRW)
+open M0Crypto.Release.Field25519Block (RegionRW)
 
 /-- The event condition of a run. -/
 def Ev (c : X25519.Ctx) (_ : State) (e : Event) : Prop :=
@@ -80,11 +80,11 @@ def MidPc (c : X25519.Ctx) (y : Word) : Prop :=
 theorem proPc (c : X25519.Ctx) : ∀ o n, Artifacts.Release.x25519 ≤ o → o + n ≤ oLadder →
     InRegion (ProPc c) c.base o n := fun _ _ h1 h2 => by
   have := bands
-  exact X25519MulcFacts.inReg ⟨h1, by omega, by omega⟩
+  exact Field25519Facts.inReg ⟨h1, by omega, by omega⟩
 
 theorem midPcOk (c : X25519.Ctx) : X25519Op.PcOk c.base oLadder oStore (MidPc c) := by
   have := bands
-  exact ⟨fun _ h => Or.inl h, fun j hj => Or.inr (X25519MulcFacts.inReg ⟨Nat.le_refl _, by omega, by omega⟩ j hj),
+  exact ⟨fun _ h => Or.inl h, fun j hj => Or.inr (Field25519Facts.inReg ⟨Nat.le_refl _, by omega, by omega⟩ j hj),
     this.1, by omega⟩
 
 theorem liftPro {c : X25519.Ctx} {z : State} {e : Event}

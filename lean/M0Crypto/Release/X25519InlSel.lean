@@ -1,5 +1,5 @@
 import M0Crypto.Release.X25519InlBase
-import M0Crypto.Release.X25519Word
+import M0Crypto.Release.Field25519Word
 
 set_option linter.unusedSimpArgs false
 
@@ -8,7 +8,7 @@ set_option linter.unusedSimpArgs false
 b` over eight words, `r0 = dst`, `r1 = a`, `r2 = b`, the mask `r7` either `0` or all ones.
 
 The body is four copies of `selPair`: load two words of `a` and of `b`, select with
-`a ^ ((b ^ a) & m)` (`X25519Word.select_word`), store the two words to `dst`. One generic
+`a ^ ((b ^ a) & m)` (`Field25519Word.select_word`), store the two words to `dst`. One generic
 lemma (`selPair_step`) carries the invariant over pair `k`: words below `2k` of `dst` are
 selected, the others still hold their initial value. An input that is `dst` itself is read at
 words `≥ 2k` only, before they are overwritten, so `a` and `b` may each be `dst` or disjoint
@@ -18,12 +18,13 @@ from it.
 namespace M0Crypto.Release.X25519Inl
 open M0Crypto.Armv6M (Word Reg LowReg State Mem read32 slot)
 open M0Crypto.Thumb
+open M0Crypto.Release.Field25519AddSubChain
 open M0Crypto.Release (B Region ReachW InRegion)
 open M0Crypto.Release.Frame (Disj)
-open M0Crypto.Release.X25519Frame (FrameOk upd)
-open M0Crypto.Release.X25519MulcChain (psum psum_congr)
-open M0Crypto.Release.X25519Block (AccAll AccOk accAll_cons accAll_nil accAll_append)
-open M0Crypto.Release.X25519Mem (toReg0 toReg1 toReg2 toReg3 toReg4 toReg5 toReg6 toReg7)
+open M0Crypto.Release.Field25519Frame (FrameOk upd)
+open M0Crypto.Release.Field25519Facts (psum psum_congr)
+open M0Crypto.Release.Field25519Block (AccAll AccOk accAll_cons accAll_nil accAll_append)
+open M0Crypto.Release.Field25519Mem (toReg0 toReg1 toReg2 toReg3 toReg4 toReg5 toReg6 toReg7)
 
 /-- One pair: `ldm r1!, {r3, r4}; ldm r2!, {r5, r6}`, the select, `stm r0!, {r3, r4}`. -/
 def selPair : List Instr :=
@@ -59,13 +60,13 @@ theorem selPair_exec (s : State) (hm : s.regs 7 = 0 ∨ s.regs 7 = BitVec.allOne
   simp only [t, selPair, execAll_append]
   generalize execAll ld34 s = s1 at l3 l4 l5 l6 l1 l2 lm lo l7 l0
   refine ⟨?_, ?_, ?_, ?_, ?_⟩
-  · simp (config := {decide := true}) only [execAll, X25519Mem.mem_stm, X25519MulcWord.mem_dp,
-      X25519Mem.regs_stm, InstrNext.regs_eors, regs_ands, listRegs_18, List.map, State.reg,
+  · simp (config := {decide := true}) only [execAll, Field25519Mem.mem_stm, X25519MulcWord.mem_dp,
+      Field25519Mem.regs_stm, InstrNext.regs_eors, regs_ands, listRegs_18, List.map, State.reg,
       toReg0, toReg3, toReg4, toReg5, toReg6, toReg7, ite_true, ite_false, l3, l4, l5, l6, l7, l0,
       lm]
-    rw [X25519Word.select_word _ _ _ hm, X25519Word.select_word _ _ _ hm, selVs, sel, sel]
+    rw [Field25519Word.select_word _ _ _ hm, Field25519Word.select_word _ _ _ hm, selVs, sel, sel]
   all_goals
-    try simp (config := {decide := true}) only [execAll, X25519Mem.regs_stm, InstrNext.regs_eors,
+    try simp (config := {decide := true}) only [execAll, Field25519Mem.regs_stm, InstrNext.regs_eors,
       regs_ands, State.reg, toReg0, toReg1, toReg2, toReg3, toReg4, toReg5, toReg6, ite_true,
       ite_false, l0, l1, l2, bitCount_18]
   · simp only [slot, Nat.mul_comm]
@@ -73,7 +74,7 @@ theorem selPair_exec (s : State) (hm : s.regs 7 = 0 ∨ s.regs 7 = BitVec.allOne
     have hr' := hr
     simp only [List.mem_cons, List.not_mem_nil, or_false, not_or] at hr'
     obtain ⟨h0, h1, h2, h3, h4, h5, h6⟩ := hr'
-    simp only [execAll, X25519Mem.regs_stm _ _ _ _ h15, InstrNext.regs_eors _ _ _ _ h15,
+    simp only [execAll, Field25519Mem.regs_stm _ _ _ _ h15, InstrNext.regs_eors _ _ _ _ h15,
       regs_ands _ _ _ _ h15, toReg0, toReg3, toReg4, toReg5, toReg6, h0, h3, h4, h5, h6,
       ite_false]
     exact lo r h15 (by simp [h1, h2, h3, h4, h5, h6])
@@ -158,8 +159,8 @@ theorem sel_exec (s : State) {dst a b : Word} (h0 : s.regs 0 = dst) (h1 : s.regs
     (hf : dst.toNat + 32 ≤ 2 ^ 32) (ha : a = dst ∨ Disj a 32 dst 32)
     (hb : b = dst ∨ Disj b 32 dst 32) :
     let t := execAll selBody s
-    X25519Routines.feVal t.mem dst =
-        (if s.regs 7 = 0 then X25519Routines.feVal s.mem a else X25519Routines.feVal s.mem b) ∧
+    Field25519Routines.feVal t.mem dst =
+        (if s.regs 7 = 0 then Field25519Routines.feVal s.mem a else Field25519Routines.feVal s.mem b) ∧
       (∀ y, ¬ Region dst 32 y → t.mem y = s.mem y) ∧
       ∀ r : Reg, r ≠ 15 → r ∉ ([0, 1, 2, 3, 4, 5, 6] : List Reg) → t.regs r = s.regs r := by
   intro t
@@ -181,11 +182,11 @@ theorem sel_exec (s : State) {dst a b : Word} (h0 : s.regs 0 = dst) (h1 : s.regs
   rw [feVal_frame hF]
   split
   · rename_i hz
-    rw [X25519MulcFacts.feVal_psum]
+    rw [Field25519Facts.feVal_psum]
     exact psum_congr fun i hi => by
       rw [hFG i hi, selG, sel]; simp only [show i < 2 * 4 by omega, hz, ↓reduceIte]
   · rename_i hz
-    rw [X25519MulcFacts.feVal_psum]
+    rw [Field25519Facts.feVal_psum]
     exact psum_congr fun i hi => by
       rw [hFG i hi, selG, sel]; simp only [show i < 2 * 4 by omega, hz, ↓reduceIte]
 
@@ -223,14 +224,14 @@ theorem sel_run_w {base : Word} (hb : base.toNat % 2 = 0) {Pc Wr : Word → Prop
     (hda : a = dst ∨ Disj a 32 dst 32) (hdb : b = dst ∨ Disj b 32 dst 32)
     (hW : ∀ j < 32, Wr (dst + BitVec.ofNat 32 j)) {Q : State → Prop}
     (k : ∀ t', t'.pc = base + BitVec.ofNat 32 (off + seqSize selBody) →
-      X25519Routines.feVal t'.mem dst =
-          (if t.regs 7 = 0 then X25519Routines.feVal t.mem a else X25519Routines.feVal t.mem b) →
+      Field25519Routines.feVal t'.mem dst =
+          (if t.regs 7 = 0 then Field25519Routines.feVal t.mem a else Field25519Routines.feVal t.mem b) →
       (∀ y, ¬ Region dst 32 y → t'.mem y = t.mem y) →
       (∀ r : Reg, r ≠ 15 → r ∉ ([0, 1, 2, 3, 4, 5, 6] : List Reg) → t'.regs r = t.regs r) →
       ReachW base Pc Wr t' Q) :
     ReachW base Pc Wr t Q := by
   obtain ⟨ev, em, eo⟩ := sel_exec t h0 h1 h2 hm hf hda hdb
-  refine X25519Block.ReachW.blockAcc hb _ off hpc hoff hseq selBody_falls
+  refine Field25519Block.ReachW.blockAcc hb _ off hpc hoff hseq selBody_falls
     (sel_acc t h0 h1 h2 hm hf hda hdb hd ha hbb hW) hr (k _ ?_ ev em eo)
   rw [execAll_pc _ _ selBody_falls, hpc, ofNat_add_assoc]
 

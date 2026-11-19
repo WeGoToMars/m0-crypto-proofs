@@ -234,7 +234,8 @@ def Instr.writesMem : Instr → Bool
 /-- Registers other than PC the instruction may write. -/
 def Instr.dsts : Instr → List Nat
   | .lslImm d _ _ | .lsrImm d _ _ | .addReg d _ _ | .subReg d _ _ | .addImm3 d _ _
-  | .subImm3 d _ _ | .movImm d _ | .addImm8 d _ | .subImm8 d _ | .addRdSp d _ | .uxth d _ => [d.val]
+  | .subImm3 d _ _ | .movImm d _ | .addImm8 d _ | .subImm8 d _ | .addRdSp d _ | .uxth d _
+  | .asrImm d _ _ | .addPc d | .rev d _ => [d.val]
   | .cmpImm _ _ | .strSp _ _ | .bcond _ _ | .b _ => []
   | .dp op dn _ => if op = .tst ∨ op = .cmp then [] else [dn.val]
   | .movHi d _ => [d.val]

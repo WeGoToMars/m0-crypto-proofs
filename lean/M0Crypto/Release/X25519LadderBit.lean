@@ -20,7 +20,7 @@ open M0Crypto.Thumb
 open M0Crypto.Release (ReachW Region InRegion WritesTo B)
 open M0Crypto.Release.X25519Layout
 open M0Crypto.Release.X25519EntryCode (bitL)
-open M0Crypto.Release.X25519Mem (toReg0 toReg1 toReg2 toReg7)
+open M0Crypto.Release.Field25519Mem (toReg0 toReg1 toReg2 toReg7)
 
 /-! ## Single instructions -/
 
@@ -100,16 +100,16 @@ theorem bit_exec (s : State) :
   intro sp tW w b u
   refine ⟨?_, ?_, ?_⟩
   · simp [u, sp, bitL, execAll, regs_lsrImm, regs_movImm, regs_ldrReg, regs_rors, regs_eors, regs_rsbs,
-      regs_strSp, X25519Mem.regs_ldrSp, X25519Mem.regs_addRdSp, X25519Inl.regs_ands, State.reg, toReg0, toReg1, toReg2, toReg7]
+      regs_strSp, Field25519Mem.regs_ldrSp, Field25519Mem.regs_addRdSp, Field25519AddSubChain.regs_ands, State.reg, toReg0, toReg1, toReg2, toReg7]
   · simp [u, sp, tW, w, b, bitL, execAll, regs_lsrImm, regs_movImm, regs_ldrReg, regs_rors, regs_eors,
-      regs_rsbs, regs_strSp, X25519Mem.regs_ldrSp, X25519Mem.regs_addRdSp, X25519Inl.regs_ands, rsbs_val,
-      mem_lsrImm, mem_movImm, mem_dp, mem_ldrReg, X25519Mem.mem_ldrSp, X25519Mem.mem_addRdSp,
-      c_lsrImm, c_movImm, c_ldrReg, X25519Inl.c_ands, X25519Mem.c_ldrSp, X25519Mem.c_addRdSp,
+      regs_rsbs, regs_strSp, Field25519Mem.regs_ldrSp, Field25519Mem.regs_addRdSp, Field25519AddSubChain.regs_ands, rsbs_val,
+      mem_lsrImm, mem_movImm, mem_dp, mem_ldrReg, Field25519Mem.mem_ldrSp, Field25519Mem.mem_addRdSp,
+      c_lsrImm, c_movImm, c_ldrReg, Field25519AddSubChain.c_ands, Field25519Mem.c_ldrSp, Field25519Mem.c_addRdSp,
       State.reg, State.sp, lvT, lvSwap, sK, toReg0, toReg1, toReg2, toReg7]
   · simp [u, sp, tW, w, b, bitL, execAll, regs_lsrImm, regs_movImm, regs_ldrReg, regs_rors, regs_eors,
-      regs_rsbs, regs_strSp, X25519Mem.regs_ldrSp, X25519Mem.regs_addRdSp, X25519Inl.regs_ands,
-      mem_lsrImm, mem_movImm, mem_dp, mem_ldrReg, X25519Mem.mem_ldrSp, X25519Mem.mem_addRdSp, mem_strSp,
-      c_lsrImm, c_movImm, c_ldrReg, X25519Inl.c_ands, X25519Mem.c_ldrSp, X25519Mem.c_addRdSp,
+      regs_rsbs, regs_strSp, Field25519Mem.regs_ldrSp, Field25519Mem.regs_addRdSp, Field25519AddSubChain.regs_ands,
+      mem_lsrImm, mem_movImm, mem_dp, mem_ldrReg, Field25519Mem.mem_ldrSp, Field25519Mem.mem_addRdSp, mem_strSp,
+      c_lsrImm, c_movImm, c_ldrReg, Field25519AddSubChain.c_ands, Field25519Mem.c_ldrSp, Field25519Mem.c_addRdSp,
       State.reg, State.sp, lvT, lvSwap, sK, toReg0, toReg1, toReg2, toReg7]
 
 theorem and28_mod (n : Nat) : (n &&& 28) % 4 = 0 := by
@@ -120,11 +120,11 @@ theorem and28_mod (n : Nat) : (n &&& 28) % 4 = 0 := by
 /-- The block's accesses: aligned, and the only write is `LV_SWAP`. -/
 theorem bit_acc {Wr : Word → Prop} (s : State) (hsp : (s.regs 13).toNat % 4 = 0)
     (hW : ∀ k < 4, Wr (s.regs 13 + BitVec.ofNat 32 lvSwap + BitVec.ofNat 32 k)) :
-    X25519Block.AccAll (X25519Block.AccOk Wr) bitL s := by
-  simp [X25519Block.AccAll, X25519Block.AccOk, bitL, traceAll, Instr.accesses, Access.aligned,
+    Field25519Block.AccAll (Field25519Block.AccOk Wr) bitL s := by
+  simp [Field25519Block.AccAll, Field25519Block.AccOk, bitL, traceAll, Instr.accesses, Access.aligned,
     regs_lsrImm, regs_movImm, regs_ldrReg, regs_rors, regs_eors, regs_rsbs, regs_strSp,
-    X25519Mem.regs_ldrSp, X25519Mem.regs_addRdSp, X25519Inl.regs_ands, State.reg, State.sp,
-    mem_lsrImm, mem_movImm, mem_dp, mem_ldrReg, X25519Mem.mem_ldrSp, X25519Mem.mem_addRdSp,
+    Field25519Mem.regs_ldrSp, Field25519Mem.regs_addRdSp, Field25519AddSubChain.regs_ands, State.reg, State.sp,
+    mem_lsrImm, mem_movImm, mem_dp, mem_ldrReg, Field25519Mem.mem_ldrSp, Field25519Mem.mem_addRdSp,
     toReg0, toReg1, toReg2, toReg7, lvT, lvSwap, sK, MemOp.width, MemOp.isLoad]
   simp only [lvSwap] at hW
   have := and28_mod (BitVec.toNat (read32 s.mem (s.regs 13 + 320#32)) >>> 3)
@@ -167,7 +167,7 @@ theorem bit_w {c : X25519.Ctx} (hv : X25519.Valid c) {m1 : Mem} {Wr : Word → P
     have e := X25519Op.E_add hv (d := lvSwap) (by decide)
     exact X25519Op.region_sub (by simp only [X25519.wipeBytes]; omega)
       (by rw [e]; simp only [lvSwap]; omega) (by rw [e]; simp only [lvSwap, X25519.wipeBytes]; omega) h
-  have hacc : X25519Block.AccAll (X25519Block.AccOk Wr) bitL s := by
+  have hacc : Field25519Block.AccAll (Field25519Block.AccOk Wr) bitL s := by
     refine bit_acc s (by rw [h13]; omega) fun j hj => hWr _ ?_
     rw [h13]
     refine X25519Op.region_sub (a := E c + BitVec.ofNat 32 lvSwap) (n := 4) (by simp only [X25519.stackBytes]; omega) ?_ ?_ ?_
@@ -175,7 +175,7 @@ theorem bit_w {c : X25519.Ctx} (hv : X25519.Valid c) {m1 : Mem} {Wr : Word → P
     · rw [X25519Op.E_add hv (by decide)]; simp only [lvSwap, X25519.stackBytes]; omega
     · show (_ - _ : Word).toNat < 4
       rw [Frame.sub_ofNat_toNat _ _ (by omega)]; exact hj
-  refine X25519Block.ReachW.blockAcc hb0 bitL o hpc ho hseq (by decide) hacc
+  refine Field25519Block.ReachW.blockAcc hb0 bitL o hpc ho hseq (by decide) hacc
     (hPO.inE hlo hend) ?_
   obtain ⟨u13, u7, um⟩ := bit_exec s
   rw [h13] at u13 u7 um

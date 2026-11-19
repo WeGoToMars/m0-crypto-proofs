@@ -1,4 +1,5 @@
-import M0Crypto.Release.X25519Block
+import M0Crypto.Release.X25519Macros
+import M0Crypto.Release.Field25519Block
 
 set_option linter.unusedSimpArgs false
 
@@ -10,19 +11,19 @@ load `a[i]` through `r1` and `b[i]` through `r2`, and leave `121666 * a[i] + b[i
 The lemma is generic in the word index and the registers: the hypotheses say only that the
 registers are distinct and differ from the fixed `r1, r2, r6, r7`. The macro is the core
 (`mulcWord i none`) and, with a carry-in register `k`, a two-instruction tail. The value
-comes from `X25519Word.mulcWord_nat`. `mulcWord_acc` gives the two (aligned, read-only)
+comes from `Field25519Word.mulcWord_nat`. `mulcWord_acc` gives the two (aligned, read-only)
 accesses.
 -/
 
 namespace M0Crypto.Release.X25519MulcWord
 open M0Crypto.Armv6M (Word Reg LowReg State addWithCarry read32)
 open M0Crypto.Thumb
-open M0Crypto.Release.X25519Mem (regs_ldrImm mem_ldrImm c_ldrImm)
-open M0Crypto.Release.X25519Mul (regs_lsr regs_lsl regs_muls regs_uxth regs_adcs regs_adds c_adcs
+open M0Crypto.Release.Field25519Mem (regs_ldrImm mem_ldrImm c_ldrImm)
+open M0Crypto.Release.Field25519Mul (regs_lsr regs_lsl regs_muls regs_uxth regs_adcs regs_adds c_adcs
   c_adds lo16 hi16 shl17 hi15 mul_small toReg_inj)
-open M0Crypto.Release.X25519Mem (c_muls c_uxth)
-open M0Crypto.Release.X25519Block
-open M0Crypto.Release.X25519Carry (adc_nat carry_le)
+open M0Crypto.Release.Field25519Mem (c_muls c_uxth)
+open M0Crypto.Release.Field25519Block
+open M0Crypto.Release.Field25519Carry (adc_nat carry_le)
 open M0Crypto.Release.X25519Macros (mulcWord)
 
 /-- The address of word `i` from the pointer in `n`, as `ldr`/`str` with offset `i` give it. -/
@@ -56,7 +57,7 @@ theorem mem_uxth (s : State) (d m : LowReg) : ((Instr.uxth d m).next s).mem = s.
 theorem mulcWord_some (i : Nat) (k a t u : LowReg) :
     mulcWord i (some k) a t u = mulcWord i none a t u ++ [.addReg t t k, .dp .adcs a 6] := rfl
 
-/-- The pieces of one `word` as natural numbers (`X25519Word.mulcWord_nat`, with `k = 0`). -/
+/-- The pieces of one `word` as natural numbers (`Field25519Word.mulcWord_nat`, with `k = 0`). -/
 theorem core_nat (A B : Word) (C1 D1 C2 D2 C3 D3 : Word × Bool × Bool)
     (e1 : C1 = addWithCarry (60833#32 * (A.setWidth 16).setWidth 32)
       (60833#32 * (A.setWidth 16).setWidth 32) false)
@@ -91,7 +92,7 @@ theorem core_nat (A B : Word) (C1 D1 C2 D2 C3 D3 : Word × Bool × Bool)
   rw [← e3] at a3
   rw [← f3, z] at b3
   simp only [Bool.toNat_false, Nat.add_zero] at a1 a2 a3 b1 b2 b3
-  have key := X25519Word.mulcWord_nat (A.toNat % 2 ^ 16) (A.toNat / 2 ^ 16) B.toNat 0
+  have key := Field25519Word.mulcWord_nat (A.toNat % 2 ^ 16) (A.toNat / 2 ^ 16) B.toNat 0
     C1.1.toNat C1.2.1.toNat D1.1.toNat D1.2.1.toNat C2.1.toNat C2.2.1.toNat D2.1.toNat
     D2.2.1.toNat C3.1.toNat C3.2.1.toNat D3.1.toNat D3.2.1.toNat C3.1.toNat 0 D3.1.toNat 0
     l1 l2 B.isLt (by decide) a1 b1 a2 b2 a3 b3 (by omega) (by omega) C3.1.isLt D3.1.isLt
@@ -214,7 +215,7 @@ theorem mulcWord_split (i : Nat) (k : Option LowReg) (a t u : LowReg) :
       [.memImm .ldr u 2 (BitVec.ofNat 5 i)] ++ rest k a t u := by
   cases k <;> rfl
 
-open M0Crypto.Release.X25519Mul (regOnly accesses_regOnly) in
+open M0Crypto.Release.Field25519Mul (regOnly accesses_regOnly) in
 theorem accAll_regOnly {P : Access → Prop} (is : List Instr) (s : State)
     (h : is.all regOnly = true) : AccAll P is s :=
   accAll_none is s fun i hi t => accesses_regOnly i t (List.all_eq_true.mp h i hi)
@@ -235,8 +236,8 @@ theorem mulcWord_acc {Wr : Word → Prop} (s : State) (i : Nat) (k : Option LowR
   obtain ⟨⟨-, -, -, da2, -, -⟩, ⟨-, -, dt2, -, -⟩, ⟨-, du2, -, -⟩, -⟩ := hd
   rw [mulcWord_split]
   refine accAll_append (accAll_append (accAll_append (ldr_acc s a 1 _ h1)
-    (accAll_regOnly _ _ (by simp [mid, X25519Mul.regOnly]))) (ldr_acc _ u 2 _ ?_))
-    (accAll_regOnly _ _ (by cases k <;> simp [rest, X25519Mul.regOnly]))
+    (accAll_regOnly _ _ (by simp [mid, Field25519Mul.regOnly]))) (ldr_acc _ u 2 _ ?_))
+    (accAll_regOnly _ _ (by cases k <;> simp [rest, Field25519Mul.regOnly]))
   have v : ∀ x : LowReg, x ≠ 2 → (2 : Nat) ≠ x.val := fun x h e => h (Fin.ext e.symm)
   have e : (execAll ([.memImm .ldr a 1 (BitVec.ofNat 5 i)] ++ mid a t u) s).reg 2 = s.reg 2 :=
     execAll_regs_other _ _ _ (by decide) (by

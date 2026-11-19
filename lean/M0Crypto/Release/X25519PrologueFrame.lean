@@ -22,11 +22,11 @@ open M0Crypto.Armv6M (Word Reg LowReg State Mem read32 write32 slot)
 open M0Crypto.Thumb
 open M0Crypto.Release (ReachW InRegion Region)
 open M0Crypto.Release.Frame (Disj InFrame)
-open M0Crypto.Release.X25519Block
-open M0Crypto.Release.X25519Frame (FrameOk upd slot_byte)
+open M0Crypto.Release.Field25519Block
+open M0Crypto.Release.Field25519Frame (FrameOk upd slot_byte)
 open M0Crypto.Release.X25519Layout
 open M0Crypto.Release.X25519EntryCode
-open M0Crypto.Release.X25519FeSteps (cons one)
+open M0Crypto.Release.Field25519FeSteps (cons one)
 
 /-! ## Single instructions -/
 
@@ -53,8 +53,8 @@ theorem push_run (s : State) (lr : Bool) (hsp : s.sp.toNat % 4 = 0)
     exact wordAccesses_ok (toNat_sub_al _ _ hsp (by omega) (by omega)) (fun _ i hi q hq => hW i hi q hq) a ha
   · simp only [execAll, Instr.next, Instr.exec, Frame.bitCount_f0, Frame.listRegs_f0]
     refine ⟨?_, ?_, fun r h15 h13 => ?_⟩
-    · simp [State.setReg, State.reg, X25519Mem.toReg4, X25519Mem.toReg5, X25519Mem.toReg6,
-        X25519Mem.toReg7]
+    · simp [State.setReg, State.reg, Field25519Mem.toReg4, Field25519Mem.toReg5, Field25519Mem.toReg6,
+        Field25519Mem.toReg7]
     · simp [State.setReg]
     · simp [State.setReg, h15, h13]
 
@@ -65,17 +65,17 @@ theorem stm_run (s : State) (hal : (s.regs 3).toNat % 4 = 0)
       t.regs 3 = s.regs 3 + BitVec.ofNat 32 (4 * 4) ∧
       ∀ r : Reg, r ≠ 15 → r ≠ 3 → t.regs r = s.regs r := by
   refine ⟨accAll_cons (fun a ha => ?_) (accAll_nil _ _), ?_⟩
-  · simp only [Instr.accesses, Frame.bitCount_f0, State.reg, X25519Mem.toReg3] at ha
+  · simp only [Instr.accesses, Frame.bitCount_f0, State.reg, Field25519Mem.toReg3] at ha
     exact wordAccesses_ok hal (fun _ i hi q hq => hW i hi q hq) a ha
   · simp only [execAll]
     refine ⟨?_, ?_, fun r h15 h3 => ?_⟩
-    · rw [X25519Mem.mem_stm]
-      simp [Frame.listRegs_f0, Frame.listRegs_240, State.reg, X25519Mem.toReg3, X25519Mem.toReg4, X25519Mem.toReg5,
-        X25519Mem.toReg6, X25519Mem.toReg7]
-    · rw [X25519Mem.regs_stm _ _ _ _ (by decide)]
-      simp [X25519Mem.toReg3, Frame.bitCount_f0, show bitCount 240#8 = 4 from by decide, State.reg]
-    · rw [X25519Mem.regs_stm _ _ _ _ h15]
-      simp [X25519Mem.toReg3, h3]
+    · rw [Field25519Mem.mem_stm]
+      simp [Frame.listRegs_f0, Frame.listRegs_240, State.reg, Field25519Mem.toReg3, Field25519Mem.toReg4, Field25519Mem.toReg5,
+        Field25519Mem.toReg6, Field25519Mem.toReg7]
+    · rw [Field25519Mem.regs_stm _ _ _ _ (by decide)]
+      simp [Field25519Mem.toReg3, Frame.bitCount_f0, show bitCount 240#8 = 4 from by decide, State.reg]
+    · rw [Field25519Mem.regs_stm _ _ _ _ h15]
+      simp [Field25519Mem.toReg3, h3]
 
 variable {is : List Instr} {Q : State → Prop}
 
@@ -86,7 +86,7 @@ theorem str_step {P : Word} {n : Nat} {m0 : Mem} {F : Nat → Word} (s : State) 
       (∀ r : Reg, r ≠ 15 → t.regs r = s.regs r) → Runs (AccOk Wr) is t Q) :
     Runs (AccOk Wr) (.strSp d (BitVec.ofNat 8 k) :: is) s Q := by
   have sp' : s.sp = P := sp
-  refine cons (X25519FeCommon.strSp_run s d hk' (by rw [sp']; exact hP) (by rw [sp']; exact hW))
+  refine cons (Field25519FeCommon.strSp_run s d hk' (by rw [sp']; exact hP) (by rw [sp']; exact hW))
     fun t ⟨tm, to⟩ => cont t ?_ ?_ to
   · rw [to 13 (by decide)]; exact sp
   · rw [tm, sp']; exact fr.write hk _
@@ -103,10 +103,10 @@ theorem stm_step {P : Word} {n : Nat} {m0 : Mem} {F : Nat → Word} (s : State) 
   have hal : (s.regs 3).toNat % 4 = 0 := by
     rw [h3]; exact word_add_aligned hP (by omega)
   refine cons (stm_run s hal fun i hi q hq => ?_) fun t ⟨tm, t3, to⟩ => cont t ?_ ?_ ?_ to
-  · rw [h3, X25519FeCommon.slot_add]; exact hW i hi q hq
+  · rw [h3, Field25519FeCommon.slot_add]; exact hW i hi q hq
   · rw [to 13 (by decide) (by decide)]; exact sp
   · rw [tm, h3, h4, h5, h6, h7]; exact fr.storeWords [v0, v1, v2, v3] (by simpa using hk)
-  · rw [t3, h3, X25519FeCommon.slot_add]
+  · rw [t3, h3, Field25519FeCommon.slot_add]
 
 end
 
@@ -294,7 +294,7 @@ theorem saveRegs_run (s : State) (hr : s.regs = c.regs0) (hm : s.mem = c.m0) (h1
   refine cons (one _ s6 rfl rfl) fun s7 e7 => ?_
   subst e7
   have sp7 : ((Instr.subSp (BitVec.ofNat 7 (LFRAME / 4))).next s6).regs 13 = E c := by
-    rw [X25519FeSteps.regs_subSp _ _ _ (by decide), if_pos rfl, sp6, hsp5, push2_addr, subSp_addr]
+    rw [Field25519FeSteps.regs_subSp _ _ _ (by decide), if_pos rfl, sp6, hsp5, push2_addr, subSp_addr]
   have m7 : ((Instr.subSp (BitVec.ofNat 7 (LFRAME / 4))).next s6).mem = mP c := by
     show s6.mem = _
     rw [m6, vm, m1, hsp5, push2_addr, hsp, push1_addr, hm, v4, v5', v6, v7, hr]
@@ -303,7 +303,7 @@ theorem saveRegs_run (s : State) (hr : s.regs = c.regs0) (hm : s.mem = c.m0) (h1
       ((Instr.subSp (BitVec.ofNat 7 (LFRAME / 4))).next s6).regs r = s.regs r := fun r hr4 => by
     have h15 : r ≠ 15 := fun e => by subst e; exact absurd hr4 (by decide)
     have h13 : r ≠ 13 := fun e => by subst e; exact absurd hr4 (by decide)
-    rw [X25519FeSteps.regs_subSp _ _ _ h15, if_neg h13, o6 r h15 h13, r5 r h15 h13 (Or.inl hr4)]
+    rw [Field25519FeSteps.regs_subSp _ _ _ h15, if_neg h13, o6 r h15 h13, r5 r h15 h13 (Or.inl hr4)]
   have fr0 : FrameOk (E c) NW (mP c) (F0 c) ((Instr.subSp (BitVec.ofNat 7 (LFRAME / 4))).next s6).mem := by
     rw [m7]; exact ⟨frame_fits hv, fun _ _ => rfl, fun _ _ => rfl⟩
   refine str_step _ 0 (k := lvOut / 4) (by simp only [NW, lvOut, LFRAME]; omega)
@@ -329,7 +329,7 @@ def initF (F : Nat → Word) : Nat → Word :=
 
 theorem regs_addRdSp' (s : State) (d : LowReg) (i : BitVec 8) :
     ((Instr.addRdSp d i).next s).regs d.toReg = s.regs 13 + BitVec.ofNat 32 (i.toNat * 4) := by
-  rw [X25519Mem.regs_addRdSp _ _ _ _ (toReg_ne_15 d), if_pos rfl]; rfl
+  rw [Field25519Mem.regs_addRdSp _ _ _ _ (toReg_ne_15 d), if_pos rfl]; rfl
 
 theorem slot_sp (P : Word) (k : Nat) (hk : k < 256) : P + BitVec.ofNat 32 ((BitVec.ofNat 8 k).toNat * 4) = slot P k := by
   simp only [BitVec.toNat_ofNat, slot, Nat.mod_eq_of_lt hk, Nat.mul_comm]
@@ -361,8 +361,8 @@ theorem strE (s : State) {F : Nat → Word} {m : Mem} (fr : FrameOk (E c) NW (mP
   str_step s d hk (by simp only [NW, LFRAME] at hk; omega) sp (hm ▸ fr) (E_al hv) (frame_wr hWr hk)
     fun t a b o => cont t a (hd ▸ b) o
 
-attribute [local simp] X25519Mem.toReg0 X25519Mem.toReg1 X25519Mem.toReg2 X25519Mem.toReg3
-  X25519Mem.toReg4 X25519Mem.toReg5 X25519Mem.toReg6 X25519Mem.toReg7 in
+attribute [local simp] Field25519Mem.toReg0 Field25519Mem.toReg1 Field25519Mem.toReg2 Field25519Mem.toReg3
+  Field25519Mem.toReg4 Field25519Mem.toReg5 Field25519Mem.toReg6 Field25519Mem.toReg7 in
 theorem initState_run (s : State) {F : Nat → Word} (sp : s.regs 13 = E c)
     (fr : FrameOk (E c) NW (mP c) F s.mem) :
     Runs (AccOk Wr) initState s fun t => t.regs 13 = E c ∧ FrameOk (E c) NW (mP c) (initF F) t.mem := by
@@ -464,7 +464,7 @@ theorem initState_run (s : State) {F : Nat → Word} (sp : s.regs 13 = E c)
   · simp [Instr.next, Instr.exec, State.setReg, State.setNZ, r35]
   -- `swap = 0`, `t = 254`
   refine strE hv hWr _ fr6 rfl 4 (k := lvSwap / 4) (v := 0) (by simp only [lvSwap, NW, LFRAME]; omega) sp6
-    (by simp only [X25519Mem.toReg4]; rw [o6 4 (by decide) (by decide)]; exact z6 4 (by decide) (by decide)) fun t7 sp7 fr7 _ => ?_
+    (by simp only [Field25519Mem.toReg4]; rw [o6 4 (by decide) (by decide)]; exact z6 4 (by decide) (by decide)) fun t7 sp7 fr7 _ => ?_
   refine cons (one _ t7 rfl rfl) fun u8 e8 => ?_
   subst e8
   refine strE hv hWr _ fr7 (by simp [Instr.next, Instr.exec, State.setReg, State.setNZ]) 0 (k := lvT / 4)

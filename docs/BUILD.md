@@ -4,7 +4,7 @@ Instructions for iterating on proofs, running sharded checks, and managing memor
 
 ## Workspaces
 
-Each release asset has its own Lake workspace, `assets/chacha20poly1305`, `assets/blake2s` and `assets/x25519`. Each compiles the shared sources in `lean/` against that asset's artifact and has its own `.lake` directory. Run Lake commands inside the workspace of the asset you are working on. A plain `lake build` there builds the asset root `M0Crypto.Assets.*`.
+Each release asset has its own Lake workspace, `assets/chacha20poly1305`, `assets/blake2s`, `assets/x25519` and `assets/ed25519`. Each compiles the shared sources in `lean/` against that asset's artifact (for `ed25519`, one artifact module per build) and has its own `.lake` directory. Run Lake commands inside the workspace of the asset you are working on. A plain `lake build` there builds the asset root `M0Crypto.Assets.*`.
 
 ## Build iteration
 
@@ -18,7 +18,7 @@ lake build +M0Crypto.Thumb.ReleaseCheck.ChaCha20Poly1305
 
 The second command runs the asset's executable release checks in parallel shards (`M0Crypto.Thumb.ReleaseCheck.X25519` for X25519; for BLAKE2s, `Blake2sShard0` to `Blake2sShard3` and `Blake2sPairwise`, which the asset root imports). Their case descriptors are defined once; coverage checks require all 83 ChaCha20 cases, 45 AEAD cases and every shard, and the five pairwise guards remain required. Use a Lake build to refresh these checks after changing the artifact or model: executing the import root with `lake env lean` alone does not rebuild imports. The full `tools/check.sh` remains the release gate.
 
-For a quick run of the same checks while developing, each asset's lakefile also has a native target: `lake build release_check && .lake/build/bin/release_check`, which runs much faster than the interpreted shards. The mutation scripts use it. The release gate does not: there the asset root runs the checks in Lean's interpreter.
+For a quick run of the same checks while developing, each asset's lakefile also has a native target: `lake build release_check && .lake/build/bin/release_check`, which runs much faster than the interpreted shards. The mutation scripts use it. The release gate uses it only for Ed25519 (`check.sh` step 4d), where one interpreted verify call would take longer than a module may. For the other assets the asset root runs the checks in Lean's interpreter.
 
 ## Memory-aware build runner
 

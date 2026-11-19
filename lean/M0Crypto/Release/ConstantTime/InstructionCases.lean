@@ -13,11 +13,24 @@ namespace M0Crypto.Release.ConstantTime
 open M0Crypto.Thumb
 open M0Crypto.Armv6M (State)
 
-/-- Instructions whose certificate step needs no memory-separation premise. -/
+/-- `xferCore` rejects `i`, so `i` is at no checked position. -/
+theorem certPoint_rejected {env : Env} {bytes : List (BitVec 8)} {entry : Nat}
+    {init : AbsState} {cert : Cert} {b : Blk} {off : Nat} {st : AbsState} {is : List Instr}
+    (i : Instr) (hc : certOk env bytes entry init cert = true) (hm : b ∈ cert)
+    (hp : BlockPoint env b off st (i :: is))
+    (hr : ∀ ctx, ∃ e, xferCore env off ctx i st = .error e) : False := by
+  obtain ⟨out, hx⟩ := certPoint_xfer hc hm hp
+  obtain ⟨e, he⟩ := hr b.ctx
+  simp only [xfer, he] at hx
+  split at hx <;> cases hx
+
+/-- Instructions whose certificate step needs no memory-separation premise, and the
+forms the checker rejects. -/
 def registerInstruction : Instr → Bool
   | .lslImm .. | .lsrImm .. | .addReg .. | .subReg .. | .addImm3 .. | .subImm3 ..
   | .movImm .. | .cmpImm .. | .addImm8 .. | .subImm8 .. | .movHi .. | .addRdSp ..
   | .addSp .. | .subSp .. | .uxth .. | .ldrSp .. | .ldm .. => true
+  | .asrImm .. | .addPc .. | .rev .. => true
   | .dp .. => true
   | _ => false
 
@@ -49,6 +62,7 @@ theorem certPoint_register_paired {env : Env} {bytes : List (BitVec 8)} {entry :
   | uxth d m => exact certPoint_uxth_paired d m hc hi hm hp h heven
   | ldrSp d k => exact certPoint_ldrSp_paired d k hc hi hm hp h heven
   | ldm n l => exact certPoint_ldm_paired n l hc hi hm hp h heven
+  | asrImm | addPc | rev => exact (certPoint_rejected _ hc hm hp fun _ => ⟨_, rfl⟩).elim
   | dp op d m =>
     cases op with
     | ands => exact certPoint_ands_paired d m hc hi hm hp h heven
@@ -62,6 +76,7 @@ theorem certPoint_register_paired {env : Env} {bytes : List (BitVec 8)} {entry :
     | rsbs => exact certPoint_rsbs_paired d m hc hi hm hp h heven
     | cmp => exact certPoint_cmpReg_paired d m hc hi hm hp h heven
     | mvns => exact certPoint_mvns_paired d m hc hi hm hp h heven
+    | lsls | lsrs => exact (certPoint_rejected _ hc hm hp fun _ => ⟨_, rfl⟩).elim
   | _ => simp [registerInstruction] at hr
 
 /-- Memory instructions handled by the general single-step proof. -/

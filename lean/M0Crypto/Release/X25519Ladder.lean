@@ -1,4 +1,4 @@
-import M0Crypto.Release.X25519Congr
+import M0Crypto.Release.Field25519Congr
 import M0Crypto.Release.X25519Chain
 import M0Crypto.Spec.X25519
 
@@ -24,7 +24,7 @@ Polynomial identities are closed by `grind` in small named lemmas.
 
 namespace M0Crypto.Release.X25519Ladder
 
-open M0Crypto.Release.X25519Congr
+open M0Crypto.Release.Field25519Congr
 open M0Crypto.Spec.X25519 (LadderState ladderStep ladderInit cswap a24 output encodeUCoordinate)
 
 theorem spec_p : Spec.X25519.p = p := rfl

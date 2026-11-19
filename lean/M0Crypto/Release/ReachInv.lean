@@ -19,6 +19,8 @@ namespace M0Crypto.Release
 open M0Crypto.Armv6M (Word State)
 open M0Crypto.Thumb
 
+variable {B : List (BitVec 8)} {BS : Nat} [CodeBytes B BS]
+
 variable {base : Word}
 
 theorem stepH_mem_other {s s1 : State} {e : Event} (h : stepH B base s = .ok (s1, e)) (y : Word)
@@ -206,7 +208,7 @@ theorem ReachS.blW {Pn Wr : Word → Prop} {P : State → Event → Prop} {s : S
     {Q : State → Prop} {off : Nat}
     (hP : ∀ x e, RegionWrites Pn Wr x e → P x e) (hr : Pn (base + BitVec.ofNat 32 off))
     (hb : base.toNat % 2 = 0) (tgt : Nat) (imm : BitVec 25) (hpc : s.pc = base + BitVec.ofNat 32 off)
-    (ho : off % 2 = 0) (hi : instrAt B off = some (.bl imm)) (hsz : off + 4 ≤ Artifacts.Release.size)
+    (ho : off % 2 = 0) (hi : instrAt B off = some (.bl imm)) (hsz : off + 4 ≤ BS)
     (ht : BitVec.ofNat 32 off + 4#32 + imm.signExtend 32 = BitVec.ofNat 32 tgt)
     (hq : ReachS base P ((s.setReg 14 ((base + BitVec.ofNat 32 (off + 4)) ||| 1#32)).setReg 15
       (base + BitVec.ofNat 32 tgt)) Q) : ReachS base P s Q :=
@@ -218,7 +220,7 @@ theorem ReachS.bcondW {Pn Wr : Word → Prop} {P : State → Event → Prop} {s 
     (hb : base.toNat % 2 = 0) (tgt : Nat) (cond : BitVec 4) (imm : BitVec 8)
     (hpc : s.pc = base + BitVec.ofNat 32 off)
     (ho : off % 2 = 0) (hi : instrAt B off = some (.bcond cond imm))
-    (hsz : off + 2 ≤ Artifacts.Release.size)
+    (hsz : off + 2 ≤ BS)
     (ht : BitVec.ofNat 32 off + 4#32 + (imm ++ 0#1).signExtend 32 = BitVec.ofNat 32 tgt)
     (hT : condPassed cond s = true → ReachS base P (s.setReg 15 (base + BitVec.ofNat 32 tgt)) Q)
     (hF : condPassed cond s = false →
@@ -229,7 +231,7 @@ theorem ReachS.bcondW {Pn Wr : Word → Prop} {P : State → Event → Prop} {s 
 theorem ReachS.bW {Pn Wr : Word → Prop} {P : State → Event → Prop} {s : State} {Q : State → Prop}
     {off : Nat} (hP : ∀ x e, RegionWrites Pn Wr x e → P x e) (hr : Pn (base + BitVec.ofNat 32 off))
     (hb : base.toNat % 2 = 0) (tgt : Nat) (imm : BitVec 11) (hpc : s.pc = base + BitVec.ofNat 32 off)
-    (ho : off % 2 = 0) (hi : instrAt B off = some (.b imm)) (hsz : off + 2 ≤ Artifacts.Release.size)
+    (ho : off % 2 = 0) (hi : instrAt B off = some (.b imm)) (hsz : off + 2 ≤ BS)
     (ht : BitVec.ofNat 32 off + 4#32 + (imm ++ 0#1).signExtend 32 = BitVec.ofNat 32 tgt)
     (hq : ReachS base P (s.setReg 15 (base + BitVec.ofNat 32 tgt)) Q) : ReachS base P s Q :=
   ReachS.b hb off tgt imm hpc ho hi hsz ht

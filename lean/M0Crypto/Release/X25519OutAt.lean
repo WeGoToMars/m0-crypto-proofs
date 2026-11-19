@@ -22,7 +22,7 @@ open M0Crypto.Armv6M (Word Reg LowReg State Mem read32)
 open M0Crypto.Thumb
 open M0Crypto.Release (ReachW ReachS RegionWrites InRegion Region B)
 open M0Crypto.Release.Frame (Disj toNat_add_ofNat)
-open M0Crypto.Release.X25519Routines (feVal)
+open M0Crypto.Release.Field25519Routines (feVal)
 open M0Crypto.Release.X25519Layout
 open M0Crypto.Release.X25519EntryCode
 open M0Crypto.Release.X25519OutEpi (savedReg)
@@ -148,22 +148,22 @@ theorem tail_w {c : X25519.Ctx} (hv : X25519.Valid c) (hlr : (c.regs0 14).getLsb
     fun d hd => X25519Op.E_add hv hd
   -- output stores
   have hS32 : Artifacts.Release.size < 2 ^ 32 := by decide
-  refine X25519Block.seg hS (X25519OutStore.storeOut_run_w hb atS hev hpc hsp (by rw [hE]; omega) h0 hout
+  refine Field25519Block.seg hS (X25519OutStore.storeOut_run_w hb atS hev hpc hsp (by rw [hE]; omega) h0 hout
     (by rw [eX2]; omega)
     ⟨by rw [eX2]; omega, hO.1, by rw [eX2]; omega⟩
     (fun k hk => show Region c.out 32 _ by
       show ((c.out + BitVec.ofNat 32 k) - c.out).toNat < 32
       rw [Frame.sub_ofNat_toNat _ _ (by omega)]; exact hk)
-    (X25519MulcFacts.inReg ⟨Nat.le_refl _, by omega, by omega⟩) ?_)
+    (Field25519Facts.inReg ⟨Nat.le_refl _, by omega, by omega⟩) ?_)
   intro u upc ureg ubytes uoth
   refine ReachS.done ?_
   -- wipe
   have u13 : u.regs 13 = E c := by rw [ureg 13 (by decide) (by decide) (by decide), hsp]
-  refine X25519Block.seg hW (X25519OutWipe.wipe_run_w hb atW (by omega) (by rw [upc]; rfl)
+  refine Field25519Block.seg hW (X25519OutWipe.wipe_run_w hb atW (by omega) (by rw [upc]; rfl)
     (by rw [u13]; exact E_sub_callee hv) (by rw [hF]; omega)
     (by rw [hF]; omega)
     (fun y hy => X25519Op.region_sub (by rw [hF]; omega) (Nat.le_refl _) (by omega) hy)
-    (X25519MulcFacts.inReg ⟨Nat.le_refl _, by omega, by omega⟩) ?_)
+    (Field25519Facts.inReg ⟨Nat.le_refl _, by omega, by omega⟩) ?_)
   intro w wpc w13 wz wreg wzero woth
   refine ReachS.done ?_
   -- epilogue
@@ -188,8 +188,8 @@ theorem tail_w {c : X25519.Ctx} (hv : X25519.Valid c) (hlr : (c.regs0 14).getLsb
     rw [eLv _ (by decide)]; simp only [LFRAME]; omega
   have hret := hsavW 8 (by decide)
   rw [savedReg_8] at hret
-  refine X25519Block.seg hW (X25519OutEpi.epilogue_run_w hb atE (by omega) (by rw [wpc, hoE]) hF' hF4
-    (by rw [hret]; exact hlr) (X25519MulcFacts.inReg ⟨by omega, by omega, by omega⟩) ?_)
+  refine Field25519Block.seg hW (X25519OutEpi.epilogue_run_w hb atE (by omega) (by rw [wpc, hoE]) hF' hF4
+    (by rw [hret]; exact hlr) (Field25519Facts.inReg ⟨by omega, by omega, by omega⟩) ?_)
   intro t tpc t13 tmem t0 t12 t13r tsv
   refine ReachS.done ⟨by rw [tpc, hret]; rfl, ?_, ?_, t0, ?_, ?_, ?_, t12, ?_, ?_, ?_⟩
   · rw [t13, add_ofNat_ofNat]; apply BitVec.eq_of_toNat_eq

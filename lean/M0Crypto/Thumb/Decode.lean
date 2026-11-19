@@ -10,15 +10,16 @@ This is the whole-function model. It is separate from the fragment model in
 Accepted encodings are exactly the forms the artifact uses, plus the other
 non-signed load/store widths of the two load/store groups. Everything else decodes
 to `none` and executing it is a fault, never a silent no-op. In particular:
-* the data-processing group (`010000 oooo`) accepts only ANDS, EORS, ADCS, SBCS,
-  RORS, TST, RSBS, CMP, ORRS, MULS, MVNS; LSLS/LSRS/ASRS (register), CMN and
-  BICS are rejected;
-* of the special data group (`010001`) only MOV is accepted, and only when neither
-  register is SP or PC (no ADD/CMP high, no BX/BLX);
+* the data-processing group (`010000 oooo`) accepts only ANDS, EORS, LSLS and LSRS
+  (register), ADCS, SBCS, RORS, TST, RSBS, CMP, ORRS, MULS, MVNS; ASRS (register), CMN
+  and BICS are rejected;
+* of the special data group (`010001`) only two forms are accepted: MOV when neither
+  register is SP or PC, and `ADD Rdn, PC` with a low Rdn (no other ADD, no CMP high,
+  no BX/BLX);
 * STM is rejected when its base register is in the list (UNPREDICTABLE unless it
   is the lowest register; the artifact never does it);
 * the only 32-bit encoding accepted is BL;
-* ASRS (immediate), ADR, LDRSB/LDRSH, SXT*/UXTB, REV*, CPS, BKPT, hints, SVC, UDF,
+* ADR, LDRSB/LDRSH, SXT*/UXTB, REV16/REVSH, CPS, BKPT, hints, SVC, UDF,
   the conditional-branch encodings with cond = 1110 or 1111 are rejected;
 * a conditional branch to the next instruction (imm8 = 0xff) is rejected. Taken or not, it
   reaches the same PC, so the trace would not record its outcome, while the core takes
@@ -31,7 +32,7 @@ open M0Crypto.Armv6M (Word Reg LowReg)
 
 /-- Data-processing operations of the `010000` group that the artifact uses. -/
 inductive DpOp where
-  | ands | eors | adcs | sbcs | rors | tst | rsbs | cmp | orrs | muls | mvns
+  | ands | eors | lsls | lsrs | adcs | sbcs | rors | tst | rsbs | cmp | orrs | muls | mvns
   deriving DecidableEq, Repr
 
 /-- Width and direction of a non-signed load or store. -/
@@ -54,6 +55,8 @@ inductive Instr where
   | lslImm (d m : LowReg) (imm5 : BitVec 5)
   /-- LSRS Rd, Rm, #imm5 (T1); imm5 = 0 encodes a shift by 32. -/
   | lsrImm (d m : LowReg) (imm5 : BitVec 5)
+  /-- ASRS Rd, Rm, #imm5 (T1); imm5 = 0 encodes a shift by 32. -/
+  | asrImm (d m : LowReg) (imm5 : BitVec 5)
   | addReg (d n m : LowReg)
   | subReg (d n m : LowReg)
   | addImm3 (d n : LowReg) (imm3 : BitVec 3)
@@ -66,6 +69,8 @@ inductive Instr where
   | dp (op : DpOp) (dn m : LowReg)
   /-- MOV Rd, Rm (T1); d, m ∉ {SP, PC}; flags unchanged. -/
   | movHi (d m : Reg)
+  /-- ADD Rdn, PC (T2 with DN = 0, Rm = PC); flags unchanged. -/
+  | addPc (dn : LowReg)
   /-- LDR Rt, [PC, #imm8*4] (literal). -/
   | ldrLit (t : LowReg) (imm8 : BitVec 8)
   /-- op Rt, [Rn, Rm]. -/
@@ -81,6 +86,7 @@ inductive Instr where
   /-- SUB SP, SP, #imm7*4. -/
   | subSp (imm7 : BitVec 7)
   | uxth (d m : LowReg)
+  | rev (d m : LowReg)
   /-- PUSH {low registers, LR if `lr`}. -/
   | push (list : BitVec 8) (lr : Bool)
   /-- POP {low registers, PC if `pc`}. -/
@@ -116,6 +122,8 @@ def decodeDp (hw : BitVec 16) : Option Instr :=
   match (hw.toNat >>> 6) % 16 with
   | 0b0000 => some (.dp .ands dn m)
   | 0b0001 => some (.dp .eors dn m)
+  | 0b0010 => some (.dp .lsls dn m)
+  | 0b0011 => some (.dp .lsrs dn m)
   | 0b0101 => some (.dp .adcs dn m)
   | 0b0110 => some (.dp .sbcs dn m)
   | 0b0111 => some (.dp .rors dn m)
@@ -190,6 +198,10 @@ def decode16 (hw : BitVec 16) : Option Instr :=
     if (op >>> 8) % 16 ≥ 14 ∨ op % 256 = 0xff then none
     else some (.bcond (bits hw 8 4) (bits hw 0 8))
   else if op >>> 11 = 0b11100 then some (.b (bits hw 0 11))
+  else if op >>> 11 = 0b00010 then some (.asrImm (low hw 0) (low hw 3) (bits hw 6 5))
+  -- ADD Rdn, PC (T2): DN = 0 and Rm = 15, so Rdn is low and the sum does not write PC.
+  else if op >>> 3 = 0b0100010001111 then some (.addPc (low hw 0))
+  else if op >>> 6 = 0b1011101000 then some (.rev (low hw 0) (low hw 3))
   else none
 
 /-- Decode BL from its two halfwords (T1: `11110 S imm10`, `11 J1 1 J2 imm11`).
@@ -228,9 +240,16 @@ example : decode 0xbdf0#16 0 = some (.pop 0xf0 true) := by decide        -- pop 
 example : decode 0xc80f#16 0 = some (.ldm 0 0x0f) := by decide           -- ldm r0, {r0-r3}
 example : decode 0xd1fe#16 0 = some (.bcond 1 0xfe) := by decide         -- bne .
 example : decode 0xb2ad#16 0 = some (.uxth 5 5) := by decide             -- uxth r5, r5
+example : decode 0x4088#16 0 = some (.dp .lsls 0 1) := by decide         -- lsls r0, r1
+example : decode 0x40e5#16 0 = some (.dp .lsrs 5 4) := by decide         -- lsrs r5, r4
+example : decode 0x1609#16 0 = some (.asrImm 1 1 24) := by decide        -- asrs r1, r1, #24
+example : decode 0x1000#16 0 = some (.asrImm 0 0 0) := by decide         -- asrs r0, r0, #32
+example : decode 0x447f#16 0 = some (.addPc 7) := by decide              -- add r7, pc
+example : decode 0xba2c#16 0 = some (.rev 4 5) := by decide              -- rev r4, r5
 example : decode 0xf000#16 0xf800#16 = some (.bl 0) := by decide         -- bl .+4
 example : decode 0xf7ff#16 0xfffe#16 = some (.bl 0x1fffffc) := by decide -- bl .  (offset -4)
--- Rejected: MOV PC, BX LR, ADD (high), ASRS, BICS, LDRSB, UDF, SVC, NOP, a Thumb-2 prefix.
+-- Rejected: MOV PC, BX LR, ADD (high), ASRS (register), BICS, LDRSB, UDF, SVC, NOP,
+-- a Thumb-2 prefix; ADD r8, PC; ADD r0, r8; REV16; REVSH.
 example : decode 0x46f7#16 0 = none := by decide
 example : decode 0x46e8#16 0 = none := by decide   -- mov r8, sp
 example : decode 0xc103#16 0 = none := by decide   -- stm r1!, {r0, r1}: base in list
@@ -238,7 +257,11 @@ example : decode 0xc50f#16 0 = some (.stm 5 0x0f) := by decide   -- stm r5!, {r0
 example : decode 0x4770#16 0 = none := by decide
 example : decode 0xd2ff#16 0 = none := by decide   -- bhs .+2: same PC taken or not
 example : decode 0x4448#16 0 = none := by decide
-example : decode 0x1008#16 0 = none := by decide
+example : decode 0x4108#16 0 = none := by decide
+example : decode 0x44f8#16 0 = none := by decide
+example : decode 0x4440#16 0 = none := by decide
+example : decode 0xba40#16 0 = none := by decide
+example : decode 0xbac0#16 0 = none := by decide
 example : decode 0x4388#16 0 = none := by decide
 example : decode 0x5608#16 0 = none := by decide
 example : decode 0xde00#16 0 = none := by decide

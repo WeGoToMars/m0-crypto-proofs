@@ -20,8 +20,8 @@ open M0Crypto.Armv6M (Word Reg State Mem)
 open M0Crypto.Thumb
 open M0Crypto.Release (ReachW InRegion Region B)
 open M0Crypto.Release.Frame (Disj)
-open M0Crypto.Release.X25519Block (Runs Runs.reg)
-open M0Crypto.Release.X25519Routines (feVal)
+open M0Crypto.Release.Field25519Block (Runs Runs.reg)
+open M0Crypto.Release.Field25519Routines (feVal)
 open M0Crypto.Release.X25519Layout
 open M0Crypto.Release.X25519Op
 open M0Crypto.Release.X25519EntryCode
@@ -43,12 +43,12 @@ def InlRun (fn : Fn) (bd : List Instr) : Prop :=
       ReachW base Pc Wr t' Q) →
     ReachW base Pc Wr t Q
 
-theorem add_inl : InlRun .add X25519Inl.feAddBody := by
+theorem add_inl : InlRun .add Field25519AddSub.feAddBody := by
   intro base hb Pc Wr t off dst a b hseq ho hpc hr h0 h1 h2 _ hd ha hbb hf _ _ hW Q k
   exact X25519Inl.feAdd_run_w hb hseq ho hpc hr h0 h1 h2 hd ha hbb hf hW fun t' p v m r =>
     k t' p v m (r 13 (by decide) (by decide)) fun h => nomatch h
 
-theorem sub_inl : InlRun .sub X25519Inl.feSubBody := by
+theorem sub_inl : InlRun .sub Field25519AddSub.feSubBody := by
   intro base hb Pc Wr t off dst a b hseq ho hpc hr h0 h1 h2 _ hd ha hbb hf _ _ hW Q k
   exact X25519Inl.feSub_run_w hb hseq ho hpc hr h0 h1 h2 hd ha hbb hf hW fun t' p v m r =>
     k t' p v m (r 13 (by decide) (by decide)) fun h => nomatch h
@@ -93,7 +93,7 @@ theorem inl_opW {fn : Fn} {bd : List Instr} (hrun : InlRun fn bd)
   have hbb : ∀ y, some x = some y → y % 4 = 0 ∧ y < 1024 := fun y hy => by
     cases hy; exact ⟨by omega, by omega⟩
   have hreg := opPre_reg d a (some x)
-  refine X25519Block.ReachW.blockRuns hb0 (opPre d a (some x)) o hpc ho hP (opPre_falls d a (some x))
+  refine Field25519Block.ReachW.blockRuns hb0 (opPre d a (some x)) o hpc ho hP (opPre_falls d a (some x))
     (Runs.reg (Q := fun u => u = execAll (opPre d a (some x)) s) hreg.1 hreg.2 rfl)
     (hPO.inE hlo (by omega)) ?_
   rintro u upc rfl

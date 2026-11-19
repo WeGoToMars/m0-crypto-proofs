@@ -1,4 +1,4 @@
-import M0Crypto.Release.X25519Block
+import M0Crypto.Release.Field25519Block
 import M0Crypto.Release.SymReadChk
 
 /-!
@@ -12,7 +12,7 @@ of `scalar` and `point`, so the read bound of the load sites holds for every pro
 (`blockReads_noRd`, a static check on the instructions) and composes over `++`.
 -/
 
-namespace M0Crypto.Release.X25519Block
+namespace M0Crypto.Release.Field25519Block
 open M0Crypto.Armv6M (Word Reg LowReg State)
 open M0Crypto.Thumb
 open M0Crypto.Release (ReachW ReachS InRegion WritesTo RegionWrites BlockOk Region)
@@ -42,12 +42,12 @@ theorem blockReads_append {R : Word → Prop} {is js : List Instr} {s : State}
 /-- No read access: stores, pushes, `stm` and register-only instructions. -/
 def noRd : Instr → Bool
   | .push .. | .strSp .. | .stm .. => true
-  | i => X25519Mul.regOnly i
+  | i => Field25519Mul.regOnly i
 
-theorem noRd_of_regOnly {i : Instr} (h : X25519Mul.regOnly i = true) : noRd i = true := by
-  cases i <;> simp_all [noRd, X25519Mul.regOnly]
+theorem noRd_of_regOnly {i : Instr} (h : Field25519Mul.regOnly i = true) : noRd i = true := by
+  cases i <;> simp_all [noRd, Field25519Mul.regOnly]
 
-theorem all_noRd {is : List Instr} (h : is.all X25519Mul.regOnly = true) : is.all noRd = true := by
+theorem all_noRd {is : List Instr} (h : is.all Field25519Mul.regOnly = true) : is.all noRd = true := by
   simp only [List.all_eq_true] at h ⊢
   exact fun i hi => noRd_of_regOnly (h i hi)
 
@@ -64,7 +64,7 @@ theorem noRd_reads {i : Instr} (h : noRd i = true) (s : State) (y : Word) :
   | strSp t k =>
     simp only [Instr.accesses, List.mem_singleton] at ha
     subst ha; cases hk
-  | _ => simp_all [noRd, X25519Mul.regOnly, Instr.accesses]
+  | _ => simp_all [noRd, Field25519Mul.regOnly, Instr.accesses]
 
 theorem blockReads_noRd (R : Word → Prop) :
     ∀ (is : List Instr) (s : State), is.all noRd = true → BlockReads R is s
@@ -127,4 +127,4 @@ theorem seg {base : Word} {P P' : State → Event → Prop} {s : State} {Q : Sta
     ReachS base P s Q :=
   Release.ReachS.bind (h.mono hp fun _ h => h)
 
-end M0Crypto.Release.X25519Block
+end M0Crypto.Release.Field25519Block

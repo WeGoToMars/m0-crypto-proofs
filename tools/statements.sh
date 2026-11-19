@@ -3,7 +3,7 @@
 # the full statement of every theorem in assets/ASSET/Audit.lean, then every trusted definition
 # those statements reach (tools/trusted_defs.lean, printTrusted), each followed by the sha256 of
 # its kernel terms (printFingerprint). Compared by tools/check.sh.
-# Usage: tools/statements.sh ASSET [ref]     (ASSET: chacha20poly1305, blake2s or x25519)
+# Usage: tools/statements.sh ASSET [ref]     (ASSET: chacha20poly1305, blake2s, x25519 or ed25519)
 set -eu
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 [ $# -ge 1 ] && [ -d "$ROOT/assets/$1" ] || { echo "usage: tools/statements.sh ASSET [ref]" >&2; exit 2; }
@@ -16,6 +16,7 @@ trap 'rm -rf "$TMP"' EXIT
 if [ $# -ge 2 ]; then git show "$2:./Audit.lean" > "$TMP/audit.lean"; else cp Audit.lean "$TMP/audit.lean"; fi
 {
     echo "import $(asset_root "$TMP/audit.lean")"
+    echo "import Lean"
     cat "$ROOT/tools/trusted_defs.lean"
     echo "set_option pp.fullNames true"
     echo "set_option pp.deepTerms true"

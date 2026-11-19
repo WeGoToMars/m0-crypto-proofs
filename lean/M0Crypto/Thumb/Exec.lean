@@ -3,7 +3,7 @@ import M0Crypto.Armv6M.Step
 
 /-!
 Execution semantics of the whole-function Thumb model, transcribed from the
-ARMv6-M ARM pseudocode (DDI 0419E §A2.2 `AddWithCarry`, `LSL_C`, `LSR_C`, `ROR_C`; §A6.4
+ARMv6-M ARM pseudocode (DDI 0419E §A2.2 `AddWithCarry`, `LSL_C`, `LSR_C`, `ASR_C`, `ROR_C`; §A6.4
 `Shift_C`; §A6.7 the per-instruction operation blocks; §A2.3 `BXWritePC`/`LoadWritePC`).
 
 Scope and assumptions (in addition to `M0Crypto.Armv6M.State`):
@@ -49,6 +49,23 @@ def lslC (x : Word) (n : Nat) (c : Bool) : Word × Bool :=
 /-- `Shift_C(x, SRType_LSR, n, c)` for `1 ≤ n ≤ 32`. -/
 def lsrC (x : Word) (n : Nat) : Word × Bool :=
   (x >>> n, x.getLsbD (n - 1))
+
+/-- `Shift_C(x, SRType_LSL, n, c)` for any `n`: the register form, `n = UInt(R[m]<7:0>)`.
+`LSL_C` returns `carry_out = (x : Zeros(n))<32>`, bit `32 - n` of `x` for `n ≤ 32`, else 0. -/
+def lslRegC (x : Word) (n : Nat) (c : Bool) : Word × Bool :=
+  if n = 0 then (x, c) else (x <<< n, (x.toNat <<< n).testBit 32)
+
+/-- `Shift_C(x, SRType_LSR, n, c)` for any `n` (register form); `lsrC` is `LSR_C`. -/
+def lsrRegC (x : Word) (n : Nat) (c : Bool) : Word × Bool :=
+  if n = 0 then (x, c) else lsrC x n
+
+/-- `Shift_C(x, SRType_ASR, n, c)` for `1 ≤ n ≤ 32`: `ASR_C`, `carry_out = x<n-1>`. -/
+def asrC (x : Word) (n : Nat) : Word × Bool :=
+  (x.sshiftRight n, x.getLsbD (n - 1))
+
+/-- REV: `result<31:24> = x<7:0>`, `<23:16> = x<15:8>`, `<15:8> = x<23:16>`, `<7:0> = x<31:24>`. -/
+def revBytes (x : Word) : Word :=
+  x.extractLsb' 0 8 ++ x.extractLsb' 8 8 ++ x.extractLsb' 16 8 ++ x.extractLsb' 24 8
 
 /-- `ConditionPassed()` for cond < 14 (DDI 0419E §A6.3). -/
 def condPassed (cond : BitVec 4) (s : State) : Bool :=
@@ -180,6 +197,9 @@ def Instr.exec (i : Instr) (s : State) : Except Fault State :=
   | .lsrImm d m imm5 =>
     let (x, c) := lsrC (r m) (if imm5.toNat = 0 then 32 else imm5.toNat)
     .ok ((next.setReg d.toReg x).setNZC x c)
+  | .asrImm d m imm5 =>
+    let (x, c) := asrC (r m) (if imm5.toNat = 0 then 32 else imm5.toNat)
+    .ok ((next.setReg d.toReg x).setNZC x c)
   | .addReg d n m => .ok (addFlags next d.toReg (r n) (r m) false)
   | .subReg d n m => .ok (addFlags next d.toReg (r n) (~~~(r m)) true)
   | .addImm3 d n imm3 => .ok (addFlags next d.toReg (r n) (imm3.setWidth 32) false)
@@ -207,7 +227,15 @@ def Instr.exec (i : Instr) (s : State) : Except Fault State :=
     | .rors =>
       let (x, c) := rorC (r dn) ((r m).toNat % 256) s.c
       .ok ((next.setReg dn.toReg x).setNZC x c)
+    | .lsls =>
+      let (x, c) := lslRegC (r dn) ((r m).toNat % 256) s.c
+      .ok ((next.setReg dn.toReg x).setNZC x c)
+    | .lsrs =>
+      let (x, c) := lsrRegC (r dn) ((r m).toNat % 256) s.c
+      .ok ((next.setReg dn.toReg x).setNZC x c)
   | .movHi d m => .ok (next.setReg d (s.regs m))
+  -- `AddWithCarry(R[dn], PC, '0')` with PC read as the address + 4; no flags are set.
+  | .addPc dn => .ok (next.setReg dn.toReg (r dn + (pc + 4#32)))
   | .ldrLit t imm8 =>
     let a := ((pc + 4#32) &&& ~~~3#32) + BitVec.ofNat 32 (imm8.toNat * 4)
     .ok (next.setReg t.toReg (read32 s.mem a))
@@ -221,6 +249,7 @@ def Instr.exec (i : Instr) (s : State) : Except Fault State :=
   | .addSp imm7 => .ok (next.setReg 13 (s.sp + BitVec.ofNat 32 (imm7.toNat * 4)))
   | .subSp imm7 => .ok (next.setReg 13 (s.sp - BitVec.ofNat 32 (imm7.toNat * 4)))
   | .uxth d m => .ok (next.setReg d.toReg ((r m).setWidth 16 |>.setWidth 32))
+  | .rev d m => .ok (next.setReg d.toReg (revBytes (r m)))
   | .push l lr =>
     let n := bitCount l + lr.toNat
     let a := s.sp - BitVec.ofNat 32 (4 * n)
@@ -315,6 +344,19 @@ example : lsrC 0x80000000#32 32 = (0#32, true) := by decide
 example : lslC 0x80000001#32 1 false = (2#32, true) := by decide
 example : lslC 0x80000001#32 0 true = (0x80000001#32, true) := by decide
 example : bitCount 0xf0#8 = 4 := by decide
+-- Register shifts: amount 0 keeps the value and the carry; 32 and above give 0.
+example : lslRegC 0x80000001#32 0 false = (0x80000001#32, false) := by decide
+example : lslRegC 0x80000001#32 32 false = (0#32, true) := by decide
+example : lslRegC 0xffffffff#32 33 true = (0#32, false) := by decide
+example : lslRegC 0x00000003#32 31 false = (0x80000000#32, true) := by decide
+example : lsrRegC 0x80000001#32 0 true = (0x80000001#32, true) := by decide
+example : lsrRegC 0x80000001#32 32 false = (0#32, true) := by decide
+example : lsrRegC 0xffffffff#32 33 true = (0#32, false) := by decide
+example : lsrRegC 0xffffffff#32 255 true = (0#32, false) := by decide
+example : asrC 0x80000000#32 32 = (0xffffffff#32, true) := by decide
+example : asrC 0x81000000#32 24 = (0xffffff81#32, false) := by decide
+example : asrC 0x7f800000#32 24 = (0x7f#32, true) := by decide
+example : revBytes 0x11223344#32 = 0x44332211#32 := by decide
 /-- HI (cond 8) passes with C set and Z clear. -/
 example : condPassed 8 ⟨fun _ => 0, false, false, true, false, fun _ => 0⟩ = true := by decide
 example : condPassed 8 ⟨fun _ => 0, false, true, true, false, fun _ => 0⟩ = false := by decide

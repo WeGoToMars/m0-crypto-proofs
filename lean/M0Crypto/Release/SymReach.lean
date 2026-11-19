@@ -16,6 +16,8 @@ namespace M0Crypto.Release
 open M0Crypto.Armv6M (Word Reg State)
 open M0Crypto.Thumb
 
+variable {B : List (BitVec 8)} {BS : Nat} [CodeBytes B BS]
+
 variable {base : Word} {Wr : Word → Prop}
 
 theorem Reach.symBlock {s : State} {Q : State → Prop} (hb : base.toNat % 2 = 0)

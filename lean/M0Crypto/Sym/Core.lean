@@ -48,6 +48,11 @@ inductive SExpr where
   | lsl (a : SExpr) (n : Nat)
   | lsr (a : SExpr) (n : Nat)
   | ror (a b : SExpr) (c : SBool)
+  /-- `(lslRegC a (b.toNat % 256) c).1`, `(lsrRegC a (b.toNat % 256) c).1`, `(asrC a n).1` -/
+  | lslR (a b : SExpr) (c : SBool)
+  | lsrR (a b : SExpr) (c : SBool)
+  | asr (a : SExpr) (n : Nat)
+  | rev (a : SExpr)
   | ld32 (m : SMem) (a : SExpr)
   | ld16 (m : SMem) (a : SExpr)
   | ld8 (m : SMem) (a : SExpr)
@@ -68,6 +73,10 @@ inductive SBool where
   | lslC (a : SExpr) (n : Nat) (c : SBool)
   | lsrC (a : SExpr) (n : Nat)
   | rorC (a b : SExpr) (c : SBool)
+  /-- carries of `lslRegC a (b.toNat % 256) c`, `lsrRegC a (b.toNat % 256) c`, `asrC a n` -/
+  | lslRC (a b : SExpr) (c : SBool)
+  | lsrRC (a b : SExpr) (c : SBool)
+  | asrC (a : SExpr) (n : Nat)
 
 /-- Memory syntax: the initial memory and a stack of stores. -/
 inductive SMem where
@@ -93,6 +102,10 @@ def SExpr.denote (s0 : State) : SExpr → Word
   | .lsl a n => a.denote s0 <<< n
   | .lsr a n => a.denote s0 >>> n
   | .ror a b c => (Armv6M.rorC (a.denote s0) ((b.denote s0).toNat % 256) (c.denote s0)).1
+  | .lslR a b c => (Thumb.lslRegC (a.denote s0) ((b.denote s0).toNat % 256) (c.denote s0)).1
+  | .lsrR a b c => (Thumb.lsrRegC (a.denote s0) ((b.denote s0).toNat % 256) (c.denote s0)).1
+  | .asr a n => (Thumb.asrC (a.denote s0) n).1
+  | .rev a => Thumb.revBytes (a.denote s0)
   | .ld32 m a => read32 (m.denote s0) (a.denote s0)
   | .ld16 m a => read16 (m.denote s0) (a.denote s0)
   | .ld8 m a => read8 (m.denote s0) (a.denote s0)
@@ -111,6 +124,9 @@ def SBool.denote (s0 : State) : SBool → Bool
   | .lslC a n c => (Thumb.lslC (a.denote s0) n (c.denote s0)).2
   | .lsrC a n => (Thumb.lsrC (a.denote s0) n).2
   | .rorC a b c => (Armv6M.rorC (a.denote s0) ((b.denote s0).toNat % 256) (c.denote s0)).2
+  | .lslRC a b c => (Thumb.lslRegC (a.denote s0) ((b.denote s0).toNat % 256) (c.denote s0)).2
+  | .lsrRC a b c => (Thumb.lsrRegC (a.denote s0) ((b.denote s0).toNat % 256) (c.denote s0)).2
+  | .asrC a n => (Thumb.asrC (a.denote s0) n).2
 
 def SMem.denote (s0 : State) : SMem → Mem
   | .mem0 => s0.mem
@@ -214,6 +230,10 @@ def symStep (i : Instr) (ss : SState) : SState :=
     let n := if imm5.toNat = 0 then 32 else imm5.toNat
     let x := SExpr.lsr (r m) n
     { (next.setReg d.toReg x).setNZ x with c := .lsrC (r m) n }
+  | .asrImm d m imm5 =>
+    let n := if imm5.toNat = 0 then 32 else imm5.toNat
+    let x := SExpr.asr (r m) n
+    { (next.setReg d.toReg x).setNZ x with c := .asrC (r m) n }
   | .addReg d n m => sAddFlags next d.toReg (r n) (r m) (.const false)
   | .subReg d n m => sAddFlags next d.toReg (r n) (.not (r m)) (.const true)
   | .addImm3 d n imm3 => sAddFlags next d.toReg (r n) (.const (imm3.setWidth 32)) (.const false)
@@ -239,7 +259,14 @@ def symStep (i : Instr) (ss : SState) : SState :=
     | .rors =>
       let x := SExpr.ror (r dn) (r m) ss.c
       { (next.setReg dn.toReg x).setNZ x with c := .rorC (r dn) (r m) ss.c }
+    | .lsls =>
+      let x := SExpr.lslR (r dn) (r m) ss.c
+      { (next.setReg dn.toReg x).setNZ x with c := .lslRC (r dn) (r m) ss.c }
+    | .lsrs =>
+      let x := SExpr.lsrR (r dn) (r m) ss.c
+      { (next.setReg dn.toReg x).setNZ x with c := .lsrRC (r dn) (r m) ss.c }
   | .movHi d m => next.setReg d (ss.regs m)
+  | .addPc dn => next.setReg dn.toReg (.add (r dn) (.add (ss.regs 15) (k 4)))
   | .ldrLit t imm8 =>
     let a := SExpr.add (.and (.add (ss.regs 15) (k 4)) (.not (k 3))) (k (imm8.toNat * 4))
     next.setReg t.toReg (.ld32 ss.mem a)
@@ -251,6 +278,7 @@ def symStep (i : Instr) (ss : SState) : SState :=
   | .addSp imm7 => next.setReg 13 (.add ss.sp (k (imm7.toNat * 4)))
   | .subSp imm7 => next.setReg 13 (.sub ss.sp (k (imm7.toNat * 4)))
   | .uxth d m => next.setReg d.toReg (.uxth (r m))
+  | .rev d m => next.setReg d.toReg (.rev (r m))
   | .push l lr =>
     let n := bitCount l + lr.toNat
     let a := SExpr.sub ss.sp (k (4 * n))
@@ -301,7 +329,8 @@ theorem symExec_sound : ∀ (is : List Instr), (∀ i ∈ is, Sound i) → ∀ (
 `sound_of_falls : i.falls = true → Sound i`. -/
 def symBasic : Instr → Bool
   | .addReg .. | .subReg .. | .addImm3 .. | .subImm3 .. | .movImm .. | .cmpImm ..
-  | .addImm8 .. | .subImm8 .. | .addRdSp .. | .addSp .. | .subSp .. | .uxth .. => true
+  | .addImm8 .. | .subImm8 .. | .addRdSp .. | .addSp .. | .subSp .. | .uxth .. | .addPc ..
+  | .rev .. => true
   | .movHi d _ => d.val != 15
   | _ => false
 

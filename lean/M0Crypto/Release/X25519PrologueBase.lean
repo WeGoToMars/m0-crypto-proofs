@@ -21,13 +21,13 @@ open M0Crypto.Armv6M (Word Reg LowReg State Mem read32 write32 slot)
 open M0Crypto.Thumb
 open M0Crypto.Release (ReachW InRegion Region)
 open M0Crypto.Release.Frame (Disj InFrame)
-open M0Crypto.Release.X25519Block
-open M0Crypto.Release.X25519Frame (FrameOk upd slot_byte)
+open M0Crypto.Release.Field25519Block
+open M0Crypto.Release.Field25519Frame (FrameOk upd slot_byte)
 open M0Crypto.Release.X25519Layout
 open M0Crypto.Release.X25519EntryCode
 open M0Crypto.Release.X25519Bytes (loadLe32)
 open M0Crypto.Release.X25519Val (val Words)
-open M0Crypto.Release.X25519Routines (feVal)
+open M0Crypto.Release.Field25519Routines (feVal)
 
 /-! ## Input words -/
 
@@ -72,10 +72,10 @@ theorem feVal_words (m : Mem) (a : Word) (ws : List Nat) (hl : ws.length = 8)
     feVal m a = val ws := by
   match ws, hl with
   | [w0, w1, w2, w3, w4, w5, w6, w7], _ =>
-    rw [X25519Val.val_eight, X25519MulcFacts.feVal_psum]
+    rw [X25519Val.val_eight, Field25519Facts.feVal_psum]
     have e : ∀ i < 8, (read32 m (slot a i)).toNat = [w0, w1, w2, w3, w4, w5, w6, w7].getD i 0 :=
       fun i hi => h i hi
-    simp only [X25519MulcChain.psum, e 0 (by omega), e 1 (by omega), e 2 (by omega), e 3 (by omega),
+    simp only [Field25519Facts.psum, e 0 (by omega), e 1 (by omega), e 2 (by omega), e 3 (by omega),
       e 4 (by omega), e 5 (by omega), e 6 (by omega), e 7 (by omega)]
     simp
 
@@ -100,10 +100,10 @@ theorem pointWord_eq (i : Nat) :
       (adjU i ++ [.strSp 4 (BitVec.ofNat 8 (sX1 / 4 + i)), .strSp 4 (BitVec.ofNat 8 (sX3 / 4 + i))]) := by
   simp only [pointWord, adjU, List.append_assoc, List.singleton_append, List.cons_append]
 
-theorem adjK_reg (i : Nat) : (adjK i).all X25519Mul.regOnly = true ∧ (adjK i).all (!·.writesMem) = true := by
+theorem adjK_reg (i : Nat) : (adjK i).all Field25519Mul.regOnly = true ∧ (adjK i).all (!·.writesMem) = true := by
   unfold adjK; split <;> split <;> exact ⟨rfl, rfl⟩
 
-theorem adjU_reg (i : Nat) : (adjU i).all X25519Mul.regOnly = true ∧ (adjU i).all (!·.writesMem) = true := by
+theorem adjU_reg (i : Nat) : (adjU i).all Field25519Mul.regOnly = true ∧ (adjU i).all (!·.writesMem) = true := by
   unfold adjU; split <;> exact ⟨rfl, rfl⟩
 
 theorem adjK_falls (i : Nat) : (adjK i).all Instr.falls = true := by
@@ -175,12 +175,12 @@ theorem adjK_val (s : State) (i : Nat) :
   by_cases h0 : i = 0
   · subst h0
     simp [execAll, Instr.next, Instr.exec, State.setReg, State.setNZC, State.reg, lslC, lsrC,
-      X25519Mem.toReg4]
+      Field25519Mem.toReg4]
     exact toNat_shr_shl _ 3
   · by_cases h7 : i = 7
     · subst h7
       simp [execAll, Instr.next, Instr.exec, State.setReg, State.setNZC, State.setNZ, State.reg, lslC,
-        lsrC, X25519Mem.toReg4, X25519Mem.toReg3]
+        lsrC, Field25519Mem.toReg4, Field25519Mem.toReg3]
       have e := shl_shr_nat (s.regs 4).toNat 2 (by omega)
       simp only [Nat.reducePow, Nat.reduceSub] at e
       rw [e]
@@ -195,7 +195,7 @@ theorem adjU_val (s : State) (i : Nat) :
   by_cases h7 : i = 7
   · subst h7
     simp [execAll, Instr.next, Instr.exec, State.setReg, State.setNZC, State.reg, lslC, lsrC,
-      X25519Mem.toReg4]
+      Field25519Mem.toReg4]
     have e := shl_shr_nat (s.regs 4).toNat 1 (by omega)
     simp only [Nat.reducePow, Nat.reduceSub] at e
     exact e

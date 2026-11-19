@@ -8,8 +8,8 @@ asset_root() { sed -n 's/^import \(M0Crypto\.Assets\..*\)$/\1/p' "$1"; }
 # claim_names AUDIT: the roots, one per line.
 claim_names() { sed -n 's/^#print axioms \(M0Crypto[^ ]*\)$/\1/p' "$1" | grep -v '_nonvacuous$'; }
 
-# claim_roots AUDIT: the roots as a Lean list literal, [`A, `B, ...].
-claim_roots() { claim_names "$1" | sed 's/^/`/' | paste -s -d, - | sed 's/^/[/; s/$/]/'; }
+# claim_roots AUDIT: the roots as a Lean list literal, [`A, `B, ...] ([] for an asset without claims).
+claim_roots() { echo "[$(claim_names "$1" | sed 's/^/`/' | paste -s -d, -)]"; }
 
 # The axioms a claim may depend on (check.sh step 6 allows the same three).
 permitted_axioms="propext Quot.sound Classical.choice"

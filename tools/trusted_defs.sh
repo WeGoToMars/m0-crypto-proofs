@@ -9,7 +9,7 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 PATH="$HOME/.elan/bin:$PATH"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
-{ echo "import $(asset_root "$ROOT/assets/$1/Audit.lean")"; cat "$ROOT/tools/trusted_defs.lean"
+{ echo "import $(asset_root "$ROOT/assets/$1/Audit.lean")"; echo "import Lean"; cat "$ROOT/tools/trusted_defs.lean"
   echo "#eval report $(claim_roots "$ROOT/assets/$1/Audit.lean")"; } > "$TMP/T.lean"
 cd "$ROOT/assets/$1"
 lake env lean "$TMP/T.lean"

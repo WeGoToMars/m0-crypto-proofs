@@ -19,13 +19,13 @@ namespace M0Crypto.Release.X25519ChainLoop
 open M0Crypto.Armv6M (Word Reg LowReg State Mem read32 write32)
 open M0Crypto.Thumb
 open M0Crypto.Release (ReachW Region B)
-open M0Crypto.Release.X25519Routines (feVal)
-open M0Crypto.Release.X25519Congr (ModP)
+open M0Crypto.Release.Field25519Routines (feVal)
+open M0Crypto.Release.Field25519Congr (ModP)
 open M0Crypto.Release.X25519Layout
 open M0Crypto.Release.X25519Op
 open M0Crypto.Release.X25519OpRun
 open M0Crypto.Release.X25519EntryCode
-open M0Crypto.Release.X25519Block (Runs AccOk accAll_cons accAll_nil)
+open M0Crypto.Release.Field25519Block (Runs AccOk accAll_cons accAll_nil)
 
 /-! ## Memory frame facts -/
 
@@ -86,13 +86,13 @@ theorem setT_runs {Wr : Word → Prop} (u : State) {j : Nat} (hj : j < 256)
   · simp [Instr.accesses]
   · simp only [Instr.accesses, List.mem_singleton, forall_eq]
     have e : ((Instr.movImm 0 (BitVec.ofNat 8 j)).next u).sp = u.sp := by
-      simp [Instr.next, Instr.exec, State.setReg, State.setNZ, State.sp, X25519Mem.toReg0]
+      simp [Instr.next, Instr.exec, State.setReg, State.setNZ, State.sp, Field25519Mem.toReg0]
     rw [e, lvT_off]
-    exact ⟨X25519Block.aligned_word hal, fun _ => hw⟩
+    exact ⟨Field25519Block.aligned_word hal, fun _ => hw⟩
   · refine ⟨?_, ?_⟩
-    · simp [setT, execAll, Instr.next, Instr.exec, State.setReg, State.setNZ, X25519Mem.toReg0]
+    · simp [setT, execAll, Instr.next, Instr.exec, State.setReg, State.setNZ, Field25519Mem.toReg0]
     · simp [setT, execAll, Instr.next, Instr.exec, State.setReg, State.setNZ, State.sp, State.reg,
-        X25519Mem.toReg0, lvT_off, lvT_off', setWidth_ofNat8 hj]
+        Field25519Mem.toReg0, lvT_off, lvT_off', setWidth_ofNat8 hj]
 
 theorem awc_dec (x : Word) : (M0Crypto.Armv6M.addWithCarry x 4294967294#32 true).1 = x - 1#32 := by
   rw [show (4294967294#32 : Word) = ~~~1#32 by decide]; exact Release.sub_flags x 1#32
@@ -108,21 +108,21 @@ theorem decT_runs {Wr : Word → Prop} (u : State)
   refine ⟨accAll_cons ?_ (accAll_cons ?_ (accAll_cons ?_ (accAll_nil _ _))), ?_⟩
   · simp only [Instr.accesses, List.mem_singleton, forall_eq]
     rw [lvT_off]
-    exact ⟨X25519Block.aligned_word hal, fun h => nomatch h⟩
+    exact ⟨Field25519Block.aligned_word hal, fun h => nomatch h⟩
   · simp [Instr.accesses]
   · simp only [Instr.accesses, List.mem_singleton, forall_eq]
     have e : ((Instr.subImm8 0 1).next ((Instr.ldrSp 0 (BitVec.ofNat 8 (lvT / 4))).next u)).sp = u.sp := by
       simp [Instr.next, Instr.exec, State.setReg, State.setNZCV, State.setNZ, State.sp, addFlags,
-        X25519Mem.toReg0]
+        Field25519Mem.toReg0]
     rw [e, lvT_off]
-    exact ⟨X25519Block.aligned_word hal, fun _ => hw⟩
+    exact ⟨Field25519Block.aligned_word hal, fun _ => hw⟩
   · refine ⟨?_, ?_, ?_⟩
     · simp [decT, execAll, Instr.next, Instr.exec, State.setReg, State.setNZCV, State.setNZ, addFlags,
-        X25519Mem.toReg0]
+        Field25519Mem.toReg0]
     · simp [decT, execAll, Instr.next, Instr.exec, State.setReg, State.setNZCV, State.setNZ, addFlags,
-        State.sp, State.reg, X25519Mem.toReg0, lvT_off, lvT_off', awc_dec]
+        State.sp, State.reg, Field25519Mem.toReg0, lvT_off, lvT_off', awc_dec]
     · simp [decT, execAll, Instr.next, Instr.exec, State.setReg, State.setNZCV, State.setNZ, addFlags,
-        State.sp, State.reg, X25519Mem.toReg0, lvT_off, lvT_off', awc_dec]
+        State.sp, State.reg, Field25519Mem.toReg0, lvT_off, lvT_off', awc_dec]
 
 /-! ## Backward branch -/
 
@@ -189,7 +189,7 @@ def KeepDT (c : X25519.Ctx) (d : Nat) (s t : State) : Prop :=
     t.mem y = s.mem y
 
 theorem sq_pow (x : Int) (j : Nat) : (x * x) ^ (2 ^ j) = x ^ (2 ^ (j + 1)) := by
-  rw [X25519Congr.mul_self_eq_sq, ← Int.pow_mul, Nat.pow_succ, Nat.mul_comm]
+  rw [Field25519Congr.mul_self_eq_sq, ← Int.pow_mul, Nat.pow_succ, Nat.mul_comm]
 
 theorem ofNat_dec {j : Nat} (_hj : j + 1 < 256) : BitVec.ofNat 32 (j + 1) - 1#32 = BitVec.ofNat 32 j := by
   apply BitVec.eq_of_toNat_eq
@@ -255,7 +255,7 @@ theorem loop_w {Q : State → Prop} {p d : Nat} (hd : SlotOk d)
     have u1sp : u1.sp = E c := e1.body.sp
     change u1.pc = c.base + BitVec.ofNat 32 (p + seqSize (opAt p (sqr d d))) at u1pc
     rw [hn1] at u1pc
-    refine X25519Block.ReachW.blockRuns hb0 decT (p + n1) u1pc (by omega) hB2 (by decide)
+    refine Field25519Block.ReachW.blockRuns hb0 decT (p + n1) u1pc (by omega) hB2 (by decide)
       (decT_runs u1 (by rw [u1sp]; exact al) (fun q hq => hWr _ (by rw [u1sp]; exact wr q hq)))
       (hPO.inE (by omega) (by rw [h6]; omega)) ?_
     rintro u2 u2pc ⟨u2sp, u2mem, u2z⟩
@@ -319,7 +319,7 @@ theorem sqrLoop_w {Q : State → Prop} {s : State} {o d n : Nat} (hd : SlotOk d)
   have hn1 := sqr_size (o + 4) d
   obtain ⟨al, wr, lv⟩ := lvT_facts hv hd
   have ssp : s.sp = E c := hs.sp
-  refine X25519Block.ReachW.blockRuns hb0 (setT (n - 1)) o hpc ho hseq.1 rfl
+  refine Field25519Block.ReachW.blockRuns hb0 (setT (n - 1)) o hpc ho hseq.1 rfl
     (setT_runs s (by omega) (by rw [ssp]; exact al) (fun q hq => hWr _ (by rw [ssp]; exact wr q hq)))
     (hPO.inE (by omega) (by rw [h4]; omega)) ?_
   rintro u upc ⟨usp, umem⟩

@@ -49,8 +49,8 @@ theorem x25519_ev_recorded :
   intro x e h i hi hw
   rw [B_len] at hi
   rcases h.2.1 _ hw with hy | hy
-  · exact X25519MulcFacts.region_ne hv.codeS hy i hi rfl
-  · exact X25519MulcFacts.region_ne hv.codeO hy i hi rfl
+  · exact Field25519Facts.region_ne hv.codeS hy i hi rfl
+  · exact Field25519Facts.region_ne hv.codeO hy i hi rfl
 
 /-- **Store sites**: every untracked store of a certified state writes only `out`. -/
 theorem x25519_store_site :

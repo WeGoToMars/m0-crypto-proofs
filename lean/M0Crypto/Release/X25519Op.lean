@@ -23,8 +23,8 @@ open M0Crypto.Armv6M (Word Reg LowReg State Mem)
 open M0Crypto.Thumb
 open M0Crypto.Release (ReachW InRegion Region)
 open M0Crypto.Release.Frame (Disj)
-open M0Crypto.Release.X25519Block (Runs Runs.reg)
-open M0Crypto.Release.X25519Routines (Call Pre Post feVal)
+open M0Crypto.Release.Field25519Block (Runs Runs.reg)
+open M0Crypto.Release.Field25519Routines (Call Pre Post feVal)
 open M0Crypto.Release.X25519Call
 open M0Crypto.Release.X25519Layout
 
@@ -67,7 +67,7 @@ theorem opPre_falls (d a : Nat) (b : Option Nat) : (opPre d a b).all Instr.falls
   cases b <;> rfl
 
 theorem opPre_reg (d a : Nat) (b : Option Nat) :
-    (opPre d a b).all X25519Mul.regOnly = true ∧ (opPre d a b).all (!·.writesMem) = true := by
+    (opPre d a b).all Field25519Mul.regOnly = true ∧ (opPre d a b).all (!·.writesMem) = true := by
   cases b <;> exact ⟨rfl, rfl⟩
 
 /-- Second operand address after the prefix: a slot, or `r2` unchanged. -/
@@ -85,24 +85,24 @@ theorem opPre_exec (s : State) (d a : Nat) (b : Option Nat) (hd : d % 4 = 0 ∧ 
   cases b with
   | none =>
     refine ⟨?_, ?_, ?_, rfl, fun r h3 h15 => ?_⟩
-    · simp [opPre, execAll, Instr.next, Instr.exec, State.setReg, State.sp, X25519Mem.toReg0,
-        X25519Mem.toReg1, X25519Mem.toReg2, k4 d hd.1 hd.2]
-    · simp [opPre, execAll, Instr.next, Instr.exec, State.setReg, State.sp, X25519Mem.toReg0,
-        X25519Mem.toReg1, X25519Mem.toReg2, k4 a ha.1 ha.2]
-    · simp [opPre, execAll, Instr.next, Instr.exec, State.setReg, State.sp, X25519Mem.toReg0,
-        X25519Mem.toReg1, X25519Mem.toReg2, bAddr]
+    · simp [opPre, execAll, Instr.next, Instr.exec, State.setReg, State.sp, Field25519Mem.toReg0,
+        Field25519Mem.toReg1, Field25519Mem.toReg2, k4 d hd.1 hd.2]
+    · simp [opPre, execAll, Instr.next, Instr.exec, State.setReg, State.sp, Field25519Mem.toReg0,
+        Field25519Mem.toReg1, Field25519Mem.toReg2, k4 a ha.1 ha.2]
+    · simp [opPre, execAll, Instr.next, Instr.exec, State.setReg, State.sp, Field25519Mem.toReg0,
+        Field25519Mem.toReg1, Field25519Mem.toReg2, bAddr]
     · have h0 : r ≠ LowReg.toReg 0 := fun e => by rw [e] at h3; exact absurd h3 (by decide)
       have h1 : r ≠ LowReg.toReg 1 := fun e => by rw [e] at h3; exact absurd h3 (by decide)
       simp [opPre, execAll, Instr.next, Instr.exec, State.setReg, h0, h1, h15]
   | some x =>
     have hx := hb x rfl
     refine ⟨?_, ?_, ?_, rfl, fun r h3 h15 => ?_⟩
-    · simp [opPre, execAll, Instr.next, Instr.exec, State.setReg, State.sp, X25519Mem.toReg0,
-        X25519Mem.toReg1, X25519Mem.toReg2, k4 d hd.1 hd.2]
-    · simp [opPre, execAll, Instr.next, Instr.exec, State.setReg, State.sp, X25519Mem.toReg0,
-        X25519Mem.toReg1, X25519Mem.toReg2, k4 a ha.1 ha.2]
-    · simp [opPre, execAll, Instr.next, Instr.exec, State.setReg, State.sp, X25519Mem.toReg0,
-        X25519Mem.toReg1, X25519Mem.toReg2, bAddr, k4 x hx.1 hx.2]
+    · simp [opPre, execAll, Instr.next, Instr.exec, State.setReg, State.sp, Field25519Mem.toReg0,
+        Field25519Mem.toReg1, Field25519Mem.toReg2, k4 d hd.1 hd.2]
+    · simp [opPre, execAll, Instr.next, Instr.exec, State.setReg, State.sp, Field25519Mem.toReg0,
+        Field25519Mem.toReg1, Field25519Mem.toReg2, k4 a ha.1 ha.2]
+    · simp [opPre, execAll, Instr.next, Instr.exec, State.setReg, State.sp, Field25519Mem.toReg0,
+        Field25519Mem.toReg1, Field25519Mem.toReg2, bAddr, k4 x hx.1 hx.2]
     · have h0 : r ≠ LowReg.toReg 0 := fun e => by rw [e] at h3; exact absurd h3 (by decide)
       have h1 : r ≠ LowReg.toReg 1 := fun e => by rw [e] at h3; exact absurd h3 (by decide)
       have h2 : r ≠ LowReg.toReg 2 := fun e => by rw [e] at h3; exact absurd h3 (by decide)
@@ -238,7 +238,7 @@ theorem Body.code {c : X25519.Ctx} (hv : X25519.Valid c) {m1 : Mem} (hc : CodeAt
   · exact hc i hi
   · have hs := hv.codeS
     have hl : B.length = Artifacts.Release.size := B_len
-    exact X25519MulcFacts.region_ne hs (show Region c.fp X25519.stackBytes _ from
+    exact Field25519Facts.region_ne hs (show Region c.fp X25519.stackBytes _ from
       Nat.lt_of_lt_of_le hy (by decide)) i (by omega) rfl
 
 /-- A slot offset: word aligned, inside the frame. -/
@@ -261,7 +261,7 @@ theorem op_call_w {off size frame : Nat} {useB : Bool} {f : Int → Int → Int}
     (hd : SlotOk d) (ha : SlotOk a) (hb : ∀ x, b = some x → SlotOk x)
     (hbB : useB = true → b.isSome = true)
     (k : ∀ t, t.pc = c.base + BitVec.ofNat 32 (o + seqSize (opCall o off d a b)) → Body c m1 t →
-      X25519Congr.ModP (feVal t.mem (E c + BitVec.ofNat 32 d))
+      Field25519Congr.ModP (feVal t.mem (E c + BitVec.ofNat 32 d))
         (f (feVal s.mem (E c + BitVec.ofNat 32 a)) (feVal s.mem (bAddr (E c) (s.regs 2) b))) →
       (∀ y, Region (E c) LFRAME y → ¬ Region (E c + BitVec.ofNat 32 d) 32 y → t.mem y = s.mem y) →
       ReachW c.base Pc Wr t Q) :
@@ -290,7 +290,7 @@ theorem op_call_w {off size frame : Nat} {useB : Bool} {f : Int → Int → Int}
   have hbb : ∀ x, b = some x → x % 4 = 0 ∧ x < 1024 := fun x hx => by
     obtain ⟨h1, h2⟩ := hb x hx; simp only [LFRAME] at h2; omega
   have hreg := opPre_reg d a b
-  refine X25519Block.ReachW.blockRuns hb0 (opPre d a b) o hpc ho hP (opPre_falls d a b)
+  refine Field25519Block.ReachW.blockRuns hb0 (opPre d a b) o hpc ho hP (opPre_falls d a b)
     (Runs.reg (Q := fun u => u = execAll (opPre d a b) s) hreg.1 hreg.2 rfl)
     (hPO.inE hlo (by omega)) ?_
   rintro u upc rfl
