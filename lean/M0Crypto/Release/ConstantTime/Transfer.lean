@@ -341,7 +341,7 @@ def xferCore (env : Env) (off : Nat) (ctx : Option Nat) (i : Instr) (st : AbsSta
       fall off ctx i
         { st.set dn.val (AbsVal.ofPub p) with fl := setNZC st.fl p (p && st.fl.c.pub) }
     | .lsls | .lsrs => .error "instruction outside the checker"
-  | .asrImm .. | .addPc _ | .rev .. => .error "instruction outside the checker"
+  | .asrImm .. | .addPc _ | .rev .. | .sxth .. | .bx .. => .error "instruction outside the checker"
   | .movHi d m =>
     if d.val == 13 || d.val == 15 || m.val == 13 || m.val == 15 then
       .error "register move uses SP or PC"

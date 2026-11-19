@@ -1,3 +1,4 @@
+import M0Crypto.Thumb.Branch
 import M0Crypto.Release.ConstantTime.PushSound
 import M0Crypto.Release.ConstantTime.PopSound
 
@@ -33,18 +34,9 @@ def controlEndsBlock : List Instr → Bool
   | [] => true
   | i :: is => (!isTerminalTransfer i || is.isEmpty) && controlEndsBlock is
 
-/-- Setting and then clearing the Thumb bit recovers an aligned address. -/
 theorem clear_thumb_bit (x : Word) (h : x.getLsbD 0 = false) :
-    (x ||| 1#32) &&& ~~~1#32 = x := by
-  apply BitVec.eq_of_getLsbD_eq
-  intro i hi
-  simp only [BitVec.getLsbD_and, BitVec.getLsbD_or, BitVec.getLsbD_not,
-    BitVec.getLsbD_one]
-  by_cases hz : i = 0
-  · subst i
-    have h' : x[0] = false := by simpa [BitVec.getLsbD_eq_getElem] using h
-    simp [h']
-  · simp [hz, hi]
+    (x ||| 1#32) &&& ~~~1#32 = x :=
+  M0Crypto.Thumb.clear_thumb_return_bit x h
 
 /-- A block found at a top-level offset is an aligned block head. -/
 theorem findBlk_aligned {cert : Cert} {r : Nat} {blk : Blk}

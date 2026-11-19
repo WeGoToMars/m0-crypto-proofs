@@ -132,7 +132,7 @@ def ptOffs (out : Out) : List Nat :=
 instruction, the next instruction otherwise. -/
 def succOffs (off : Nat) (i : Instr) (out : Out) : List Nat :=
   match i with
-  | .bcond .. | .b .. | .bl .. | .pop _ true => ptOffs out
+  | .bcond .. | .b .. | .bl .. | .pop _ true | .bx .. => ptOffs out
   | _ => [off + i.size]
 
 /-- Instructions whose next PC `succOffs` describes: all but a register move to PC. -/

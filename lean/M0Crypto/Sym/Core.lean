@@ -278,6 +278,7 @@ def symStep (i : Instr) (ss : SState) : SState :=
   | .addSp imm7 => next.setReg 13 (.add ss.sp (k (imm7.toNat * 4)))
   | .subSp imm7 => next.setReg 13 (.sub ss.sp (k (imm7.toNat * 4)))
   | .uxth d m => next.setReg d.toReg (.uxth (r m))
+  | .sxth d m => next.setReg d.toReg (.asr (.lsl (r m) 16) 16)
   | .rev d m => next.setReg d.toReg (.rev (r m))
   | .push l lr =>
     let n := bitCount l + lr.toNat
@@ -330,7 +331,7 @@ theorem symExec_sound : ∀ (is : List Instr), (∀ i ∈ is, Sound i) → ∀ (
 def symBasic : Instr → Bool
   | .addReg .. | .subReg .. | .addImm3 .. | .subImm3 .. | .movImm .. | .cmpImm ..
   | .addImm8 .. | .subImm8 .. | .addRdSp .. | .addSp .. | .subSp .. | .uxth .. | .addPc ..
-  | .rev .. => true
+  | .rev .. | .sxth .. => true
   | .movHi d _ => d.val != 15
   | _ => false
 

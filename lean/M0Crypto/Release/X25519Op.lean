@@ -1,3 +1,4 @@
+import M0Crypto.Thumb.Branch
 import M0Crypto.Release.X25519Call
 import M0Crypto.Release.X25519Layout
 
@@ -29,20 +30,6 @@ open M0Crypto.Release.X25519Call
 open M0Crypto.Release.X25519Layout
 
 /-! ## Branch offsets -/
-
-theorem bl_target (q t : Nat) (hq : q + 4 < 2 ^ 23) (ht : t < 2 ^ 23) :
-    BitVec.ofNat 32 q + 4#32 + (BitVec.ofInt 25 ((t : Int) - (q + 4))).signExtend 32 =
-      BitVec.ofNat 32 t := by
-  apply BitVec.eq_of_toInt_eq
-  rw [BitVec.toInt_add, BitVec.toInt_add, BitVec.toInt_signExtend_of_le (by omega), BitVec.toInt_ofInt,
-    BitVec.toInt_ofNat', BitVec.toInt_ofNat', BitVec.toInt_ofNat']
-  have e1 : ((q : Int)).bmod (2 ^ 32) = q := Int.bmod_eq_of_le (by omega) (by omega)
-  have e2 : ((t : Int) - (q + 4)).bmod (2 ^ 25) = (t : Int) - (q + 4) :=
-    Int.bmod_eq_of_le (by omega) (by omega)
-  have e3 : ((t : Int)).bmod (2 ^ 32) = t := Int.bmod_eq_of_le (by omega) (by omega)
-  have e4 : ((q : Int) + 4).bmod (2 ^ 32) = q + 4 := Int.bmod_eq_of_le (by omega) (by omega)
-  have e5 : (((4 : Nat) : Int)).bmod (2 ^ 32) = 4 := by decide
-  rw [e1, e5, e4, e2, show (q : Int) + 4 + ((t : Int) - (q + 4)) = t by omega, e3]
 
 /-- `bl` at offset `q` to offset `t`. -/
 def blTo (q t : Nat) : Instr := .bl (BitVec.ofInt 25 ((t : Int) - (q + 4)))

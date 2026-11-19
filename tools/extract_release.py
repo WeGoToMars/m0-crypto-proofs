@@ -13,8 +13,8 @@ bytes the artifact the asset's proofs bind to:
   `$t` code range and ends inside .text;
 
 and writes the asset's assets/ASSET/artifact/M0Crypto/Artifacts/Release.lean with the bytes, their sha256,
-the offsets of the function symbols (global: exported; local: internal), the offsets of the named data
-labels (local untyped `m0c_*` symbols, each inside a `$d` range), and the code/data ranges given by the
+the offsets of the function symbols (global: exported; local: internal), the offsets of named
+labels (local untyped `m0c_*` symbols in code or data), and the code/data ranges given by the
 ARM mapping symbols ($t / $d; ELF for the Arm Architecture §5.5.5). `--check` regenerates in memory and
 fails if the checked-in file differs. An asset with several builds (ed25519) has one module per build,
 named with `--module` (default `M0Crypto.Artifacts.Release`).
@@ -142,10 +142,18 @@ def main(argv):
         if not size or value + size > len(code) or not any(a <= value < b for a, b in code_ranges):
             fail(f"function {name} (0x{value:x}, {size} B) does not start in a code range")
     data_ranges = [(a, b) for a, b, k in ranges if k == "$d"]
-    labels.sort()
-    for value, name in labels:
-        if value % 4 or not any(a <= value < b for a, b in data_ranges):
-            fail(f"data label {name} (0x{value:x}) is not word aligned inside a data range")
+    code_labels, data_labels = [], []
+    for value, name in sorted(labels):
+        if any(a <= value < b for a, b in data_ranges):
+            if value % 4:
+                fail(f"data label {name} (0x{value:x}) is not word aligned")
+            data_labels.append((value, name))
+        elif any(a <= value < b for a, b in code_ranges):
+            if value % 2:
+                fail(f"code label {name} (0x{value:x}) is not halfword aligned")
+            code_labels.append((value, name))
+        else:
+            fail(f"label {name} (0x{value:x}) is outside the mapped .text ranges")
     digest = hashlib.sha256(code).hexdigest()
     unit = os.path.splitext(os.path.basename(obj))[0]
     lines = [
@@ -167,10 +175,14 @@ def main(argv):
     for value, size, name, exported in syms:
         kind = "exported" if exported else "internal"
         lines.append(f"def {name.removeprefix('m0c_')} : Nat := 0x{value:x}  -- {name}, {size} bytes, {kind}")
-    if labels:
+    if data_labels:
         lines += ["", "/-- Byte offsets of the named data labels (tables and constants, internal). -/"]
-        for value, name in labels:
+        for value, name in data_labels:
             lines.append(f"def {name.removeprefix('m0c_')} : Nat := 0x{value:x}  -- {name}, data")
+    if code_labels:
+        lines += ["", "/-- Byte offsets of named internal labels in Thumb code. -/"]
+        for value, name in code_labels:
+            lines.append(f"def {name.removeprefix('m0c_')} : Nat := 0x{value:x}  -- {name}, code")
     fmt = lambda rs: ", ".join(f"(0x{a:x}, 0x{b:x})" for a, b in rs)
     lines += ["", "/-- Half-open offset ranges of Thumb code (`$t`) and of literal data (`$d`),",
               "from the assembler's mapping symbols. Together they cover `bytes`. -/",

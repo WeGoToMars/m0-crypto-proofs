@@ -248,6 +248,7 @@ def Instr.exec (i : Instr) (s : State) : Except Fault State :=
   | .addRdSp d imm8 => .ok (next.setReg d.toReg (s.sp + BitVec.ofNat 32 (imm8.toNat * 4)))
   | .addSp imm7 => .ok (next.setReg 13 (s.sp + BitVec.ofNat 32 (imm7.toNat * 4)))
   | .subSp imm7 => .ok (next.setReg 13 (s.sp - BitVec.ofNat 32 (imm7.toNat * 4)))
+  | .sxth d m => .ok (next.setReg d.toReg (asrC ((r m) <<< 16) 16).1)
   | .uxth d m => .ok (next.setReg d.toReg ((r m).setWidth 16 |>.setWidth 32))
   | .rev d m => .ok (next.setReg d.toReg (revBytes (r m)))
   | .push l lr =>
@@ -272,6 +273,10 @@ def Instr.exec (i : Instr) (s : State) : Except Fault State :=
     let s1 := loadRegs next (r n) ((listRegs l).map LowReg.toReg)
     if l.getLsbD n.val then .ok s1
     else .ok (s1.setReg n.toReg (r n + BitVec.ofNat 32 (4 * bitCount l)))
+  | .bx m =>
+    let target := s.regs m
+    if target.getLsbD 0 then .ok (s.setReg 15 (target &&& ~~~1#32))
+    else .error (.interworking pc)
   | .bcond cond imm8 =>
     if condPassed cond s then
       .ok (s.setReg 15 (pc + 4#32 + (imm8 ++ 0#1).signExtend 32))

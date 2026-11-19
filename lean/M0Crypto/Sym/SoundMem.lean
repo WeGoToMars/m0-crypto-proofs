@@ -121,6 +121,7 @@ theorem sound_of_falls (i : Instr) (h : i.falls = true) : Sound i := by
   | addSp imm7 => exact sound_basic _ rfl
   | subSp imm7 => exact sound_basic _ rfl
   | uxth d m => exact sound_basic _ rfl
+  | sxth d m => exact sound_basic _ rfl
   | rev d m => exact sound_basic _ rfl
   | push l lr => exact sound_push l lr
   | pop l pc =>
@@ -132,5 +133,6 @@ theorem sound_of_falls (i : Instr) (h : i.falls = true) : Sound i := by
   | bcond cond imm8 => simp [Instr.falls] at h
   | b imm11 => simp [Instr.falls] at h
   | bl imm25 => simp [Instr.falls] at h
+  | bx m => simp [Instr.falls] at h
 
 end M0Crypto.Sym

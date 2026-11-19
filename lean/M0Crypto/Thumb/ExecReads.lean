@@ -283,6 +283,10 @@ private theorem readsOnly (i : Instr) (s : State) (m : Mem)
     · simp only [Instr.accesses, wordAccesses, List.mem_map, List.mem_range] at hacc
       obtain ⟨i, hi, rfl⟩ := hacc
       exact .inr ⟨i, k, by simpa [bitCount_listRegs] using hi, hk, hy⟩
+  case bx m =>
+    refine .of_map (fun y hy => by simp [Instr.accesses, Writes] at hy) ?_
+    simp only [Instr.exec, pc_withMem, setReg_withMem]
+    split <;> rfl
   case pop l pcBit =>
     refine .of_map (fun y => no_writes_of_read y) ?_
     have e1 := loadRegs_congr (s.setReg 15 (s.pc + BitVec.ofNat 32 (Instr.pop l pcBit).size)) m

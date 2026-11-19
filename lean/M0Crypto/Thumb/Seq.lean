@@ -20,7 +20,7 @@ open M0Crypto.Armv6M
 
 /-- Instructions whose only effect on PC is to advance it by their size. -/
 def Instr.falls : Instr → Bool
-  | .bcond _ _ | .b _ | .bl _ => false
+  | .bcond _ _ | .b _ | .bl _ | .bx _ => false
   | .pop _ pc => !pc
   | .movHi d _ => d.val != 15
   | _ => true
@@ -235,8 +235,8 @@ def Instr.writesMem : Instr → Bool
 def Instr.dsts : Instr → List Nat
   | .lslImm d _ _ | .lsrImm d _ _ | .addReg d _ _ | .subReg d _ _ | .addImm3 d _ _
   | .subImm3 d _ _ | .movImm d _ | .addImm8 d _ | .subImm8 d _ | .addRdSp d _ | .uxth d _
-  | .asrImm d _ _ | .addPc d | .rev d _ => [d.val]
-  | .cmpImm _ _ | .strSp _ _ | .bcond _ _ | .b _ => []
+  | .asrImm d _ _ | .addPc d | .rev d _ | .sxth d _ => [d.val]
+  | .cmpImm _ _ | .strSp _ _ | .bcond _ _ | .b _ | .bx _ => []
   | .dp op dn _ => if op = .tst ∨ op = .cmp then [] else [dn.val]
   | .movHi d _ => [d.val]
   | .ldrLit t _ | .ldrSp t _ => [t.val]
@@ -313,6 +313,10 @@ theorem next_regs_other {i : Instr} (s : State) (r : Reg) (h15 : r.val ≠ 15)
       · simp only [M0Crypto.Armv6M.State.setReg]
         rw [ite_eq_right_of_eq_false _ _ (eq_false (fun e => hd.2 (by rw [e]; rfl))), loadRegs_regs_other _ _ _ _ hd.1]
         simp [h15']
+    case bx =>
+      simp only [Instr.exec] at hex
+      split at hex <;> cases hex
+      simp [State.setReg, h15']
     case bcond =>
       simp only [Instr.exec] at hex
       split at hex <;> cases hex <;> simp [M0Crypto.Armv6M.State.setReg, h15']
@@ -407,5 +411,36 @@ theorem seqAt_append (bytes : List (BitVec 8)) : ∀ (off : Nat) (l₁ l₂ : Li
 
 theorem seqSize_append (l₁ l₂ : List Instr) : seqSize (l₁ ++ l₂) = seqSize l₁ + seqSize l₂ := by
   simp [seqSize]
+
+/-- Execute a straight-line leaf at its linked offset, including its register return. -/
+theorem runH_leaf {bytes : List (BitVec 8)} {base : Word} {off : Nat} {s : State}
+    {is : List Instr} {ret : Reg} (hb : base.toNat % 2 = 0) (hlen : bytes.length < 2^32)
+    (hpc : s.pc = base + BitVec.ofNat 32 off) (ho : off % 2 = 0)
+    (hat : seqAt bytes off (is ++ [.bx ret]) = true)
+    (hf : is.all Instr.falls = true) (ha : alignedAll is s = true)
+    (he : (off + seqSize is) % 2 = 0)
+    (hr : ((execAll is s).regs ret).getLsbD 0 = true) :
+    let t := execAll is s
+    runH bytes base (is.length + 1) s =
+      .ok (t.setReg 15 (t.regs ret &&& ~~~1#32), traceAll is s ++ [⟨t.pc, .bx ret, []⟩]) := by
+  rw [seqAt_append, Bool.and_eq_true] at hat
+  obtain ⟨hs, hrAt⟩ := hat
+  simp only [seqAt, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at hrAt
+  let t := execAll is s
+  have hp : t.pc = base + BitVec.ofNat 32 (off + seqSize is) := by
+    rw [execAll_pc _ _ hf, hpc, ofNat_add_assoc]
+  have hex : (Instr.bx ret).exec t = .ok (t.setReg 15 (t.regs ret &&& ~~~1#32)) := by
+    change (if (t.regs ret).getLsbD 0 then
+      Except.ok (t.setReg 15 (t.regs ret &&& ~~~1#32)) else Except.error (Fault.interworking t.pc)) = _
+    rw [show (t.regs ret).getLsbD 0 = true from hr]
+    rfl
+  have hstep := stepH_of_instr hb hlen hp he hrAt.1.1 hrAt.1.2 (by rfl) hex
+  dsimp only
+  rw [runH_add, runH_seq hb hlen _ _ _ hpc ho hs hf, runSeq_eq _ _ hf ha]
+  change (match runH bytes base (0+1) t with
+    | .error f => Except.error f
+    | .ok (u, tr) => .ok (u, traceAll is s ++ tr)) = _
+  rw [runH_one_step 0 hstep]
+  rfl
 
 end M0Crypto.Thumb

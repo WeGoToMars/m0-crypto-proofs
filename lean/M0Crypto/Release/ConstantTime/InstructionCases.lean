@@ -30,7 +30,7 @@ def registerInstruction : Instr → Bool
   | .lslImm .. | .lsrImm .. | .addReg .. | .subReg .. | .addImm3 .. | .subImm3 ..
   | .movImm .. | .cmpImm .. | .addImm8 .. | .subImm8 .. | .movHi .. | .addRdSp ..
   | .addSp .. | .subSp .. | .uxth .. | .ldrSp .. | .ldm .. => true
-  | .asrImm .. | .addPc .. | .rev .. => true
+  | .asrImm .. | .addPc .. | .rev .. | .sxth .. | .bx .. => true
   | .dp .. => true
   | _ => false
 
@@ -62,7 +62,7 @@ theorem certPoint_register_paired {env : Env} {bytes : List (BitVec 8)} {entry :
   | uxth d m => exact certPoint_uxth_paired d m hc hi hm hp h heven
   | ldrSp d k => exact certPoint_ldrSp_paired d k hc hi hm hp h heven
   | ldm n l => exact certPoint_ldm_paired n l hc hi hm hp h heven
-  | asrImm | addPc | rev => exact (certPoint_rejected _ hc hm hp fun _ => ⟨_, rfl⟩).elim
+  | asrImm | addPc | rev | sxth | bx => exact (certPoint_rejected _ hc hm hp fun _ => ⟨_, rfl⟩).elim
   | dp op d m =>
     cases op with
     | ands => exact certPoint_ands_paired d m hc hi hm hp h heven

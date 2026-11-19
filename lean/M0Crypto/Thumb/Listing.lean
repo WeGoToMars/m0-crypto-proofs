@@ -113,6 +113,8 @@ def render (pc : Nat) : Instr → String
   | .dp .rsbs d m => s!"rsbs {lo d}, {lo m}, #0"
   | .dp .muls d m => s!"muls {lo d}, {lo m}, {lo d}"
   | .dp op d m => s!"{dpName op} {lo d}, {lo m}"
+  | .bx m => s!"bx {regName m.val}"
+  | .sxth d m => s!"sxth {regName d.val}, {regName m.val}"
   | .movHi d m => s!"mov {regName d.val}, {regName m.val}"
   | .addPc d => s!"add {lo d}, pc"
   | .ldrLit t k => s!"ldr {lo t}, [pc, #{hex (k.toNat * 4)}] @ {hex ((pc + 4) / 4 * 4 + k.toNat * 4)}"

@@ -1151,6 +1151,7 @@ inductive M0Crypto.Thumb.Instr : Type
   | M0Crypto.Thumb.Instr.addSp : BitVec 7 → M0Crypto.Thumb.Instr
   | M0Crypto.Thumb.Instr.subSp : BitVec 7 → M0Crypto.Thumb.Instr
   | M0Crypto.Thumb.Instr.uxth : M0Crypto.Armv6M.LowReg → M0Crypto.Armv6M.LowReg → M0Crypto.Thumb.Instr
+  | M0Crypto.Thumb.Instr.sxth : M0Crypto.Armv6M.LowReg → M0Crypto.Armv6M.LowReg → M0Crypto.Thumb.Instr
   | M0Crypto.Thumb.Instr.rev : M0Crypto.Armv6M.LowReg → M0Crypto.Armv6M.LowReg → M0Crypto.Thumb.Instr
   | M0Crypto.Thumb.Instr.push : BitVec 8 → Bool → M0Crypto.Thumb.Instr
   | M0Crypto.Thumb.Instr.pop : BitVec 8 → Bool → M0Crypto.Thumb.Instr
@@ -1158,14 +1159,15 @@ inductive M0Crypto.Thumb.Instr : Type
   | M0Crypto.Thumb.Instr.ldm : M0Crypto.Armv6M.LowReg → BitVec 8 → M0Crypto.Thumb.Instr
   | M0Crypto.Thumb.Instr.bcond : BitVec 4 → BitVec 8 → M0Crypto.Thumb.Instr
   | M0Crypto.Thumb.Instr.b : BitVec 11 → M0Crypto.Thumb.Instr
+  | M0Crypto.Thumb.Instr.bx : M0Crypto.Armv6M.Reg → M0Crypto.Thumb.Instr
   | M0Crypto.Thumb.Instr.bl : BitVec 25 → M0Crypto.Thumb.Instr
-sha256 23826d760f443c15962e45cbd0ae69954ae51aea6c4b1945619c5d519c1517e9
+sha256 72a5761da80721baa04e7aad3415684bd6f6bf6a0b534aed26da986b5ec51d08
 def M0Crypto.Thumb.Instr.size : M0Crypto.Thumb.Instr → Nat :=
   fun x =>
   match x with
   | M0Crypto.Thumb.Instr.bl imm25 => 4
   | x => 2
-sha256 1f8ae7f8b0a5d77c345ee371aa323f8686700b6dba5487596f41884132966361
+sha256 821646c087f63d3ce50fa9208763d5c269e5c4500777c1b7c937eb22c2e41722
 def M0Crypto.Thumb.low : BitVec 16 → Nat → M0Crypto.Armv6M.LowReg :=
   fun hw lo => ⟨hw.toNat >>> lo % 8, M0Crypto.Thumb.low._proof_1 hw lo⟩
 sha256 f489e79f902e0984793e0b9d1045b7bcf696163f41f594a5b8ba7f962f30ad0d
@@ -1256,148 +1258,163 @@ def M0Crypto.Thumb.decode16 : BitVec 16 → Option M0Crypto.Thumb.Instr :=
                           if op >>> 8 = 70 then
                             let d := op >>> 7 % 2 * 8 + op % 8;
                             let m := op >>> 3 % 16;
-                            if d = 15 ∨ d = 13 ∨ m = 15 ∨ m = 13 then Option.none
+                            if d = 15 ∨ d = 13 ∨ m = 15 then Option.none
                             else
                               Option.some
                                 (M0Crypto.Thumb.Instr.movHi ⟨d, M0Crypto.Thumb.decode16._proof_3 hw⟩
                                   ⟨m, M0Crypto.Thumb.decode16._proof_4 hw⟩)
                           else
-                            if op >>> 11 = 9 then
-                              Option.some
-                                (M0Crypto.Thumb.Instr.ldrLit (M0Crypto.Thumb.low hw 8) (M0Crypto.Thumb.bits hw 0 8))
+                            if op >>> 7 = 142 ∧ op % 8 = 0 then
+                              let m := op >>> 3 % 16;
+                              if m = 13 ∨ m = 15 then Option.none
+                              else Option.some (M0Crypto.Thumb.Instr.bx ⟨m, M0Crypto.Thumb.decode16._proof_4 hw⟩)
                             else
-                              if op >>> 12 = 5 then
-                                Option.map
-                                  (fun o =>
-                                    M0Crypto.Thumb.Instr.memReg o (M0Crypto.Thumb.low hw 0) (M0Crypto.Thumb.low hw 3)
-                                      (M0Crypto.Thumb.low hw 6))
-                                  (M0Crypto.Thumb.memOpOfRegForm (op >>> 9 % 8))
+                              if op >>> 11 = 9 then
+                                Option.some
+                                  (M0Crypto.Thumb.Instr.ldrLit (M0Crypto.Thumb.low hw 8) (M0Crypto.Thumb.bits hw 0 8))
                               else
-                                if op >>> 11 = 12 then
-                                  Option.some
-                                    (M0Crypto.Thumb.Instr.memImm M0Crypto.Thumb.MemOp.str (M0Crypto.Thumb.low hw 0)
-                                      (M0Crypto.Thumb.low hw 3) (M0Crypto.Thumb.bits hw 6 5))
+                                if op >>> 12 = 5 then
+                                  Option.map
+                                    (fun o =>
+                                      M0Crypto.Thumb.Instr.memReg o (M0Crypto.Thumb.low hw 0) (M0Crypto.Thumb.low hw 3)
+                                        (M0Crypto.Thumb.low hw 6))
+                                    (M0Crypto.Thumb.memOpOfRegForm (op >>> 9 % 8))
                                 else
-                                  if op >>> 11 = 13 then
+                                  if op >>> 11 = 12 then
                                     Option.some
-                                      (M0Crypto.Thumb.Instr.memImm M0Crypto.Thumb.MemOp.ldr (M0Crypto.Thumb.low hw 0)
+                                      (M0Crypto.Thumb.Instr.memImm M0Crypto.Thumb.MemOp.str (M0Crypto.Thumb.low hw 0)
                                         (M0Crypto.Thumb.low hw 3) (M0Crypto.Thumb.bits hw 6 5))
                                   else
-                                    if op >>> 11 = 14 then
+                                    if op >>> 11 = 13 then
                                       Option.some
-                                        (M0Crypto.Thumb.Instr.memImm M0Crypto.Thumb.MemOp.strb (M0Crypto.Thumb.low hw 0)
+                                        (M0Crypto.Thumb.Instr.memImm M0Crypto.Thumb.MemOp.ldr (M0Crypto.Thumb.low hw 0)
                                           (M0Crypto.Thumb.low hw 3) (M0Crypto.Thumb.bits hw 6 5))
                                     else
-                                      if op >>> 11 = 15 then
+                                      if op >>> 11 = 14 then
                                         Option.some
-                                          (M0Crypto.Thumb.Instr.memImm M0Crypto.Thumb.MemOp.ldrb
+                                          (M0Crypto.Thumb.Instr.memImm M0Crypto.Thumb.MemOp.strb
                                             (M0Crypto.Thumb.low hw 0) (M0Crypto.Thumb.low hw 3)
                                             (M0Crypto.Thumb.bits hw 6 5))
                                       else
-                                        if op >>> 11 = 16 then
+                                        if op >>> 11 = 15 then
                                           Option.some
-                                            (M0Crypto.Thumb.Instr.memImm M0Crypto.Thumb.MemOp.strh
+                                            (M0Crypto.Thumb.Instr.memImm M0Crypto.Thumb.MemOp.ldrb
                                               (M0Crypto.Thumb.low hw 0) (M0Crypto.Thumb.low hw 3)
                                               (M0Crypto.Thumb.bits hw 6 5))
                                         else
-                                          if op >>> 11 = 17 then
+                                          if op >>> 11 = 16 then
                                             Option.some
-                                              (M0Crypto.Thumb.Instr.memImm M0Crypto.Thumb.MemOp.ldrh
+                                              (M0Crypto.Thumb.Instr.memImm M0Crypto.Thumb.MemOp.strh
                                                 (M0Crypto.Thumb.low hw 0) (M0Crypto.Thumb.low hw 3)
                                                 (M0Crypto.Thumb.bits hw 6 5))
                                           else
-                                            if op >>> 11 = 18 then
+                                            if op >>> 11 = 17 then
                                               Option.some
-                                                (M0Crypto.Thumb.Instr.strSp (M0Crypto.Thumb.low hw 8)
-                                                  (M0Crypto.Thumb.bits hw 0 8))
+                                                (M0Crypto.Thumb.Instr.memImm M0Crypto.Thumb.MemOp.ldrh
+                                                  (M0Crypto.Thumb.low hw 0) (M0Crypto.Thumb.low hw 3)
+                                                  (M0Crypto.Thumb.bits hw 6 5))
                                             else
-                                              if op >>> 11 = 19 then
+                                              if op >>> 11 = 18 then
                                                 Option.some
-                                                  (M0Crypto.Thumb.Instr.ldrSp (M0Crypto.Thumb.low hw 8)
+                                                  (M0Crypto.Thumb.Instr.strSp (M0Crypto.Thumb.low hw 8)
                                                     (M0Crypto.Thumb.bits hw 0 8))
                                               else
-                                                if op >>> 11 = 21 then
+                                                if op >>> 11 = 19 then
                                                   Option.some
-                                                    (M0Crypto.Thumb.Instr.addRdSp (M0Crypto.Thumb.low hw 8)
+                                                    (M0Crypto.Thumb.Instr.ldrSp (M0Crypto.Thumb.low hw 8)
                                                       (M0Crypto.Thumb.bits hw 0 8))
                                                 else
-                                                  if op >>> 7 = 352 then
+                                                  if op >>> 11 = 21 then
                                                     Option.some
-                                                      (M0Crypto.Thumb.Instr.addSp (M0Crypto.Thumb.bits hw 0 7))
+                                                      (M0Crypto.Thumb.Instr.addRdSp (M0Crypto.Thumb.low hw 8)
+                                                        (M0Crypto.Thumb.bits hw 0 8))
                                                   else
-                                                    if op >>> 7 = 353 then
+                                                    if op >>> 7 = 352 then
                                                       Option.some
-                                                        (M0Crypto.Thumb.Instr.subSp (M0Crypto.Thumb.bits hw 0 7))
+                                                        (M0Crypto.Thumb.Instr.addSp (M0Crypto.Thumb.bits hw 0 7))
                                                     else
-                                                      if op >>> 6 = 714 then
+                                                      if op >>> 7 = 353 then
                                                         Option.some
-                                                          (M0Crypto.Thumb.Instr.uxth (M0Crypto.Thumb.low hw 0)
-                                                            (M0Crypto.Thumb.low hw 3))
+                                                          (M0Crypto.Thumb.Instr.subSp (M0Crypto.Thumb.bits hw 0 7))
                                                       else
-                                                        if op >>> 9 = 90 then
-                                                          if op % 512 = 0 then Option.none
-                                                          else
-                                                            Option.some
-                                                              (M0Crypto.Thumb.Instr.push (M0Crypto.Thumb.bits hw 0 8)
-                                                                (Decidable.decide (op >>> 8 % 2 = 1)))
+                                                        if op >>> 6 = 712 then
+                                                          Option.some
+                                                            (M0Crypto.Thumb.Instr.sxth (M0Crypto.Thumb.low hw 0)
+                                                              (M0Crypto.Thumb.low hw 3))
                                                         else
-                                                          if op >>> 9 = 94 then
-                                                            if op % 512 = 0 then Option.none
-                                                            else
-                                                              Option.some
-                                                                (M0Crypto.Thumb.Instr.pop (M0Crypto.Thumb.bits hw 0 8)
-                                                                  (Decidable.decide (op >>> 8 % 2 = 1)))
+                                                          if op >>> 6 = 714 then
+                                                            Option.some
+                                                              (M0Crypto.Thumb.Instr.uxth (M0Crypto.Thumb.low hw 0)
+                                                                (M0Crypto.Thumb.low hw 3))
                                                           else
-                                                            if op >>> 11 = 24 then
-                                                              if
-                                                                  op % 256 = 0 ∨
-                                                                    (op % 256) >>> (op >>> 8 % 8) % 2 = 1 then
-                                                                Option.none
+                                                            if op >>> 9 = 90 then
+                                                              if op % 512 = 0 then Option.none
                                                               else
                                                                 Option.some
-                                                                  (M0Crypto.Thumb.Instr.stm (M0Crypto.Thumb.low hw 8)
-                                                                    (M0Crypto.Thumb.bits hw 0 8))
+                                                                  (M0Crypto.Thumb.Instr.push
+                                                                    (M0Crypto.Thumb.bits hw 0 8)
+                                                                    (Decidable.decide (op >>> 8 % 2 = 1)))
                                                             else
-                                                              if op >>> 11 = 25 then
-                                                                if op % 256 = 0 then Option.none
+                                                              if op >>> 9 = 94 then
+                                                                if op % 512 = 0 then Option.none
                                                                 else
                                                                   Option.some
-                                                                    (M0Crypto.Thumb.Instr.ldm (M0Crypto.Thumb.low hw 8)
-                                                                      (M0Crypto.Thumb.bits hw 0 8))
+                                                                    (M0Crypto.Thumb.Instr.pop
+                                                                      (M0Crypto.Thumb.bits hw 0 8)
+                                                                      (Decidable.decide (op >>> 8 % 2 = 1)))
                                                               else
-                                                                if op >>> 12 = 13 then
-                                                                  if op >>> 8 % 16 ≥ 14 ∨ op % 256 = 255 then
+                                                                if op >>> 11 = 24 then
+                                                                  if
+                                                                      op % 256 = 0 ∨
+                                                                        (op % 256) >>> (op >>> 8 % 8) % 2 = 1 then
                                                                     Option.none
                                                                   else
                                                                     Option.some
-                                                                      (M0Crypto.Thumb.Instr.bcond
-                                                                        (M0Crypto.Thumb.bits hw 8 4)
+                                                                      (M0Crypto.Thumb.Instr.stm
+                                                                        (M0Crypto.Thumb.low hw 8)
                                                                         (M0Crypto.Thumb.bits hw 0 8))
                                                                 else
-                                                                  if op >>> 11 = 28 then
-                                                                    Option.some
-                                                                      (M0Crypto.Thumb.Instr.b
-                                                                        (M0Crypto.Thumb.bits hw 0 11))
-                                                                  else
-                                                                    if op >>> 11 = 2 then
-                                                                      Option.some
-                                                                        (M0Crypto.Thumb.Instr.asrImm
-                                                                          (M0Crypto.Thumb.low hw 0)
-                                                                          (M0Crypto.Thumb.low hw 3)
-                                                                          (M0Crypto.Thumb.bits hw 6 5))
+                                                                  if op >>> 11 = 25 then
+                                                                    if op % 256 = 0 then Option.none
                                                                     else
-                                                                      if op >>> 3 = 2191 then
-                                                                        Option.some
-                                                                          (M0Crypto.Thumb.Instr.addPc
-                                                                            (M0Crypto.Thumb.low hw 0))
+                                                                      Option.some
+                                                                        (M0Crypto.Thumb.Instr.ldm
+                                                                          (M0Crypto.Thumb.low hw 8)
+                                                                          (M0Crypto.Thumb.bits hw 0 8))
+                                                                  else
+                                                                    if op >>> 12 = 13 then
+                                                                      if op >>> 8 % 16 ≥ 14 ∨ op % 256 = 255 then
+                                                                        Option.none
                                                                       else
-                                                                        if op >>> 6 = 744 then
+                                                                        Option.some
+                                                                          (M0Crypto.Thumb.Instr.bcond
+                                                                            (M0Crypto.Thumb.bits hw 8 4)
+                                                                            (M0Crypto.Thumb.bits hw 0 8))
+                                                                    else
+                                                                      if op >>> 11 = 28 then
+                                                                        Option.some
+                                                                          (M0Crypto.Thumb.Instr.b
+                                                                            (M0Crypto.Thumb.bits hw 0 11))
+                                                                      else
+                                                                        if op >>> 11 = 2 then
                                                                           Option.some
-                                                                            (M0Crypto.Thumb.Instr.rev
+                                                                            (M0Crypto.Thumb.Instr.asrImm
                                                                               (M0Crypto.Thumb.low hw 0)
-                                                                              (M0Crypto.Thumb.low hw 3))
-                                                                        else Option.none
-sha256 fc380b9cab5f1ebd7c4e61c21f7251d099512d6b93254a3adc9b2d47ce91cf38
+                                                                              (M0Crypto.Thumb.low hw 3)
+                                                                              (M0Crypto.Thumb.bits hw 6 5))
+                                                                        else
+                                                                          if op >>> 3 = 2191 then
+                                                                            Option.some
+                                                                              (M0Crypto.Thumb.Instr.addPc
+                                                                                (M0Crypto.Thumb.low hw 0))
+                                                                          else
+                                                                            if op >>> 6 = 744 then
+                                                                              Option.some
+                                                                                (M0Crypto.Thumb.Instr.rev
+                                                                                  (M0Crypto.Thumb.low hw 0)
+                                                                                  (M0Crypto.Thumb.low hw 3))
+                                                                            else Option.none
+sha256 9e8f99ec6fe0ce5ae58e8d8daedee4ab8a19ade2c367149d878b57eb44bbe3ae
 def M0Crypto.Thumb.decodeBL : BitVec 16 → BitVec 16 → Option M0Crypto.Thumb.Instr :=
   fun hw1 hw2 =>
   if hw1.toNat >>> 11 = 30 ∧ hw2.toNat >>> 14 % 4 = 3 ∧ hw2.toNat >>> 12 % 2 = 1 then
@@ -1564,7 +1581,7 @@ def M0Crypto.Thumb.Instr.accesses : M0Crypto.Thumb.Instr → M0Crypto.Armv6M.Sta
   | M0Crypto.Thumb.Instr.ldm n l =>
     M0Crypto.Thumb.wordAccesses M0Crypto.Thumb.Kind.read (s.reg n) (M0Crypto.Thumb.bitCount l)
   | x => []
-sha256 6263cf1376787c3ed299331366d6f46afe8bb0a8dc9ba21cf962a514323651c0
+sha256 4efd42e22d82f5e64e9eda53ae65f6a8e54c8ba7de8752d04e9ce783e4cc99c6
 def M0Crypto.Thumb.Instr.exec : M0Crypto.Thumb.Instr → M0Crypto.Armv6M.State → Except M0Crypto.Thumb.Fault M0Crypto.Armv6M.State :=
   fun i s =>
   have pc := s.pc;
@@ -1643,6 +1660,7 @@ def M0Crypto.Thumb.Instr.exec : M0Crypto.Thumb.Instr → M0Crypto.Armv6M.State �
   | M0Crypto.Thumb.Instr.addRdSp d imm8 => Except.ok (next.setReg d.toReg (s.sp + BitVec.ofNat 32 (imm8.toNat * 4)))
   | M0Crypto.Thumb.Instr.addSp imm7 => Except.ok (next.setReg 13 (s.sp + BitVec.ofNat 32 (imm7.toNat * 4)))
   | M0Crypto.Thumb.Instr.subSp imm7 => Except.ok (next.setReg 13 (s.sp - BitVec.ofNat 32 (imm7.toNat * 4)))
+  | M0Crypto.Thumb.Instr.sxth d m => Except.ok (next.setReg d.toReg (M0Crypto.Thumb.asrC (r m <<< 16) 16).fst)
   | M0Crypto.Thumb.Instr.uxth d m => Except.ok (next.setReg d.toReg (BitVec.setWidth 32 (BitVec.setWidth 16 (r m))))
   | M0Crypto.Thumb.Instr.rev d m => Except.ok (next.setReg d.toReg (M0Crypto.Thumb.revBytes (r m)))
   | M0Crypto.Thumb.Instr.push l lr =>
@@ -1672,6 +1690,10 @@ def M0Crypto.Thumb.Instr.exec : M0Crypto.Thumb.Instr → M0Crypto.Armv6M.State �
     have s1 := M0Crypto.Thumb.loadRegs next (r n) (List.map M0Crypto.Armv6M.LowReg.toReg (M0Crypto.Thumb.listRegs l));
     if l.getLsbD ↑n = Bool.true then Except.ok s1
     else Except.ok (s1.setReg n.toReg (r n + BitVec.ofNat 32 (4 * M0Crypto.Thumb.bitCount l)))
+  | M0Crypto.Thumb.Instr.bx m =>
+    have target := s.regs m;
+    if BitVec.getLsbD target 0 = Bool.true then Except.ok (s.setReg 15 (target &&& ~~~1#32))
+    else Except.error (M0Crypto.Thumb.Fault.interworking pc)
   | M0Crypto.Thumb.Instr.bcond cond imm8 =>
     if M0Crypto.Thumb.condPassed cond s = Bool.true then
       Except.ok (s.setReg 15 (pc + 4#32 + BitVec.signExtend 32 (imm8 ++ 0#1)))
@@ -1679,7 +1701,7 @@ def M0Crypto.Thumb.Instr.exec : M0Crypto.Thumb.Instr → M0Crypto.Armv6M.State �
   | M0Crypto.Thumb.Instr.b imm11 => Except.ok (s.setReg 15 (pc + 4#32 + BitVec.signExtend 32 (imm11 ++ 0#1)))
   | M0Crypto.Thumb.Instr.bl imm25 =>
     Except.ok ((s.setReg 14 (pc + 4#32 ||| 1#32)).setReg 15 (pc + 4#32 + BitVec.signExtend 32 imm25))
-sha256 6f18339e3ae98cf455d79e2d57bc6a8ea3df6a208fff6822fb9385e721063b1f
+sha256 763b9abc09dcc90a41fe9670a257c27421c001faa204d2cb5a1a11f8f80aa679
 def M0Crypto.Thumb.Instr.exec.memOp : M0Crypto.Armv6M.State → M0Crypto.Thumb.MemOp → M0Crypto.Armv6M.LowReg → M0Crypto.Armv6M.Word → M0Crypto.Armv6M.State :=
   fun next op t a =>
   have v := next.reg t;

@@ -212,6 +212,11 @@ theorem exec_mem_other (i : Instr) (s s' : State) (hex : i.exec s = .ok s') (y :
   case ldm n l =>
     simp only [Instr.exec] at hex
     split at hex <;> (simp only [Except.ok.injEq] at hex; subst hex; simp [loadRegs_mem])
+  case bx m =>
+    simp only [Instr.exec] at hex
+    split at hex
+    · simp only [Except.ok.injEq] at hex; subst hex; rfl
+    · cases hex
   case bcond cond imm8 =>
     simp only [Instr.exec] at hex
     split at hex <;> (simp only [Except.ok.injEq] at hex; subst hex; simp)

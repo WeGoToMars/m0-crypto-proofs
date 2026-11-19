@@ -13,13 +13,13 @@ to `none` and executing it is a fault, never a silent no-op. In particular:
 * the data-processing group (`010000 oooo`) accepts only ANDS, EORS, LSLS and LSRS
   (register), ADCS, SBCS, RORS, TST, RSBS, CMP, ORRS, MULS, MVNS; ASRS (register), CMN
   and BICS are rejected;
-* of the special data group (`010001`) only two forms are accepted: MOV when neither
-  register is SP or PC, and `ADD Rdn, PC` with a low Rdn (no other ADD, no CMP high,
-  no BX/BLX);
+* of the special data group (`010001`) MOV permits reading SP but excludes writes to SP or PC and reads of PC.
+  The other accepted forms are `ADD Rdn, PC` with a low Rdn and BX with a register
+  other than SP or PC;
 * STM is rejected when its base register is in the list (UNPREDICTABLE unless it
   is the lowest register; the artifact never does it);
 * the only 32-bit encoding accepted is BL;
-* ADR, LDRSB/LDRSH, SXT*/UXTB, REV16/REVSH, CPS, BKPT, hints, SVC, UDF,
+* ADR, LDRSB/LDRSH, SXTB/UXTB, REV16/REVSH, CPS, BKPT, hints, SVC, UDF,
   the conditional-branch encodings with cond = 1110 or 1111 are rejected;
 * a conditional branch to the next instruction (imm8 = 0xff) is rejected. Taken or not, it
   reaches the same PC, so the trace would not record its outcome, while the core takes
@@ -67,7 +67,7 @@ inductive Instr where
   | subImm8 (dn : LowReg) (imm8 : BitVec 8)
   /-- Data processing `op Rdn, Rm`; for RSBS the immediate is #0. -/
   | dp (op : DpOp) (dn m : LowReg)
-  /-- MOV Rd, Rm (T1); d, m ∉ {SP, PC}; flags unchanged. -/
+  /-- MOV Rd, Rm (T1); d is not SP or PC and m is not PC; flags unchanged. -/
   | movHi (d m : Reg)
   /-- ADD Rdn, PC (T2 with DN = 0, Rm = PC); flags unchanged. -/
   | addPc (dn : LowReg)
@@ -86,6 +86,7 @@ inductive Instr where
   /-- SUB SP, SP, #imm7*4. -/
   | subSp (imm7 : BitVec 7)
   | uxth (d m : LowReg)
+  | sxth (d m : LowReg)
   | rev (d m : LowReg)
   /-- PUSH {low registers, LR if `lr`}. -/
   | push (list : BitVec 8) (lr : Bool)
@@ -98,6 +99,8 @@ inductive Instr where
   /-- B<cond> with cond < 14. -/
   | bcond (cond : BitVec 4) (imm8 : BitVec 8)
   | b (imm11 : BitVec 11)
+  /-- BX Rm (T1), with a register other than SP or PC. -/
+  | bx (m : Reg)
   /-- BL with the 25-bit signed offset `S:I1:I2:imm10:imm11:'0'`. -/
   | bl (imm25 : BitVec 25)
   deriving DecidableEq, Repr
@@ -164,10 +167,12 @@ def decode16 (hw : BitVec 16) : Option Instr :=
     -- MOV Rd, Rm (T1): D:Rd = bits 7, 2:0; Rm = bits 6:3.
     let d := ((op >>> 7) % 2) * 8 + op % 8
     let m := (op >>> 3) % 16
-    -- PC and SP are excluded on both sides: writing PC is a branch, writing SP
-    -- needs the SP alignment rule, and reading PC is not used by the artifact.
-    if d = 15 ∨ d = 13 ∨ m = 15 ∨ m = 13 then none
+    -- Writing PC branches, writing SP needs the alignment rule, and reading PC needs a bias.
+    if d = 15 ∨ d = 13 ∨ m = 15 then none
     else some (.movHi ⟨d, by omega⟩ ⟨m, by omega⟩)
+  else if op >>> 7 = 0b010001110 ∧ op % 8 = 0 then
+    let m := (op >>> 3) % 16
+    if m = 13 ∨ m = 15 then none else some (.bx ⟨m, by omega⟩)
   else if op >>> 11 = 0b01001 then some (.ldrLit (low hw 8) (bits hw 0 8))
   else if op >>> 12 = 0b0101 then
     (memOpOfRegForm ((op >>> 9) % 8)).map fun o => .memReg o (low hw 0) (low hw 3) (low hw 6)
@@ -182,6 +187,7 @@ def decode16 (hw : BitVec 16) : Option Instr :=
   else if op >>> 11 = 0b10101 then some (.addRdSp (low hw 8) (bits hw 0 8))
   else if op >>> 7 = 0b101100000 then some (.addSp (bits hw 0 7))
   else if op >>> 7 = 0b101100001 then some (.subSp (bits hw 0 7))
+  else if op >>> 6 = 0b1011001000 then some (.sxth (low hw 0) (low hw 3))
   else if op >>> 6 = 0b1011001010 then some (.uxth (low hw 0) (low hw 3))
   else if op >>> 9 = 0b1011010 then
     if op % 512 = 0 then none   -- empty list is UNPREDICTABLE
@@ -248,13 +254,17 @@ example : decode 0x447f#16 0 = some (.addPc 7) := by decide              -- add 
 example : decode 0xba2c#16 0 = some (.rev 4 5) := by decide              -- rev r4, r5
 example : decode 0xf000#16 0xf800#16 = some (.bl 0) := by decide         -- bl .+4
 example : decode 0xf7ff#16 0xfffe#16 = some (.bl 0x1fffffc) := by decide -- bl .  (offset -4)
--- Rejected: MOV PC, BX LR, ADD (high), ASRS (register), BICS, LDRSB, UDF, SVC, NOP,
+example : decode 0x4668#16 0 = some (.movHi 0 13) := by decide          -- mov r0, sp
+example : decode 0xb225#16 0 = some (.sxth 5 4) := by decide           -- sxth r5, r4
+example : decode 0x4770#16 0 = some (.bx 14) := by decide               -- bx lr
+
+-- Rejected: MOV PC, BLX LR, ADD (high), ASRS (register), BICS, LDRSB, UDF, SVC, NOP,
 -- a Thumb-2 prefix; ADD r8, PC; ADD r0, r8; REV16; REVSH.
 example : decode 0x46f7#16 0 = none := by decide
-example : decode 0x46e8#16 0 = none := by decide   -- mov r8, sp
+example : decode 0x46e8#16 0 = some (.movHi 8 13) := by decide   -- mov r8, sp
 example : decode 0xc103#16 0 = none := by decide   -- stm r1!, {r0, r1}: base in list
 example : decode 0xc50f#16 0 = some (.stm 5 0x0f) := by decide   -- stm r5!, {r0-r3}
-example : decode 0x4770#16 0 = none := by decide
+example : decode 0x47f0#16 0 = none := by decide
 example : decode 0xd2ff#16 0 = none := by decide   -- bhs .+2: same PC taken or not
 example : decode 0x4448#16 0 = none := by decide
 example : decode 0x4108#16 0 = none := by decide

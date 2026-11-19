@@ -52,7 +52,7 @@ theorem step_exec_of {s t : State} {e : Event} {base : Word} {bytes : List (BitV
 
 /-- Instructions that continue at the next instruction. -/
 def fallInstr : Instr → Bool
-  | .bcond .. | .b .. | .bl .. | .pop _ true => false
+  | .bcond .. | .b .. | .bl .. | .pop _ true | .bx .. => false
   | _ => true
 
 theorem succOffs_fall {off : Nat} {i : Instr} {out : Out} (h : fallInstr i = true) :
@@ -102,6 +102,7 @@ theorem exec_pc_fall {s t : State} (i : Instr) (hf : fallInstr i = true) (hs : p
   | bcond => simp [fallInstr] at hf
   | b => simp [fallInstr] at hf
   | bl => simp [fallInstr] at hf
+  | bx => simp [fallInstr] at hf
   | pop l pc =>
     cases pc
     · simp only [Instr.exec, Bool.false_eq_true, ite_false, Except.ok.injEq] at h
@@ -235,6 +236,9 @@ theorem certPoint_next_pc {env : Env} {bytes : List (BitVec 8)} {entry : Nat}
               rw [hsp, sp_add_ofInt]
             rw [ha', hr₁, clear_thumb_bit _ hev]
         · cases hex
+    | bx =>
+      unfold xfer at hx
+      split at hx <;> simp [xferCore] at hx
     | _ => simp [fallInstr] at hf
 
 end M0Crypto.Release.ConstantTime
