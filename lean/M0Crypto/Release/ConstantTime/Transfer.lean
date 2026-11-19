@@ -31,6 +31,27 @@ namespace M0Crypto.Release.ConstantTime
 open M0Crypto.Thumb
 open M0Crypto.Armv6M (Word addWithCarry)
 
+/-- A direct call with a separately proved trace and frame effect.
+The two field pointers are exact offsets from entry SP. At the return only SP
+and the stack words disjoint from the frame are tracked. -/
+structure FrameCall where
+  site : Nat
+  target : Nat
+  spOff : Int
+  dstOff : Int
+  srcOff : Int
+  frame : Nat
+  deriving DecidableEq, Repr
+
+def FrameCall.ok (f : FrameCall) (w : StackWindow) (target : Nat) (st : AbsState) : Bool :=
+  target == f.target && st.spOff == f.spOff &&
+    st.get 0 == .sp f.dstOff f.dstOff && st.get 1 == .sp f.srcOff f.srcOff &&
+    w.covers f.spOff (f.spOff + f.frame)
+
+def FrameCall.after (f : FrameCall) (st : AbsState) : AbsState :=
+  ⟨List.replicate numRegs .hi, st.spOff, AFl.all .hi,
+    stkForget st.stk f.spOff (f.spOff + f.frame), [], []⟩
+
 /-- Fixed parameters of one entry's analysis. -/
 structure Env where
   win : StackWindow
@@ -45,7 +66,11 @@ structure Env where
   /-- Analyse each callee once for all call sites (context = callee entry) instead of once
   per call site (context = return offset). -/
   shareCalls : Bool := false
+  frameCall : Option FrameCall := none
   deriving DecidableEq, Repr
+
+def Env.frameCallAt (env : Env) (off : Nat) : Option FrameCall :=
+  env.frameCall.filter (fun f => f.site == off)
 
 /-- Certificate context of a callee entered by the `bl` at `off` with target `tgt`. -/
 def callCtx (env : Env) (off tgt : Nat) : Nat := if env.shareCalls then tgt else off + 4
@@ -462,7 +487,12 @@ def xferCore (env : Env) (off : Nat) (ctx : Option Nat) (i : Instr) (st : AbsSta
     if ctx.isSome then .error "nested call" else
     match relTarget off (blDisp imm25) with
     | none => .error "call target before the artifact"
-    | some tgt => .ok ⟨[(.pt tgt (some (callCtx env off tgt)), st.set 14 (.ret [off + 4]))], []⟩
+    | some tgt =>
+      match env.frameCallAt off with
+      | none => .ok ⟨[(.pt tgt (some (callCtx env off tgt)), st.set 14 (.ret [off + 4]))], []⟩
+      | some f =>
+        if f.ok env.win tgt st then .ok ⟨[(.pt (off + 4) ctx, f.after st)], []⟩
+        else .error "call does not meet its frame summary"
 
 /-- Transfer with the SP-window obligation checked first. -/
 def xfer (env : Env) (off : Nat) (ctx : Option Nat) (i : Instr) (st : AbsState) : Except String Out :=

@@ -26,7 +26,7 @@ theorem certificate_reachable_partner {env : Env} {bytes : List (BitVec 8)} {ent
     (hlocal : ∀ u₁ u₂, BeforeStop (p.lr0 &&& ~~~1#32) s₁ u₁ →
       BeforeStop (p.lr0 &&& ~~~1#32) s₂ u₂ → CertAt env cert p bytes u₁ u₂ →
       PositionObligations env cert p bytes u₁ u₂)
-    (h : CertAt env cert p bytes s₁ s₂) :
+    (h : CertAt env cert p bytes s₁ s₂) (hplain : env.frameCall = none := by rfl) :
     ∀ u, BeforeStop (p.lr0 &&& ~~~1#32) s₁ u →
       ∃ u₂, RunRel env cert p bytes (p.lr0 &&& ~~~1#32) u u₂ ∧
         BeforeStop (p.lr0 &&& ~~~1#32) s₂ u₂ := by
@@ -40,7 +40,7 @@ theorem certificate_reachable_partner {env : Env} {bytes : List (BitVec 8)} {ent
       · exact hcert
       · exact absurd hpc hstop
     have hs := certAt_run_paired hc hi ha hslots hwidth hdisj hsize hbase hnowrap hlr hcert
-      (hlocal s u₂ hreach hr₂ hcert)
+      (hlocal s u₂ hreach hr₂ hcert) (fun off _ => by simp [Env.frameCallAt,hplain])
     have hstop₂ : u₂.pc ≠ p.lr0 &&& ~~~1#32 := by rw [← hcert.pc_eq]; exact hstop
     unfold PairedStep at hs
     rw [hstep] at hs
@@ -65,10 +65,11 @@ theorem certificate_reachable_window {env : Env} {bytes : List (BitVec 8)} {entr
       BeforeStop (p.lr0 &&& ~~~1#32) s₂ u₂ → CertAt env cert p bytes u₁ u₂ →
       PositionObligations env cert p bytes u₁ u₂)
     (h : CertAt env cert p bytes s₁ s₂) {u : State}
-    (hu : BeforeStop (p.lr0 &&& ~~~1#32) s₁ u) (hne : u.pc ≠ p.lr0 &&& ~~~1#32) :
+    (hu : BeforeStop (p.lr0 &&& ~~~1#32) s₁ u) (hne : u.pc ≠ p.lr0 &&& ~~~1#32)
+    (hplain : env.frameCall = none := by rfl) :
     M0Crypto.Release.TraceSpec.InStackWindow p.sp0 env.win.below (u.regs 13) := by
   obtain ⟨u₂, hrel, -⟩ := certificate_reachable_partner hc hi ha hslots hwidth hdisj hsize hbase
-    hnowrap hlr hlocal h u hu
+    hnowrap hlr hlocal h hplain u hu
   rcases hrel with ⟨b, off, st, code, hm, hp, hnil, hlow⟩ | ⟨hpc, _⟩
   · cases code with
     | nil => exact absurd rfl hnil

@@ -77,6 +77,16 @@ inductive BlockPoint (env : Env) (b : Blk) : Nat → AbsState → List Instr →
       out.succs = [(.pt (off + i.size) b.ctx, next)] →
       BlockPoint env b (off + i.size) next is
 
+/-- A checked block position retains the total byte extent of the block. -/
+theorem blockPoint_extent {env : Env} {b : Blk} {off : Nat} {st : AbsState} {code : List Instr}
+    (hp : BlockPoint env b off st code) :
+    b.off ≤ off ∧ off + seqSize code = b.off + seqSize b.code := by
+  induction hp with
+  | entry => exact ⟨Nat.le_refl _, rfl⟩
+  | @next off st i is out next hp hx hs ih =>
+    simp only [seqSize, List.map_cons, List.sum_cons] at ih ⊢
+    constructor <;> omega
+
 /-- At every fall-through position reached within a checked block, the
 remaining check holds and therefore the current stack state is well formed. -/
 theorem blockPoint_slotsCheck {env : Env} {b : Blk} {off : Nat} {st : AbsState} {code : List Instr}

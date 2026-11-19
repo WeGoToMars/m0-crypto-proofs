@@ -1,6 +1,6 @@
 import M0Crypto.Release.X25519Prologue
 import M0Crypto.Release.X25519LadderTail
-import M0Crypto.Release.X25519ChainRun
+import M0Crypto.Release.X25519SafegcdEntry
 import M0Crypto.Release.X25519Finish
 import M0Crypto.Release.X25519OutAt
 import M0Crypto.Release.X25519Ev
@@ -12,7 +12,7 @@ The functional claim for `m0c_x25519`: `x25519_correct`.
 
 The run is composed from the segment lemmas in code order: prologue (`prologue_w`), the ladder
 over bits 254 to 3 (`loop_w`), the pending swap (`swap_w`), three doublings (`dbl_loop`), the
-inversion chain (`chain_w`), the final product and canonical reduction (`finish_w`), and the
+shared inversion (`inversion_w`), the final product and canonical reduction (`finish_w`), and the
 stores, wipe and epilogue (`tail_w`). Between segments the frame words that a later segment
 needs (`LV_OUT`, `X2`) are carried by each segment's frame clause; the saved registers and
 everything outside the wiped stack are carried by `Body`. `x25519_tail` and `output_canon`
@@ -61,13 +61,6 @@ theorem out_bytes {y : Word} (h : Region (slotAt c lvOut) 4 y) :
     band_disj hv (by decide) (by decide) (by decide) h, band_disj hv (by decide) (by decide) (by decide) h,
     band_disj hv (by decide) (by decide) (by decide) h, band_disj hv (by decide) (by decide) (by decide) h,
     band_disj hv (by decide) (by decide) (by decide) h⟩
-
-/-- The bytes of slot `X2` lie outside the bands the inversion chain changes. -/
-theorem x2_bytes {y : Word} (h : Region (slotAt c sX2) 32 y) :
-    Region (E c) LFRAME y ∧ ¬ Region (slotAt c sA) 128 y ∧ ¬ Region (slotAt c sZ2) 32 y ∧
-      ¬ Region (slotAt c lvT) 4 y :=
-  ⟨band_frame hv (by decide) h, band_disj hv (by decide) (by decide) (by decide) h,
-    band_disj hv (by decide) (by decide) (by decide) h, band_disj hv (by decide) (by decide) (by decide) h⟩
 
 theorem fp_le {y : Word} (h : Region c.fp X25519.wipeBytes y) : Region c.fp X25519.stackBytes y := by
   have hF := fp_toNat hv
@@ -219,9 +212,9 @@ theorem x25519_run {c : X25519.Ctx} {s : State} (hp : X25519.Pre c s) :
   refine X25519LadderTail.dbl_loop hv hcode hWr0 hPO hL hH X25519OpInline.add_opW X25519OpInline.sub_opW 2
     (by decide) _ _ t3 t3pc b3 tw3 hx3 hz3 ?_
   intro t4 t4pc b4 vx vz _ K4
-  -- the inversion chain
-  refine X25519ChainRun.chain_w hv hcode hWr0 hPO hL hH t4pc b4 ?_
-  intro t5 t5pc b5 hz5 K5
+  -- safegcd inversion in place
+  refine X25519SafegcdEntry.inversion_w hv hcode t4pc b4 ?_
+  intro t5 t5pc b5 hz5 e54 K5
   -- the final product and reduction
   refine X25519Finish.finish_w hv hcode hWr0 hPO hL hH t5pc b5 ?_
   intro t6 t6pc b6 r6 hv6 hlt6 K6
@@ -230,18 +223,13 @@ theorem x25519_run {c : X25519.Ctx} {s : State} (hp : X25519.Pre c s) :
   have hout : read32 t6.mem (E c + BitVec.ofNat 32 lvOut) = c.out := by
     rw [← P.out]
     refine read32_congr' fun y hy => ?_
-    obtain ⟨f1, f2, f3, f4, f5, f6, f7⟩ := out_bytes hv hy
-    rw [K6 y f1 f7, K5 y f1 f5 f6 f4, K4 y f1 f2 f4, K3 y f1 f2 f4, K2 y f1 f2 f3]
+    obtain ⟨f1, f2, f3, f4, _, _, f7⟩ := out_bytes hv hy
+    rw [K6 y f1 f7, K5 y hy, K4 y f1 f2 f4, K3 y f1 f2 f4, K2 y f1 f2 f3]
   have hsv : Saved c t6.mem := by
     intro i hi
     rw [← saved_list i hi (by rw [show (savedList c).length = 9 from rfl]; exact hi),
       ← P.saved i (by rw [show (savedList c).length = 9 from rfl]; exact hi), ← save_addr hv i hi]
     exact read32_congr' fun y hy => b6.keep y (save_out hv i hi hy)
-  -- the value of `X2`
-  have e54 : env c t5.mem sX2 = env c t4.mem sX2 :=
-    congrArg (fun n : Nat => (n : Int)) (feVal_congr fun y hy => by
-      obtain ⟨f1, f2, f3, f4⟩ := x2_bytes hv hy
-      exact K5 y f1 f2 f3 f4)
   have hval : ModP (feVal t6.mem (slotAt c sX2) : Int)
       ((dblN (2 + 1) (cswap S.swap S.x2 S.x3).1 (cswap S.swap S.z2 S.z3).1).1 *
         (dblN (2 + 1) (cswap S.swap S.x2 S.x3).1 (cswap S.swap S.z2 S.z3).1).2 ^ (2 ^ 255 - 21)) := by

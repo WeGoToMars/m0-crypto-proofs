@@ -105,7 +105,8 @@ theorem recorded_self_certAt {env : Env} {bytes : List (BitVec 8)} {entry : Nat}
       BlockPoint env b off st (i :: is) → LowEq p bytes off st x x →
       BufferStoreOk env p bytes st x i)
     (hentry : CertAt env cert p bytes s s) (hmem : u ∈ states)
-    (hstop : u.pc ≠ (p.lr0 &&& ~~~1#32)) : CertAt env cert p bytes u u := by
+    (hstop : u.pc ≠ (p.lr0 &&& ~~~1#32))
+    (hplain : env.frameCall = none := by rfl) : CertAt env cert p bytes u u := by
   have hreach := runStates_beforeStop hrun u hmem
   have hinv : RunRel env cert p bytes (p.lr0 &&& ~~~1#32) u u := by
     induction hreach with
@@ -118,7 +119,7 @@ theorem recorded_self_certAt {env : Env} {bytes : List (BitVec 8)} {entry : Nat}
           intro b off st i is hm hp hrel
           exact ⟨hbuffer _ hxmem b off st i is hm hp hrel, pubLoadOk_self _ _ _ _, by intros; rfl⟩
         have hpaired := certAt_run_paired hc hi ha hslots hwidth hdisj hsize hbase
-          hnowrap hlr hcert hlocal
+          hnowrap hlr hcert hlocal (fun off _ => by simp [Env.frameCallAt,hplain])
         simp only [PairedStep, hs] at hpaired
         exact hpaired.2
       · exact False.elim (hnot hret)

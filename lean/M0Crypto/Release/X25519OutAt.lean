@@ -2,6 +2,7 @@ import M0Crypto.Release.X25519OutStore
 import M0Crypto.Release.X25519OutWipe
 import M0Crypto.Release.X25519OutEpi
 import M0Crypto.Release.X25519ReadBlock
+import M0Crypto.Release.X25519EntrySeg
 
 set_option linter.unusedSimpArgs false
 
@@ -9,8 +10,7 @@ set_option linter.unusedSimpArgs false
 The tail of `m0c_x25519` from `oStore` to the return:
 `storeOut`, `wipe` and `epilogue` at their offsets in the entry.
 
-`tail_at` takes the three `seqAt` facts from `entry_at` by `seqAt_append` (no offset is written
-down). `Saved c m` is the save area left by the prologue (word `i` above `E c + LFRAME` holds
+Each segment uses the byte check for the entry point. `Saved c m` is the save area left by the prologue (word `i` above `E c + LFRAME` holds
 `savedReg i`). `tail_w` runs the three segments: from `pc = base + oStore` with SP at `E c`,
 `r0` at slot `X2` and `c.out` in `LV_OUT`, the call returns to `c.ret` with the register fields
 of `X25519.Result`, the 32 bytes of `out` holding the little-endian bytes of `feVal` of slot
@@ -30,32 +30,12 @@ open M0Crypto.Release.X25519OutEpi (savedReg)
 /-! ## Code facts -/
 
 theorem tail_at : seqAt B oStore storeOut = true ∧ seqAt B oWipe wipe = true ∧
-    seqAt B oEpi epilogue = true := by
-  have h := entry_at
-  simp only [entryList, List.append_assoc, seqAt_append, Bool.and_eq_true] at h
-  have e1 : Artifacts.Release.x25519 + seqSize prologue = oLadder := rfl
-  have e2 : oLadder + seqSize (ladderAt oLadder) = oSwap := rfl
-  have e3 : oSwap + seqSize (swapAt oSwap) = oDbl := rfl
-  have e4 : oDbl + seqSize (dblAt oDbl) = oChain := rfl
-  have e5 : oChain + seqSize (chainAt oChain X25519Chain.invChain) = oFinish := rfl
-  have e6 : oFinish + seqSize (finishAt oFinish) = oStore := rfl
-  have e7 : oStore + seqSize storeOut = oWipe := rfl
-  have e8 : oWipe + seqSize wipe = oEpi := rfl
-  rw [e1, e2, e3, e4, e5, e6, e7, e8] at h
-  exact ⟨h.2.2.2.2.2.2.1, h.2.2.2.2.2.2.2.1, h.2.2.2.2.2.2.2.2⟩
+    seqAt B oEpi epilogue = true :=
+  ⟨X25519EntrySeg.store_seg, X25519EntrySeg.wipe_seg, X25519EntrySeg.epi_seg⟩
 
-theorem oEpi_end : oEpi + seqSize epilogue = Artifacts.Release.size := by
-  have h := entry_size
-  simp only [entryList, seqSize_append] at h
-  have e1 : oLadder = Artifacts.Release.x25519 + seqSize prologue := rfl
-  have e2 : oSwap = oLadder + seqSize (ladderAt oLadder) := rfl
-  have e3 : oDbl = oSwap + seqSize (swapAt oSwap) := rfl
-  have e4 : oChain = oDbl + seqSize (dblAt oDbl) := rfl
-  have e5 : oFinish = oChain + seqSize (chainAt oChain X25519Chain.invChain) := rfl
-  have e6 : oStore = oFinish + seqSize (finishAt oFinish) := rfl
-  have e7 : oWipe = oStore + seqSize storeOut := rfl
-  have e8 : oEpi = oWipe + seqSize wipe := rfl
-  omega
+theorem oEpi_end : oEpi + seqSize epilogue ≤ Artifacts.Release.size := by
+  rw [X25519EntrySeg.epi_end]
+  decide +kernel
 
 theorem oStore_even : oStore % 2 = 0 := by
   have h0 : Artifacts.Release.x25519 % 2 = 0 := by decide
@@ -64,7 +44,7 @@ theorem oStore_even : oStore % 2 = 0 := by
   have h3 : oDbl % 2 = 0 := by have := X25519OpRun.seqSize_even (swapAt oSwap); unfold oDbl; omega
   have h4 : oChain % 2 = 0 := by have := X25519OpRun.seqSize_even (dblAt oDbl); unfold oChain; omega
   have h5 : oFinish % 2 = 0 := by
-    have := X25519OpRun.seqSize_even (chainAt oChain X25519Chain.invChain); unfold oFinish; omega
+    have := X25519OpRun.seqSize_even (inversion); unfold oFinish; omega
   have := X25519OpRun.seqSize_even (finishAt oFinish); unfold oStore; omega
 
 theorem oWipe_eq : oWipe = oStore + seqSize storeOut := rfl

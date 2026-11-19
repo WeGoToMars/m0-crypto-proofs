@@ -183,8 +183,6 @@ import M0Crypto.Release.X25519LadderStep
 import M0Crypto.Release.X25519LadderLoop
 import M0Crypto.Release.X25519LadderTail
 import M0Crypto.Release.X25519ChainLoop
-import M0Crypto.Release.X25519ChainStep
-import M0Crypto.Release.X25519ChainRun
 import M0Crypto.Release.X25519Finish
 import M0Crypto.Release.X25519OutStore
 import M0Crypto.Release.X25519OutWipe

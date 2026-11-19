@@ -172,12 +172,13 @@ theorem certPoint_final_control_paired {env : Env} {bytes : List (BitVec 8)}
     (ha : certAligned cert = true) (hbase : p.base.toNat % 2 = 0)
     (hm : b ∈ cert) (hp : BlockPoint env b off st [i]) (h : LowEq p bytes off st s₁ s₂)
     (hlr : p.lr0.getLsbD 0 = true)
-    (hform : (∃ imm, i = .b imm) ∨ (∃ imm, i = .bl imm) ∨ (∃ l, i = .pop l true)) :
+    (hform : (∃ imm, i = .b imm) ∨ (∃ imm, i = .bl imm ∧ env.frameCallAt off = none) ∨
+      (∃ l, i = .pop l true)) :
     PairedStep (RunRel env cert p bytes (p.lr0 &&& ~~~1#32)) s₁ s₂ := by
   have heven := certPoint_pc_even p.base hbase ha hm hp
-  rcases hform with ⟨imm, rfl⟩ | ⟨imm, rfl⟩ | ⟨l, rfl⟩
+  rcases hform with ⟨imm, rfl⟩ | ⟨imm, rfl, hplain⟩ | ⟨l, rfl⟩
   · exact (certPoint_branch_paired imm hc hi hm hp h heven).toRunRel
-  · exact (certPoint_call_paired imm hc hi hm hp h heven).toRunRel
+  · exact (certPoint_call_paired imm hc hi hm hp h heven hplain).toRunRel
   · cases hctx : b.ctx with
     | none => exact certPoint_pop_exit_paired l hc hm hp hctx h hlr heven
     | some ret =>
@@ -212,7 +213,7 @@ theorem certPoint_call_final {env : Env} {bytes : List (BitVec 8)}
     {entry : Nat} {init : AbsState} {cert : Cert} {b : Blk} {off : Nat} {st : AbsState}
     {is : List Instr} (imm : BitVec 25)
     (hc : certOk env bytes entry init cert = true) (hm : b ∈ cert)
-    (hp : BlockPoint env b off st (.bl imm :: is)) : is = [] := by
+    (hp : BlockPoint env b off st (.bl imm :: is)) (hplain : env.frameCallAt off = none) : is = [] := by
   cases is with
   | nil => rfl
   | cons j js =>
@@ -229,7 +230,7 @@ theorem certPoint_call_final {env : Env} {bytes : List (BitVec 8)}
       cases ht : relTarget off (blDisp imm) with
       | none => simp [ht] at hx
       | some target =>
-        simp only [ht, Except.ok.injEq] at hx
+        simp only [ht, hplain, Except.ok.injEq] at hx
         subst out
         simp [hctx] at hs
 
@@ -281,7 +282,8 @@ theorem certPoint_paired {env : Env} {bytes : List (BitVec 8)} {entry : Nat}
     (hsize : env.size = bytes.length) (hbase : p.base.toNat % 4 = 0)
     (hnowrap : p.base.toNat + bytes.length ≤ 2 ^ 32) (hlr : p.lr0.getLsbD 0 = true)
     (hdecision : ∀ cond imm, i = .bcond cond imm → env.declass = some off →
-      condPassed cond s₁ = condPassed cond s₂) :
+      condPassed cond s₁ = condPassed cond s₂)
+    (hplain : ∀ imm, i = .bl imm → env.frameCallAt off = none := by intro _ _; rfl) :
     PairedStep (RunRel env cert p bytes (p.lr0 &&& ~~~1#32)) s₁ s₂ := by
   have hbase2 : p.base.toNat % 2 = 0 := by omega
   have heven := certPoint_pc_even p.base hbase2 ha hm hp
@@ -304,9 +306,10 @@ theorem certPoint_paired {env : Env} {bytes : List (BitVec 8)} {entry : Nat}
       | nil => exact (certPoint_branch_paired imm hc hi hm hp h heven).toRunRel
       | cons j js => exact (certPoint_branch_nonfinal_paired imm hc hi hm hp h heven).toRunRel
     | bl imm =>
-      have hs := certPoint_call_final imm hc hm hp
+      have hplain := hplain imm rfl
+      have hs := certPoint_call_final imm hc hm hp hplain
       subst is
-      exact (certPoint_call_paired imm hc hi hm hp h heven).toRunRel
+      exact (certPoint_call_paired imm hc hi hm hp h heven hplain).toRunRel
     | _ => simp [controlInstruction] at hn
 
 /-- Local obligations required at all certificate positions of a paired run. -/
@@ -329,7 +332,9 @@ theorem certAt_run_paired {env : Env} {bytes : List (BitVec 8)} {entry : Nat}
       (p.sp0 - BitVec.ofNat 32 env.win.below) (env.win.below + env.win.above))
     (hsize : env.size = bytes.length) (hbase : p.base.toNat % 4 = 0)
     (hnowrap : p.base.toNat + bytes.length ≤ 2 ^ 32) (hlr : p.lr0.getLsbD 0 = true)
-    (h : CertAt env cert p bytes s₁ s₂) (hlocal : PositionObligations env cert p bytes s₁ s₂) :
+    (h : CertAt env cert p bytes s₁ s₂) (hlocal : PositionObligations env cert p bytes s₁ s₂)
+    (hplain : ∀ off, s₁.pc = p.base + BitVec.ofNat 32 off → env.frameCallAt off = none := by
+      intro _ _; rfl) :
     PairedStep (RunRel env cert p bytes (p.lr0 &&& ~~~1#32)) s₁ s₂ := by
   obtain ⟨b, off, st, code, hm, hp, hne, hrel⟩ := h
   cases code with
@@ -337,7 +342,7 @@ theorem certAt_run_paired {env : Env} {bytes : List (BitVec 8)} {entry : Nat}
   | cons i is =>
     have ⟨hbuffer, hpl, hdecision⟩ := hlocal b off st i is hm hp hrel
     exact certPoint_paired i hc hi ha hslots hm hp hrel hwidth hdisj hbuffer hpl
-      hsize hbase hnowrap hlr hdecision
+      hsize hbase hnowrap hlr hdecision (fun _ _ => hplain off hrel.pc)
 
 /-- If the site obligations hold at all reachable certificate states, paired
 executions produce equal traces up to their shared return address. -/
@@ -352,13 +357,14 @@ theorem certificate_trace_eq {env : Env} {bytes : List (BitVec 8)} {entry : Nat}
     (hnowrap : p.base.toNat + bytes.length ≤ 2 ^ 32) (hlr : p.lr0.getLsbD 0 = true)
     (hlocal : ∀ u₁ u₂, CertAt env cert p bytes u₁ u₂ →
       PositionObligations env cert p bytes u₁ u₂)
-    (fuel : Nat) (h : CertAt env cert p bytes s₁ s₂) :
+    (fuel : Nat) (h : CertAt env cert p bytes s₁ s₂)
+    (hplain : env.frameCall = none := by rfl) :
     (runUntil (p.lr0 &&& ~~~1#32) fuel s₁).map Prod.snd =
       (runUntil (p.lr0 &&& ~~~1#32) fuel s₂).map Prod.snd := by
   apply runRel_trace_eq (fuel := fuel) (h := Or.inl h)
   intro u₁ u₂ hrel hstop
   rcases hrel with hcert | ⟨hret, _⟩
-  · exact certAt_run_paired hc hi ha hslots hwidth hdisj hsize hbase hnowrap hlr hcert (hlocal _ _ hcert)
+  · exact certAt_run_paired hc hi ha hslots hwidth hdisj hsize hbase hnowrap hlr hcert (hlocal _ _ hcert) (fun off _ => by simp [Env.frameCallAt,hplain])
   · contradiction
 
 /-- States reachable by successful machine steps before the chosen stop PC. -/
@@ -543,7 +549,8 @@ theorem certificate_reachable_trace_eq {env : Env} {bytes : List (BitVec 8)} {en
     (hlocal : ∀ u₁ u₂, BeforeStop (p.lr0 &&& ~~~1#32) s₁ u₁ →
       BeforeStop (p.lr0 &&& ~~~1#32) s₂ u₂ → CertAt env cert p bytes u₁ u₂ →
       PositionObligations env cert p bytes u₁ u₂)
-    (fuel : Nat) (h : CertAt env cert p bytes s₁ s₂) :
+    (fuel : Nat) (h : CertAt env cert p bytes s₁ s₂)
+    (hplain : env.frameCall = none := by rfl) :
     (runUntil (p.lr0 &&& ~~~1#32) fuel s₁).map Prod.snd =
       (runUntil (p.lr0 &&& ~~~1#32) fuel s₂).map Prod.snd := by
   let stop := p.lr0 &&& ~~~1#32
@@ -557,7 +564,7 @@ theorem certificate_reachable_trace_eq {env : Env} {bytes : List (BitVec 8)} {en
     have hs : PairedStep (RunRel env cert p bytes stop) u₁ u₂ := by
       rcases hrel with hcert | ⟨hret, _⟩
       · exact certAt_run_paired hc hi ha hslots hwidth hdisj hsize hbase hnowrap hlr hcert
-          (hlocal u₁ u₂ hr₁ hr₂ hcert)
+          (hlocal u₁ u₂ hr₁ hr₂ hcert) (fun off _ => by simp [Env.frameCallAt,hplain])
       · contradiction
     unfold PairedStep at hs ⊢
     cases h₁ : step u₁ with
@@ -591,10 +598,11 @@ theorem certificate_recorded_trace_eq {env : Env} {bytes : List (BitVec 8)} {ent
     (hrun₂ : M0Crypto.Release.runStates (p.lr0 &&& ~~~1#32) fuel s₂ = .ok (states₂, events₂))
     (hlocal : ∀ u₁ ∈ states₁, ∀ u₂ ∈ states₂, CertAt env cert p bytes u₁ u₂ →
       PositionObligations env cert p bytes u₁ u₂)
-    (h : CertAt env cert p bytes s₁ s₂) : events₁ = events₂ := by
+    (h : CertAt env cert p bytes s₁ s₂)
+    (hplain : env.frameCall = none := by rfl) : events₁ = events₂ := by
   have ht := certificate_reachable_trace_eq hc hi ha hslots hwidth hdisj hsize hbase hnowrap hlr
     (fun u₁ u₂ hr₁ hr₂ hcert => hlocal u₁ (hr₁.mem_runStates hrun₁)
-      u₂ (hr₂.mem_runStates hrun₂) hcert) fuel h
+      u₂ (hr₂.mem_runStates hrun₂) hcert) fuel h hplain
   have h₁ := M0Crypto.Release.runStates_events (p.lr0 &&& ~~~1#32) fuel s₁
   have h₂ := M0Crypto.Release.runStates_events (p.lr0 &&& ~~~1#32) fuel s₂
   rw [hrun₁] at h₁

@@ -31,16 +31,6 @@ def graphWalk (env : Env) (cert : Cert) : Nat → List GraphNode → List GraphN
 def blocksContaining (cert : Cert) (off : Nat) : List Blk :=
   cert.filter fun b => b.off ≤ off && off < b.off + seqSize b.code
 
-/-- A checked block position retains the total byte extent of the block. -/
-theorem blockPoint_extent {env : Env} {b : Blk} {off : Nat} {st : AbsState} {code : List Instr}
-    (hp : BlockPoint env b off st code) :
-    b.off ≤ off ∧ off + seqSize code = b.off + seqSize b.code := by
-  induction hp with
-  | entry => exact ⟨Nat.le_refl _, rfl⟩
-  | @next off st i is out next hp hx hs ih =>
-    simp only [seqSize, List.map_cons, List.sum_cons] at ih ⊢
-    constructor <;> omega
-
 /-- Every nonempty checked position lies in its block's byte extent. -/
 theorem blockPoint_in_blocksContaining {env : Env} {cert : Cert} {b : Blk}
     {off : Nat} {st : AbsState} {i : Instr} {is : List Instr}

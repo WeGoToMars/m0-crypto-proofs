@@ -9,7 +9,8 @@ inputs at a load site (`X25519Code.loadSites`) and writes only `out` at a store 
 (`X25519Code.storeSites`). The run is proved in three bands, each with its own PC region:
 
 * prologue `[x25519, oLadder)`, with every read in the inputs (`liftPro`);
-* middle: the field routines below `x25519` and `[oLadder, oStore)` (`MidPc`, `liftMid`);
+* middle: the field routines, the ladder through final reduction, and shared inversion
+  (`MidPc`, `liftMid`);
 * tail: the output stores `[oStore, oWipe)` writing `out` (`liftS`), then wipe and epilogue
   `[oWipe, size)` writing the stack window (`liftW`).
 
@@ -73,9 +74,14 @@ theorem band0 {base pc : Word} {S : Nat} (h : Region base S pc) :
 abbrev ProPc (c : X25519.Ctx) : Word → Prop :=
   Region (c.base + BitVec.ofNat 32 Artifacts.Release.x25519) (oLadder - Artifacts.Release.x25519)
 
-/-- PCs of the middle: the field routines and the entry from the ladder to the stores. -/
+/-- PCs of the shared inversion code after the entry point's epilogue. -/
+abbrev InvPc (base : Word) : Word → Prop :=
+  Region (base + BitVec.ofNat 32 Artifacts.Release.inv_canon)
+    (Artifacts.Release.size - Artifacts.Release.inv_canon)
+
+/-- PCs of the middle: field routines, ladder through final reduction, and shared inversion. -/
 def MidPc (c : X25519.Ctx) (y : Word) : Prop :=
-  Region c.base Artifacts.Release.x25519 y ∨ Region (c.base + BitVec.ofNat 32 oLadder) (oStore - oLadder) y
+  Region c.base Artifacts.Release.x25519 y ∨ Region (c.base + BitVec.ofNat 32 oLadder) (oStore - oLadder) y ∨ InvPc c.base y
 
 theorem proPc (c : X25519.Ctx) : ∀ o n, Artifacts.Release.x25519 ≤ o → o + n ≤ oLadder →
     InRegion (ProPc c) c.base o n := fun _ _ h1 h2 => by
@@ -84,7 +90,7 @@ theorem proPc (c : X25519.Ctx) : ∀ o n, Artifacts.Release.x25519 ≤ o → o +
 
 theorem midPcOk (c : X25519.Ctx) : X25519Op.PcOk c.base oLadder oStore (MidPc c) := by
   have := bands
-  exact ⟨fun _ h => Or.inl h, fun j hj => Or.inr (Field25519Facts.inReg ⟨Nat.le_refl _, by omega, by omega⟩ j hj),
+  exact ⟨fun _ h => Or.inl h, fun j hj => Or.inr (Or.inl (Field25519Facts.inReg ⟨Nat.le_refl _, by omega, by omega⟩ j hj)),
     this.1, by omega⟩
 
 theorem liftPro {c : X25519.Ctx} {z : State} {e : Event}
@@ -102,16 +108,21 @@ theorem liftMid {c : X25519.Ctx} {z : State} {e : Event}
   have hs : ∀ o ∈ storeSites, o < Artifacts.Release.size ∧ (o < oLadder ∨ oLadder + (oStore - oLadder) ≤ o) ∧
       (o < 0 ∨ 0 + Artifacts.Release.x25519 ≤ o) := fun o ho => by
     have := storeSites_in o ho; omega
+  have hInv : oWipe ≤ Artifacts.Release.inv_canon ∧
+      Artifacts.Release.inv_canon ≤ Artifacts.Release.size := by decide +kernel
   refine ⟨?_, h.2, fun hx => absurd hx ?_, fun hx => absurd hx ?_⟩
-  · rcases h.1 with h1 | h1
+  · rcases h.1 with h1 | h1 | h1
     · exact band_code (F := 0) (by omega) (band0 h1)
     · exact band_code (by omega) h1
-  · rcases h.1 with h1 | h1
+    · exact band_code (by omega) h1
+  · rcases h.1 with h1 | h1 | h1
     · exact not_site (fun o ho => ⟨(hl o ho).1, (hl o ho).2.2⟩) (by omega) (band0 h1)
     · exact not_site (fun o ho => ⟨(hl o ho).1, (hl o ho).2.1⟩) (by omega) h1
-  · rcases h.1 with h1 | h1
+    · exact not_site (fun o ho => by have := loadSites_in o ho; omega) (by omega) h1
+  · rcases h.1 with h1 | h1 | h1
     · exact not_site (fun o ho => ⟨(hs o ho).1, (hs o ho).2.2⟩) (by omega) (band0 h1)
     · exact not_site (fun o ho => ⟨(hs o ho).1, (hs o ho).2.1⟩) (by omega) h1
+    · exact not_site (fun o ho => by have := storeSites_in o ho; omega) (by omega) h1
 
 theorem liftS {c : X25519.Ctx} {z : State} {e : Event}
     (h : RegionWrites (Region (c.base + BitVec.ofNat 32 oStore) (oWipe - oStore)) (Region c.out 32) z e) :

@@ -1,3 +1,4 @@
+import M0Crypto.Release.ConstantTime.TraceFragment
 import M0Crypto.Release.ConstantTime.HolesAccess
 import M0Crypto.Release.ConstantTime.PopSound
 import M0Crypto.Release.ConstantTime.ReturnSound
@@ -17,17 +18,6 @@ or returns to the caller.
 namespace M0Crypto.Release.ConstantTime
 open M0Crypto.Armv6M (Word State Reg LowReg)
 open M0Crypto.Thumb
-
-/-- The event of a step is at the PC of its pre-state. -/
-theorem step_ev_pc {s t : State} {e : Event} (h : step s = .ok (t, e)) : e.pc = s.pc := by
-  unfold step at h; simp only at h
-  split at h; · cases h
-  split at h; · cases h
-  split at h
-  · split at h
-    · simp only [Except.ok.injEq, Prod.mk.injEq] at h; rw [← h.2]
-    · cases h
-  · cases h
 
 /-- A step from a decoded instruction is its execution, with its event. -/
 theorem step_exec_of {s t : State} {e : Event} {base : Word} {bytes : List (BitVec 8)}
@@ -148,7 +138,7 @@ theorem certPoint_next_pc {env : Env} {bytes : List (BitVec 8)} {entry : Nat}
     (ha : certAligned cert = true) (hbase : p.base.toNat % 2 = 0)
     (hm : b ∈ cert) (hp : BlockPoint env b off st (i :: is)) (h : LowEq p bytes off st s s)
     (hx : xfer env off b.ctx i st = .ok out) (hsafe : pcSafe i = true)
-    (hst : step s = .ok (t, e)) :
+    (hst : step s = .ok (t, e)) (hplain : env.frameCallAt off = none) :
     t.pc = p.lr0 &&& ~~~1#32 ∨ ∃ tgt ∈ succOffs off i out, t.pc = p.base + BitVec.ofNat 32 tgt := by
   have heven := certPoint_pc_even p.base hbase ha hm hp
   have ⟨hdecode, hlen⟩ := certPoint_instrAt hc hm hp
@@ -188,7 +178,7 @@ theorem certPoint_next_pc {env : Env} {bytes : List (BitVec 8)} {entry : Nat}
         cases ht : relTarget off (blDisp imm) with
         | none => simp [ht] at hx'
         | some target =>
-          simp only [ht, Except.ok.injEq] at hx'
+          simp only [ht, hplain, Except.ok.injEq] at hx'
           subst out
           have htarget := relTarget_address p.base off target (blDisp imm) ht
           have hdisp : BitVec.ofInt 32 (blDisp imm) = imm.signExtend 32 := by simp [blDisp]

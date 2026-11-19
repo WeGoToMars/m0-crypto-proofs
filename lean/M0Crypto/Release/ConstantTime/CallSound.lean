@@ -13,7 +13,8 @@ theorem certPoint_call_paired {env : Env} {bytes : List (BitVec 8)} {entry : Nat
     (hc : certOk env bytes entry init cert = true) (hi : certIndicesFailure cert env = none)
     (hm : b ∈ cert) (hp : BlockPoint env b off st [.bl imm])
     (hrel : LowEq p bytes off st s₁ s₂)
-    (heven : (p.base + BitVec.ofNat 32 off).getLsbD 0 = false) :
+    (heven : (p.base + BitVec.ofNat 32 off).getLsbD 0 = false)
+    (hplain : env.frameCallAt off = none) :
     PairedStep (CertAt env cert p bytes) s₁ s₂ := by
   obtain ⟨out, hx⟩ := certPoint_xfer hc hm hp
   have hidx := certPoint_state_indices hi hm hp
@@ -31,7 +32,7 @@ theorem certPoint_call_paired {env : Env} {bytes : List (BitVec 8)} {entry : Nat
     cases ht : relTarget off (blDisp imm) with
     | none => simp [ht] at hx'
     | some target =>
-      simp only [ht, Except.ok.injEq] at hx'
+      simp only [ht, hplain, Except.ok.injEq] at hx'
       subst out
       have htarget := relTarget_address p.base off target (blDisp imm) ht
       have hdisp : BitVec.ofInt 32 (blDisp imm) = imm.signExtend 32 := by simp [blDisp]

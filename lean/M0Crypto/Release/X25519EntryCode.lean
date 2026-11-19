@@ -1,6 +1,7 @@
 import M0Crypto.Release.X25519Op
 import M0Crypto.Release.X25519Bytes
 import M0Crypto.Release.X25519Chain
+import M0Crypto.Release.X25519SafegcdCode
 import M0Crypto.Thumb.SeqScan
 
 set_option linter.deprecated false
@@ -11,7 +12,7 @@ The code of `m0c_x25519` as Lean lists.
 The lists follow `emit_x25519` of `tools/gen_x25519.py`. Field operations are `Op` values
 (`op(g, fn, d, a, b)` of the generator); `opsAt o ops` emits them from code offset `o`, so every
 `bl` offset is computed from where it lands. Loops branch to offsets computed the same way. The
-inversion chain is emitted from `X25519Chain.invChain`, the table the arithmetic proof uses.
+inversion wrapper is emitted from `X25519SafegcdCode.body`.
 
 `entry_at` checks the whole list against the release bytes once; every segment lemma of the
 entry proof gets its `seqAt` from it by `seqAt_append`. No offset is written down: segment
@@ -249,19 +250,21 @@ def oLadder : Nat := Artifacts.Release.x25519 + seqSize prologue
 def oSwap : Nat := oLadder + seqSize (ladderAt oLadder)
 def oDbl : Nat := oSwap + seqSize (swapAt oSwap)
 def oChain : Nat := oDbl + seqSize (dblAt oDbl)
-def oFinish : Nat := oChain + seqSize (chainAt oChain invChain)
+def inversion : List Instr :=
+  X25519SafegcdCode.body oChain Artifacts.Release.fe_inv_shared
+def oFinish : Nat := oChain + seqSize inversion
 def oStore : Nat := oFinish + seqSize (finishAt oFinish)
 def oWipe : Nat := oStore + seqSize storeOut
 def oEpi : Nat := oWipe + seqSize wipe
 
 def entryList : List Instr :=
-  prologue ++ ladderAt oLadder ++ swapAt oSwap ++ dblAt oDbl ++ chainAt oChain invChain ++
+  prologue ++ ladderAt oLadder ++ swapAt oSwap ++ dblAt oDbl ++ inversion ++
     finishAt oFinish ++ storeOut ++ wipe ++ epilogue
 
 theorem entry_at : seqAt B Artifacts.Release.x25519 entryList = true := by
   rw [seqAt_eq_scan]; decide +kernel
 
-theorem entry_size : Artifacts.Release.x25519 + seqSize entryList = Artifacts.Release.size := by
+theorem entry_size : Artifacts.Release.x25519 + seqSize entryList = Artifacts.Release.inv_canon := by
   decide +kernel
 
 end M0Crypto.Release.X25519EntryCode

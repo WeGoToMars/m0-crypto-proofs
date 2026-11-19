@@ -39,7 +39,8 @@ theorem certificate_run_reads {env : Env} {bytes : List (BitVec 8)} {entry : Nat
       ∀ i, instrAt bytes off = some i → ev.instr = i →
       ∀ y, Reads ev.accesses y → R y)
     {fuel : Nat} {states : List State} {tr : List Event}
-    (hrun : M0Crypto.Release.runStates (p.lr0 &&& ~~~1#32) fuel s = .ok (states, tr)) :
+    (hrun : M0Crypto.Release.runStates (p.lr0 &&& ~~~1#32) fuel s = .ok (states, tr))
+    (hplain : env.frameCall = none := by rfl) :
     TraceSpec.ReadsFrom (fun y => ReadOk p env y ∨ R y) tr := by
   have hq := runStates_events_invariant (fun u => BeforeStop (p.lr0 &&& ~~~1#32) s u)
     (fun ev => ∀ y, Reads ev.accesses y → ReadOk p env y ∨ R y)
@@ -49,7 +50,7 @@ theorem certificate_run_reads {env : Env} {bytes : List (BitVec 8)} {entry : Nat
   · intro u t ev hu hne hst
     refine ⟨BeforeStop.next hu hne hst, ?_⟩
     obtain ⟨u₂, hrel, -⟩ := certificate_reachable_partner hc hi ha hslots hwidth hdisj hsize hbase
-      hnowrap hlr hlocal h u hu
+      hnowrap hlr hlocal h hplain u hu
     rcases hrel with ⟨b, off, st, code, hm, hp, hnil, hlow⟩ | ⟨hpc, _⟩
     · cases code with
       | nil => exact absurd rfl hnil

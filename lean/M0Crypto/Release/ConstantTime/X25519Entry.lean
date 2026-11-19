@@ -6,6 +6,7 @@ import M0Crypto.Release.ConstantTime.ReadBounds
 import M0Crypto.Release.ConstantTime.CertGen
 import M0Crypto.Release.ConstantTime.CertChunks
 import M0Crypto.Release.X25519Sites
+import M0Crypto.Release.X25519EntryCode
 
 /-! # Certificate for `m0c_x25519`
 
@@ -28,7 +29,15 @@ open M0Crypto.Artifacts M0Crypto.Release
 callee's. -/
 def x25519StackBytes : Nat := 516
 
-def x25519Env : Env := ⟨⟨x25519StackBytes, 0⟩, Release.size, none, [], true⟩
+open X25519Layout X25519SafegcdCode X25519EntryCode
+open SafegcdRow.BatchCode (frameBytes)
+
+def x25519InversionCall : FrameCall :=
+  let spOff : Int := -(SAVED + LFRAME + borrowed : Nat)
+  let z2 := spOff + borrowed + sZ2
+  ⟨callSite oChain, Release.fe_inv_shared, spOff, z2, z2, frameBytes⟩
+
+def x25519Env : Env := ⟨⟨x25519StackBytes, 0⟩, Release.size, none, [], true, some x25519InversionCall⟩
 
 /-- Entry state: `r0` to `r2` public, no stack argument. -/
 def x25519Init : AbsState := entryStateP 3 0

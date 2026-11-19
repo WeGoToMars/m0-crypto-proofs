@@ -316,6 +316,23 @@ section
 variable {env : Env} {bytes : List (BitVec 8)} {entry : Nat} {init : AbsState} {cert : Cert}
   {p : Params} {s : State}
 
+
+abbrev EarlierHoles (m : HoleMap) (states : List State) (tr : List Event) (k : Nat) :=
+  ∀ j, j < k → ∀ u, states[j]? = some u → u.pc ≠ p.lr0 &&& ~~~1#32 →
+    HoleInv env cert p bytes m states tr j u
+
+/-- The pointwise stack claims supplied by a verified fragment for a recorded
+state between certificate positions. -/
+structure FragmentDisciplineAt (m : HoleMap) (states : List State) (tr : List Event)
+    (k : Nat) (u : State) : Prop where
+  code : Interrupt.CodePos p.base bytes u
+  access : ∀ ev t, tr[k]? = some ev → states[k+1]? = some t →
+    ∀ y, (Reads ev.accesses y ∨ Writes ev.accesses y) → TraceSpec.BelowEntry p.sp0 env.win.below y →
+      TraceSpec.AtOrAboveSp p.sp0 u.sp y ∨ TraceSpec.AtOrAboveSp p.sp0 t.sp y
+  reads : EarlierHoles (env := env) (cert := cert) (p := p) (bytes := bytes) m states tr k →
+    ∀ ev, tr[k]? = some ev → ∀ y, Reads ev.accesses y → TraceSpec.BelowEntry p.sp0 env.win.below y →
+      TraceSpec.WrittenSinceAllocated p.sp0 states tr k y
+
 /-- A recorded state before the stop has a certificate position, related to itself, with its
 buffer obligation. -/
 theorem run_position
@@ -330,11 +347,11 @@ theorem run_position
       BeforeStop (p.lr0 &&& ~~~1#32) s u₂ → CertAt env cert p bytes u₁ u₂ →
       PositionObligations env cert p bytes u₁ u₂)
     (h : CertAt env cert p bytes s s) {u : State} (hu : BeforeStop (p.lr0 &&& ~~~1#32) s u)
-    (hne : u.pc ≠ p.lr0 &&& ~~~1#32) :
+    (hne : u.pc ≠ p.lr0 &&& ~~~1#32) (hplain : env.frameCall = none := by rfl) :
     ∃ b off st i is, b ∈ cert ∧ BlockPoint env b off st (i :: is) ∧ LowEq p bytes off st u u ∧
       BufferStoreOk env p bytes st u i := by
   obtain ⟨u₂, hrel, hb₂⟩ := certificate_reachable_partner hc hi ha hslots hwidth hdisj hsize hbase
-    hnowrap hlr hlocal h u hu
+    hnowrap hlr hlocal h hplain u hu
   rcases hrel with ⟨b, off, st, code, hm, hp, hnil, hlow⟩ | ⟨hpc, _⟩
   · cases code with
     | nil => exact absurd rfl hnil
@@ -342,6 +359,237 @@ theorem run_position
       exact ⟨b, off, st, i, is, hm, hp, hlow.left,
         (hlocal u u₂ hu hb₂ ⟨b, off, st, _, hm, hp, hnil, hlow⟩ b off st i is hm hp hlow).1⟩
   · exact absurd hpc hne
+
+/-- Stack discipline with separately justified fragments between certificate positions. -/
+theorem certificate_run_discipline_with_fragments
+    (hc : certOk env bytes entry init cert = true) (hi : certIndicesFailure cert env = none)
+    (ha : certAligned cert = true)
+    (hwidth : env.win.below + env.win.above < 2 ^ 32)
+    (hdisj : M0Crypto.Release.Frame.Disj p.base bytes.length
+      (p.sp0 - BitVec.ofNat 32 env.win.below) (env.win.below + env.win.above))
+    (hsize : env.size = bytes.length) (hbase : p.base.toNat % 4 = 0)
+    (hnowrap : p.base.toNat + bytes.length ≤ 2 ^ 32) (hsp : s.regs 13 = p.sp0)
+    {ok : Nat → Bool} (hl : certLoadFailure ok env cert = none) (R : Word → Prop)
+    {ls : Nat → Option (Int × Int)}
+    (hsite : ∀ u t ev, BeforeStop (p.lr0 &&& ~~~1#32) s u → u.pc ≠ p.lr0 &&& ~~~1#32 →
+      step u = .ok (t, ev) → ∀ off, u.pc = p.base + BitVec.ofNat 32 off → ok off = true →
+      ∀ i, instrAt bytes off = some i → ev.instr = i →
+      ∀ y, Reads ev.accesses y → R y ∨ ∃ a b, ls off = some (a, b) ∧
+        ∃ q : Int, a ≤ q ∧ q < b ∧ y = p.sp0 + BitVec.ofInt 32 q)
+    (hR : ∀ y, R y → ¬ TraceSpec.BelowEntry p.sp0 env.win.below y)
+    {m : HoleMap} (hh : certHoleFailure env ls m cert = none)
+    {fuel : Nat} {states : List State} {tr : List Event}
+    (hrun : runStates (p.lr0 &&& ~~~1#32) fuel s = .ok (states, tr))
+    (hpos : ∀ k u, states[k]? = some u → u.pc ≠ p.lr0 &&& ~~~1#32 →
+      (∃ b off st i is, b ∈ cert ∧ BlockPoint env b off st (i :: is) ∧ LowEq p bytes off st u u ∧
+        BufferStoreOk env p bytes st u i) ∨
+      FragmentDisciplineAt (env := env) (cert := cert) (p := p) (bytes := bytes) m states tr k u)
+    (hAdvance : ∀ k u t ev, states[k]? = some u → states[k+1]? = some t → tr[k]? = some ev →
+      u.pc ≠ p.lr0 &&& ~~~1#32 → step u = .ok (t,ev) → t.pc ≠ p.lr0 &&& ~~~1#32 →
+      (∃ b off st i is, b ∈ cert ∧ BlockPoint env b off st (i :: is) ∧ LowEq p bytes off st u u ∧
+        env.frameCallAt off = none) ∨
+      (EarlierHoles (env := env) (cert := cert) (p := p) (bytes := bytes) m states tr (k+1) →
+        HoleInv env cert p bytes m states tr (k+1) t)) :
+    TraceSpec.StackDiscipline p.sp0 env.win.below states tr ∧
+      ∀ (k : Nat) (u : State), states[k]? = some u → u.pc ≠ p.lr0 &&& ~~~1#32 →
+        Interrupt.CodePos p.base bytes u := by
+  obtain ⟨h0, hfwd, hbwd⟩ := runStates_get hrun
+  have hbs : ∀ k u, states[k]? = some u → BeforeStop (p.lr0 &&& ~~~1#32) s u :=
+    fun k u hk => runStates_beforeStop hrun u (List.mem_of_getElem? hk)
+  have hbase2 : p.base.toNat % 2 = 0 := by omega
+  have hb32 : env.win.below < 2 ^ 32 := by omega
+  -- the facts at one position
+  have hat : ∀ {b off st i is u}, b ∈ cert → BlockPoint env b off st (i :: is) →
+      LowEq p bytes off st u u → ∃ out e, xfer env off b.ctx i st = .ok out ∧
+        m.find off b.ctx = some e ∧ e.o = st.spOff ∧ lrOk e.lr st = true ∧ pcSafe i = true ∧
+        (∀ a ∈ stackAccs st i, saccOk env.win.below env.win.above i st.spOff e.h a = true) ∧
+        (loadSite st i = true → ∀ lo hi, ls off = some (lo, hi) → st.spOff ≤ lo ∧
+          -(env.win.below : Int) ≤ lo ∧ hi ≤ env.win.above ∧
+          (e.h &&& rangeMask env.win.below lo hi == 0) = true) ∧
+        ∀ tgt ∈ succOffs off i out, tgt < env.size ∧ ∀ e' ∈ m.get tgt,
+          refuted off e i e' = true ∨ (-(env.win.below : Int) ≤ e'.o ∧
+            (holesAfter env.win.below st.spOff e'.o (stackAccs st i) e.h &&& e'.h ==
+              holesAfter env.win.below st.spOff e'.o (stackAccs st i) e.h) = true) := by
+    intro b off st i is u hm hp _
+    obtain ⟨out, hx⟩ := certPoint_xfer hc hm hp
+    exact ⟨out, posHoleOk_facts (certPoint_hole hh hm hp) hx |>.elim fun e he => ⟨e, hx, he⟩⟩
+  -- the invariant
+  have inv : ∀ k u, states[k]? = some u → u.pc ≠ p.lr0 &&& ~~~1#32 →
+      HoleInv env cert p bytes m states tr k u := by
+    intro k
+    induction k using Nat.strongRecOn with
+    | ind k ih =>
+      cases k with
+      | zero =>
+        intro u hu hne
+        rw [h0] at hu
+        cases hu
+        intro b off st i is e hm hp hlow hfind q hq hq0 _
+        obtain ⟨out, e', hx, hf, ho, -⟩ := hat hm hp hlow
+        rw [hfind] at hf
+        cases hf
+        have hb := xfer_sp_bounds hx
+        have h0' : st.spOff = 0 := sp_ofInt_zero hb32 hb.1 hb.2.1 (hlow.sp.symm.trans hsp)
+        omega
+      | succ k =>
+        intro t ht htne b' off' st' i' is' e' hm' hp' hlow' hfind' q hq hq0 hbit
+        obtain ⟨u, ev, hu, he, hune, hst⟩ := hbwd k t ht
+        rcases hAdvance k u t ev hu ht he hune hst htne with hposU | hJump
+        · obtain ⟨b, off, st, i, is, hm, hp, hlow, hplain⟩ := hposU
+          obtain ⟨out, e, hx, hfind, ho, hlre, hsafe, hacc, -, hsucc⟩ := hat hm hp hlow
+          have ⟨hdecode, hlen⟩ := certPoint_instrAt hc hm hp
+          obtain ⟨hexec, hev⟩ := step_exec_of hlow.code₁ off i hlow.pc hdecode hlen hst
+          rcases certPoint_next_pc hc hi ha hbase2 hm hp hlow hx hsafe hst hplain with hts | ⟨tgt, htgt, htpc⟩
+          · exact absurd hts htne
+          obtain ⟨htsz, hall⟩ := hsucc tgt htgt
+          obtain ⟨out', e'', -, hfind'', ho', hlr', -⟩ := hat hm' hp' hlow'
+          rw [hfind'] at hfind''
+          cases hfind''
+          have hlen' := (certPoint_instrAt hc hm' hp').2
+          have hsz' := instr_size_pos i'
+          have hoff' : off' = tgt := ofNat_inj_base (by omega) (by omega) (hlow'.pc.symm.trans htpc)
+          subst hoff'
+          have hmem : e' ∈ m.get off' := List.mem_of_find?_eq_some hfind'
+          have hoffe : off % 2 = 0 := blockPoint_aligned hp (certAligned_head ha hm)
+          rcases hall e' hmem with hrf | ⟨hlo', hsub⟩
+          · rw [not_refuted hbase2 hoffe hlow hlre hlow' hlr' hexec] at hrf
+            cases hrf
+          have hspt : t.sp = p.sp0 + BitVec.ofInt 32 e'.o := by
+            rw [ho']; simpa [State.sp] using hlow'.sp
+          have hlo : ∀ a ∈ stackAccs st i, -(env.win.below : Int) ≤ a.lo :=
+            fun a ha => (saccOk_facts (hacc a ha)).1
+          have hha : (holesAfter env.win.below st.spOff e'.o (stackAccs st i) e.h).testBit
+              (holeBit env.win.below q) = false := by
+            cases hb : (holesAfter env.win.below st.spOff e'.o (stackAccs st i) e.h).testBit
+                (holeBit env.win.below q)
+            · rfl
+            · rw [sub_testBit hsub hb] at hbit
+              cases hbit
+          have hnew : ∀ i' u', i' ≤ k + 1 → ¬ i' ≤ k → states[i']? = some u' →
+              TraceSpec.AtOrAboveSp p.sp0 u'.sp (p.sp0 + BitVec.ofInt 32 q) := by
+            intro i' u' h1 h2 hu'
+            have : i' = k + 1 := by omega
+            subst this
+            rw [ht] at hu'
+            cases hu'
+            rw [hspt]
+            exact atOrAbove_of_off hb32 hlo' hq hq0
+          rcases holesAfter_testBit hlo' hq hlo hha with ⟨a, ha, hr, hex, hal, hah⟩ | ⟨hbit', hoq⟩
+          · have hw := stackAccs_exact i hlow a ha hr hex q hal hah
+            refine ⟨k, Nat.lt_succ_self k, ⟨ev, he, by rw [hev]; exact hw⟩, ?_⟩
+            intro i' u' h1 h2 hu'
+            exact hnew i' u' h2 (by omega) hu'
+          · obtain ⟨j, hj, hw, hold⟩ := ih k (Nat.lt_succ_self k) u hu hune b off st i is e hm hp hlow hfind q
+              (by omega) hq0 hbit'
+            refine ⟨j, by omega, hw, ?_⟩
+            intro i' u' h1 h2 hu'
+            by_cases hik : i' ≤ k
+            · exact hold i' u' h1 hik hu'
+            · exact hnew i' u' h2 hik hu'
+        · exact hJump ih b' off' st' i' is' e' hm' hp' hlow' hfind' q hq hq0 hbit
+  -- a load-site byte below the entry SP lies in the checked range
+  have hsiteW : ∀ (k : Nat) (u t : State) (ev : Event) (b : Blk) (off : Nat) (st : AbsState)
+      (i : Instr) (is : List Instr), states[k]? = some u → u.pc ≠ p.lr0 &&& ~~~1#32 →
+      step u = .ok (t, ev) → b ∈ cert → BlockPoint env b off st (i :: is) →
+      LowEq p bytes off st u u → loadSite st i = true → ∀ y, Reads ev.accesses y →
+      TraceSpec.BelowEntry p.sp0 env.win.below y →
+      ∃ lo hi q e, ls off = some (lo, hi) ∧ m.find off b.ctx = some e ∧ st.spOff ≤ lo ∧
+        lo ≤ q ∧ q < 0 ∧ -(env.win.below : Int) ≤ lo ∧ y = p.sp0 + BitVec.ofInt 32 q ∧
+        e.h.testBit (holeBit env.win.below q) = false := by
+    intro k u t ev b off st i is hu hune hst hm hp hlow hls y hy hyw
+    obtain ⟨out, e, -, hfind, -, -, -, -, hlsf, -⟩ := hat hm hp hlow
+    have ⟨hdecode, hlen⟩ := certPoint_instrAt hc hm hp
+    have hev := (step_exec_of hlow.code₁ off i hlow.pc hdecode hlen hst).2
+    rcases hsite u t ev (hbs k u hu) hune hst off hlow.pc (certPoint_loadSite hl hm hp hls) i
+        hdecode (by rw [hev]) y hy with hr | ⟨lo, hi, hab, q, haq, hqb, rfl⟩
+    · exact (hR _ hr hyw).elim
+    · obtain ⟨h1, h2, h3, h4⟩ := hlsf hls lo hi hab
+      have hq0 := neg_of_belowEntry hwidth (by omega) (by omega) hyw
+      exact ⟨lo, hi, q, e, hab, hfind, h1, haq, hq0, h2, rfl,
+        meets_testBit h4 ((rangeMask_testBit h2 (by omega)).2 ⟨haq, hqb⟩)⟩
+  refine ⟨⟨?_, ?_⟩, ?_⟩
+  rotate_right
+  · -- instruction positions
+    intro k u hu hune
+    rcases hpos k u hu hune with ⟨b, off, st, i, is, hm, hp, hlow, -⟩ | hFragment
+    · have ⟨hdecode, hlen⟩ := certPoint_instrAt hc hm hp
+      exact ⟨off, i, hlow.pc, hdecode, hlen, hlow.code₁⟩
+    · exact hFragment.code
+  · -- accesses at or above SP
+    intro k e u u' he hu hu' y hy hyw
+    obtain ⟨u0, t, hu0, ht, hune, hst⟩ := hfwd k e he
+    rw [hu] at hu0; cases hu0
+    rw [hu'] at ht; cases ht
+    rcases hpos k u hu hune with ⟨b, off, st, i, is, hm, hp, hlow, hbuf⟩ | hFragment
+    · obtain ⟨out, en, hx, -, -, -, -, hacc, -, -⟩ := hat hm hp hlow
+      have ⟨hdecode, hlen⟩ := certPoint_instrAt hc hm hp
+      obtain ⟨hexec, hev⟩ := step_exec_of hlow.code₁ off i hlow.pc hdecode hlen hst
+      have hspu : u.sp = p.sp0 + BitVec.ofInt 32 st.spOff := by simpa [State.sp] using hlow.sp
+      have hacc' : ∃ a ∈ i.accesses u, ∃ j, j < a.width ∧ y = a.addr + BitVec.ofNat 32 j ∧
+          (a.kind = .read → Reads e.accesses y) := by
+        rcases hy with ⟨a, ha, hk, j, hj, rfl⟩ | ⟨a, ha, hk, j, hj, rfl⟩
+        · exact ⟨a, by rw [hev] at ha; exact ha, j, hj, rfl, fun _ => ⟨a, ha, hk, j, hj, rfl⟩⟩
+        · exact ⟨a, by rw [hev] at ha; exact ha, j, hj, rfl, fun hr => by rw [hr] at hk; cases hk⟩
+      obtain ⟨a, ha, j, hj, rfl, hrd⟩ := hacc'
+      rcases xfer_stack_access i hlow hx hsize hbase hnowrap a ha j hj with
+        hcode | ⟨hls, hk⟩ | ⟨hss, hk⟩ | ⟨sa, hsa, hkind, q, hql, hqh, hyq⟩
+      · exact (not_code_of_belowEntry hdisj hsize hcode hyw).elim
+      · obtain ⟨a', b', q, e', -, -, h1, h2, hq0, h3, hyq, -⟩ :=
+          hsiteW k u u' e b off st i is hu hune hst hm hp hlow hls _ (hrd hk) hyw
+        left; rw [hspu, hyq]; exact atOrAbove_of_off hb32 (xfer_sp_bounds hx).1 (by omega) hq0
+      · exact (storeSite_outside i hbuf hss a ha j hj (region_of_belowEntry hyw)).elim
+      · obtain ⟨hlo, hhi, hrdf, hwrf⟩ := saccOk_facts (hacc sa hsa)
+        rw [hyq] at hyw ⊢
+        have hq0 := neg_of_belowEntry hwidth (by omega) (by omega) hyw
+        cases hr : sa.read
+        · rcases hwrf hr with hle | hpush
+          · left; rw [hspu]; exact atOrAbove_of_off hb32 (xfer_sp_bounds hx).1 (by omega) hq0
+          · right
+            cases i with
+            | push l lr =>
+              simp only [stackAccs, List.mem_singleton] at hsa
+              subst hsa
+              simp only [Instr.exec, Except.ok.injEq] at hexec
+              subst hexec
+              have : ({ u.setReg 15 (u.pc + BitVec.ofNat 32 (Instr.push l lr).size) with
+                  mem := storeWords u.mem (u.sp - BitVec.ofNat 32 (4 * (bitCount l + lr.toNat)))
+                    ((listRegs l).map u.reg ++ if lr = true then [u.regs 14] else []) }.setReg 13
+                  (u.sp - BitVec.ofNat 32 (4 * (bitCount l + lr.toNat)))).sp =
+                  u.sp - BitVec.ofNat 32 (4 * (bitCount l + lr.toNat)) := by
+                simp [State.sp, State.setReg]
+              rw [this, hspu, sp_sub_ofInt]
+              exact atOrAbove_of_off hb32 hlo (by omega) hq0
+            | _ => simp [isPush] at hpush
+        · left; rw [hspu]; exact atOrAbove_of_off hb32 (xfer_sp_bounds hx).1 (by have := (hrdf hr).1; omega) hq0
+    · exact hFragment.access e _ he hu' y hy hyw
+  · -- reads of written bytes
+    intro k e he y hy hyw
+    obtain ⟨u, t, hu, ht, hune, hst⟩ := hfwd k e he
+    rcases hpos k u hu hune with ⟨b, off, st, i, is, hm, hp, hlow, -⟩ | hFragment
+    · obtain ⟨out, en, hx, hfind, ho, -, -, hacc, -, -⟩ := hat hm hp hlow
+      have ⟨hdecode, hlen⟩ := certPoint_instrAt hc hm hp
+      have hev := (step_exec_of hlow.code₁ off i hlow.pc hdecode hlen hst).2
+      have hy' := hy
+      obtain ⟨a, ha, hk, j, hj, rfl⟩ := hy
+      rw [hev] at ha
+      rcases xfer_stack_access i hlow hx hsize hbase hnowrap a ha j hj with
+        hcode | ⟨hls, -⟩ | ⟨-, hk'⟩ | ⟨sa, hsa, hkind, q, hql, hqh, hyq⟩
+      · exact (not_code_of_belowEntry hdisj hsize hcode hyw).elim
+      · obtain ⟨a', b', q, e', -, hf', h1, h2, hq0, h3, hyq, hbit⟩ :=
+          hsiteW k u t e b off st i is hu hune hst hm hp hlow hls _ hy' hyw
+        rw [hfind] at hf'
+        cases hf'
+        rw [hyq]
+        exact inv k u hu hune b off st i is en hm hp hlow hfind q (by omega) hq0 hbit
+      · rw [hk] at hk'; cases hk'
+      · obtain ⟨hlo, hhi, hrdf, -⟩ := saccOk_facts (hacc sa hsa)
+        rw [hyq] at hyw ⊢
+        have hq0 := neg_of_belowEntry hwidth (by omega) (by omega) hyw
+        obtain ⟨hle, hz⟩ := hrdf (hkind.2 hk)
+        have hbit := meets_testBit hz ((rangeMask_testBit hlo (by omega)).2 ⟨hql, hqh⟩)
+        exact inv k u hu hune b off st i is en hm hp hlow hfind q (by omega) hq0 hbit
+
+    · exact hFragment.reads (fun j _ => inv j) e he y hy hyw
 
 /-- **Stack discipline of a certified run**, from a certificate position of each recorded state
 before the stop. If the hole map passes the check and every load site reads outside the window
@@ -368,203 +616,18 @@ theorem certificate_run_discipline_of
     {fuel : Nat} {states : List State} {tr : List Event}
     (hrun : runStates (p.lr0 &&& ~~~1#32) fuel s = .ok (states, tr))
     (hpos : ∀ u ∈ states, u.pc ≠ p.lr0 &&& ~~~1#32 → ∃ b off st i is, b ∈ cert ∧
-      BlockPoint env b off st (i :: is) ∧ LowEq p bytes off st u u ∧ BufferStoreOk env p bytes st u i) :
+      BlockPoint env b off st (i :: is) ∧ LowEq p bytes off st u u ∧ BufferStoreOk env p bytes st u i)
+    (hplain : env.frameCall = none := by rfl) :
     TraceSpec.StackDiscipline p.sp0 env.win.below states tr ∧
       ∀ (k : Nat) (u : State), states[k]? = some u → u.pc ≠ p.lr0 &&& ~~~1#32 →
         Interrupt.CodePos p.base bytes u := by
-  obtain ⟨h0, hfwd, hbwd⟩ := runStates_get hrun
-  have hbs : ∀ k u, states[k]? = some u → BeforeStop (p.lr0 &&& ~~~1#32) s u :=
-    fun k u hk => runStates_beforeStop hrun u (List.mem_of_getElem? hk)
-  have hbase2 : p.base.toNat % 2 = 0 := by omega
-  replace hpos : ∀ {k : Nat} {u : State}, states[k]? = some u → u.pc ≠ p.lr0 &&& ~~~1#32 →
-      ∃ b off st i is, b ∈ cert ∧ BlockPoint env b off st (i :: is) ∧ LowEq p bytes off st u u ∧
-        BufferStoreOk env p bytes st u i :=
-    fun hk hne => hpos _ (List.mem_of_getElem? hk) hne
-  have hb32 : env.win.below < 2 ^ 32 := by omega
-  -- the facts at one position
-  have hat : ∀ {b off st i is u}, b ∈ cert → BlockPoint env b off st (i :: is) →
-      LowEq p bytes off st u u → ∃ out e, xfer env off b.ctx i st = .ok out ∧
-        m.find off b.ctx = some e ∧ e.o = st.spOff ∧ lrOk e.lr st = true ∧ pcSafe i = true ∧
-        (∀ a ∈ stackAccs st i, saccOk env.win.below env.win.above i st.spOff e.h a = true) ∧
-        (loadSite st i = true → ∀ lo hi, ls off = some (lo, hi) → st.spOff ≤ lo ∧
-          -(env.win.below : Int) ≤ lo ∧ hi ≤ env.win.above ∧
-          (e.h &&& rangeMask env.win.below lo hi == 0) = true) ∧
-        ∀ tgt ∈ succOffs off i out, tgt < env.size ∧ ∀ e' ∈ m.get tgt,
-          refuted off e i e' = true ∨ (-(env.win.below : Int) ≤ e'.o ∧
-            (holesAfter env.win.below st.spOff e'.o (stackAccs st i) e.h &&& e'.h ==
-              holesAfter env.win.below st.spOff e'.o (stackAccs st i) e.h) = true) := by
-    intro b off st i is u hm hp _
-    obtain ⟨out, hx⟩ := certPoint_xfer hc hm hp
-    exact ⟨out, posHoleOk_facts (certPoint_hole hh hm hp) hx |>.elim fun e he => ⟨e, hx, he⟩⟩
-  -- the invariant
-  have inv : ∀ k u, states[k]? = some u → u.pc ≠ p.lr0 &&& ~~~1#32 →
-      HoleInv env cert p bytes m states tr k u := by
-    intro k
-    induction k with
-    | zero =>
-      intro u hu hne
-      rw [h0] at hu
-      cases hu
-      intro b off st i is e hm hp hlow hfind q hq hq0 _
-      obtain ⟨out, e', hx, hf, ho, -⟩ := hat hm hp hlow
-      rw [hfind] at hf
-      cases hf
-      have hb := xfer_sp_bounds hx
-      have h0' : st.spOff = 0 := sp_ofInt_zero hb32 hb.1 hb.2.1 (hlow.sp.symm.trans hsp)
-      omega
-    | succ k ih =>
-      intro t ht htne b' off' st' i' is' e' hm' hp' hlow' hfind' q hq hq0 hbit
-      obtain ⟨u, ev, hu, he, hune, hst⟩ := hbwd k t ht
-      obtain ⟨b, off, st, i, is, hm, hp, hlow, -⟩ := hpos hu hune
-      obtain ⟨out, e, hx, hfind, ho, hlre, hsafe, hacc, -, hsucc⟩ := hat hm hp hlow
-      have ⟨hdecode, hlen⟩ := certPoint_instrAt hc hm hp
-      obtain ⟨hexec, hev⟩ := step_exec_of hlow.code₁ off i hlow.pc hdecode hlen hst
-      rcases certPoint_next_pc hc hi ha hbase2 hm hp hlow hx hsafe hst with hts | ⟨tgt, htgt, htpc⟩
-      · exact absurd hts htne
-      obtain ⟨htsz, hall⟩ := hsucc tgt htgt
-      obtain ⟨out', e'', -, hfind'', ho', hlr', -⟩ := hat hm' hp' hlow'
-      rw [hfind'] at hfind''
-      cases hfind''
-      have hlen' := (certPoint_instrAt hc hm' hp').2
-      have hsz' := instr_size_pos i'
-      have hoff' : off' = tgt := ofNat_inj_base (by omega) (by omega) (hlow'.pc.symm.trans htpc)
-      subst hoff'
-      have hmem : e' ∈ m.get off' := List.mem_of_find?_eq_some hfind'
-      have hoffe : off % 2 = 0 := blockPoint_aligned hp (certAligned_head ha hm)
-      rcases hall e' hmem with hrf | ⟨hlo', hsub⟩
-      · rw [not_refuted hbase2 hoffe hlow hlre hlow' hlr' hexec] at hrf
-        cases hrf
-      have hspt : t.sp = p.sp0 + BitVec.ofInt 32 e'.o := by
-        rw [ho']; simpa [State.sp] using hlow'.sp
-      have hlo : ∀ a ∈ stackAccs st i, -(env.win.below : Int) ≤ a.lo :=
-        fun a ha => (saccOk_facts (hacc a ha)).1
-      have hha : (holesAfter env.win.below st.spOff e'.o (stackAccs st i) e.h).testBit
-          (holeBit env.win.below q) = false := by
-        cases hb : (holesAfter env.win.below st.spOff e'.o (stackAccs st i) e.h).testBit
-            (holeBit env.win.below q)
-        · rfl
-        · rw [sub_testBit hsub hb] at hbit
-          cases hbit
-      have hnew : ∀ i' u', i' ≤ k + 1 → ¬ i' ≤ k → states[i']? = some u' →
-          TraceSpec.AtOrAboveSp p.sp0 u'.sp (p.sp0 + BitVec.ofInt 32 q) := by
-        intro i' u' h1 h2 hu'
-        have : i' = k + 1 := by omega
-        subst this
-        rw [ht] at hu'
-        cases hu'
-        rw [hspt]
-        exact atOrAbove_of_off hb32 hlo' hq hq0
-      rcases holesAfter_testBit hlo' hq hlo hha with ⟨a, ha, hr, hex, hal, hah⟩ | ⟨hbit', hoq⟩
-      · have hw := stackAccs_exact i hlow a ha hr hex q hal hah
-        refine ⟨k, Nat.lt_succ_self k, ⟨ev, he, by rw [hev]; exact hw⟩, ?_⟩
-        intro i' u' h1 h2 hu'
-        exact hnew i' u' h2 (by omega) hu'
-      · obtain ⟨j, hj, hw, hold⟩ := ih u hu hune b off st i is e hm hp hlow hfind q
-          (by omega) hq0 hbit'
-        refine ⟨j, by omega, hw, ?_⟩
-        intro i' u' h1 h2 hu'
-        by_cases hik : i' ≤ k
-        · exact hold i' u' h1 hik hu'
-        · exact hnew i' u' h2 hik hu'
-  -- a load-site byte below the entry SP lies in the checked range
-  have hsiteW : ∀ (k : Nat) (u t : State) (ev : Event) (b : Blk) (off : Nat) (st : AbsState)
-      (i : Instr) (is : List Instr), states[k]? = some u → u.pc ≠ p.lr0 &&& ~~~1#32 →
-      step u = .ok (t, ev) → b ∈ cert → BlockPoint env b off st (i :: is) →
-      LowEq p bytes off st u u → loadSite st i = true → ∀ y, Reads ev.accesses y →
-      TraceSpec.BelowEntry p.sp0 env.win.below y →
-      ∃ lo hi q e, ls off = some (lo, hi) ∧ m.find off b.ctx = some e ∧ st.spOff ≤ lo ∧
-        lo ≤ q ∧ q < 0 ∧ -(env.win.below : Int) ≤ lo ∧ y = p.sp0 + BitVec.ofInt 32 q ∧
-        e.h.testBit (holeBit env.win.below q) = false := by
-    intro k u t ev b off st i is hu hune hst hm hp hlow hls y hy hyw
-    obtain ⟨out, e, -, hfind, -, -, -, -, hlsf, -⟩ := hat hm hp hlow
-    have ⟨hdecode, hlen⟩ := certPoint_instrAt hc hm hp
-    have hev := (step_exec_of hlow.code₁ off i hlow.pc hdecode hlen hst).2
-    rcases hsite u t ev (hbs k u hu) hune hst off hlow.pc (certPoint_loadSite hl hm hp hls) i
-        hdecode (by rw [hev]) y hy with hr | ⟨lo, hi, hab, q, haq, hqb, rfl⟩
-    · exact (hR _ hr hyw).elim
-    · obtain ⟨h1, h2, h3, h4⟩ := hlsf hls lo hi hab
-      have hq0 := neg_of_belowEntry hwidth (by omega) (by omega) hyw
-      exact ⟨lo, hi, q, e, hab, hfind, h1, haq, hq0, h2, rfl,
-        meets_testBit h4 ((rangeMask_testBit h2 (by omega)).2 ⟨haq, hqb⟩)⟩
-  refine ⟨⟨?_, ?_⟩, ?_⟩
-  rotate_right
-  · -- instruction positions
-    intro k u hu hune
-    obtain ⟨b, off, st, i, is, hm, hp, hlow, -⟩ := hpos hu hune
-    have ⟨hdecode, hlen⟩ := certPoint_instrAt hc hm hp
-    exact ⟨off, i, hlow.pc, hdecode, hlen, hlow.code₁⟩
-  · -- accesses at or above SP
-    intro k e u u' he hu hu' y hy hyw
-    obtain ⟨u0, t, hu0, ht, hune, hst⟩ := hfwd k e he
-    rw [hu] at hu0; cases hu0
-    rw [hu'] at ht; cases ht
-    obtain ⟨b, off, st, i, is, hm, hp, hlow, hbuf⟩ := hpos hu hune
-    obtain ⟨out, en, hx, -, -, -, -, hacc, -, -⟩ := hat hm hp hlow
-    have ⟨hdecode, hlen⟩ := certPoint_instrAt hc hm hp
-    obtain ⟨hexec, hev⟩ := step_exec_of hlow.code₁ off i hlow.pc hdecode hlen hst
-    have hspu : u.sp = p.sp0 + BitVec.ofInt 32 st.spOff := by simpa [State.sp] using hlow.sp
-    have hacc' : ∃ a ∈ i.accesses u, ∃ j, j < a.width ∧ y = a.addr + BitVec.ofNat 32 j ∧
-        (a.kind = .read → Reads e.accesses y) := by
-      rcases hy with ⟨a, ha, hk, j, hj, rfl⟩ | ⟨a, ha, hk, j, hj, rfl⟩
-      · exact ⟨a, by rw [hev] at ha; exact ha, j, hj, rfl, fun _ => ⟨a, ha, hk, j, hj, rfl⟩⟩
-      · exact ⟨a, by rw [hev] at ha; exact ha, j, hj, rfl, fun hr => by rw [hr] at hk; cases hk⟩
-    obtain ⟨a, ha, j, hj, rfl, hrd⟩ := hacc'
-    rcases xfer_stack_access i hlow hx hsize hbase hnowrap a ha j hj with
-      hcode | ⟨hls, hk⟩ | ⟨hss, hk⟩ | ⟨sa, hsa, hkind, q, hql, hqh, hyq⟩
-    · exact (not_code_of_belowEntry hdisj hsize hcode hyw).elim
-    · obtain ⟨a', b', q, e', -, -, h1, h2, hq0, h3, hyq, -⟩ :=
-        hsiteW k u u' e b off st i is hu hune hst hm hp hlow hls _ (hrd hk) hyw
-      left; rw [hspu, hyq]; exact atOrAbove_of_off hb32 (xfer_sp_bounds hx).1 (by omega) hq0
-    · exact (storeSite_outside i hbuf hss a ha j hj (region_of_belowEntry hyw)).elim
-    · obtain ⟨hlo, hhi, hrdf, hwrf⟩ := saccOk_facts (hacc sa hsa)
-      rw [hyq] at hyw ⊢
-      have hq0 := neg_of_belowEntry hwidth (by omega) (by omega) hyw
-      cases hr : sa.read
-      · rcases hwrf hr with hle | hpush
-        · left; rw [hspu]; exact atOrAbove_of_off hb32 (xfer_sp_bounds hx).1 (by omega) hq0
-        · right
-          cases i with
-          | push l lr =>
-            simp only [stackAccs, List.mem_singleton] at hsa
-            subst hsa
-            simp only [Instr.exec, Except.ok.injEq] at hexec
-            subst hexec
-            have : ({ u.setReg 15 (u.pc + BitVec.ofNat 32 (Instr.push l lr).size) with
-                mem := storeWords u.mem (u.sp - BitVec.ofNat 32 (4 * (bitCount l + lr.toNat)))
-                  ((listRegs l).map u.reg ++ if lr = true then [u.regs 14] else []) }.setReg 13
-                (u.sp - BitVec.ofNat 32 (4 * (bitCount l + lr.toNat)))).sp =
-                u.sp - BitVec.ofNat 32 (4 * (bitCount l + lr.toNat)) := by
-              simp [State.sp, State.setReg]
-            rw [this, hspu, sp_sub_ofInt]
-            exact atOrAbove_of_off hb32 hlo (by omega) hq0
-          | _ => simp [isPush] at hpush
-      · left; rw [hspu]; exact atOrAbove_of_off hb32 (xfer_sp_bounds hx).1 (by have := (hrdf hr).1; omega) hq0
-  · -- reads of written bytes
-    intro k e he y hy hyw
-    obtain ⟨u, t, hu, ht, hune, hst⟩ := hfwd k e he
-    obtain ⟨b, off, st, i, is, hm, hp, hlow, -⟩ := hpos hu hune
-    obtain ⟨out, en, hx, hfind, ho, -, -, hacc, -, -⟩ := hat hm hp hlow
-    have ⟨hdecode, hlen⟩ := certPoint_instrAt hc hm hp
-    have hev := (step_exec_of hlow.code₁ off i hlow.pc hdecode hlen hst).2
-    have hy' := hy
-    obtain ⟨a, ha, hk, j, hj, rfl⟩ := hy
-    rw [hev] at ha
-    rcases xfer_stack_access i hlow hx hsize hbase hnowrap a ha j hj with
-      hcode | ⟨hls, -⟩ | ⟨-, hk'⟩ | ⟨sa, hsa, hkind, q, hql, hqh, hyq⟩
-    · exact (not_code_of_belowEntry hdisj hsize hcode hyw).elim
-    · obtain ⟨a', b', q, e', -, hf', h1, h2, hq0, h3, hyq, hbit⟩ :=
-        hsiteW k u t e b off st i is hu hune hst hm hp hlow hls _ hy' hyw
-      rw [hfind] at hf'
-      cases hf'
-      rw [hyq]
-      exact inv k u hu hune b off st i is en hm hp hlow hfind q (by omega) hq0 hbit
-    · rw [hk] at hk'; cases hk'
-    · obtain ⟨hlo, hhi, hrdf, -⟩ := saccOk_facts (hacc sa hsa)
-      rw [hyq] at hyw ⊢
-      have hq0 := neg_of_belowEntry hwidth (by omega) (by omega) hyw
-      obtain ⟨hle, hz⟩ := hrdf (hkind.2 hk)
-      have hbit := meets_testBit hz ((rangeMask_testBit hlo (by omega)).2 ⟨hql, hqh⟩)
-      exact inv k u hu hune b off st i is en hm hp hlow hfind q (by omega) hq0 hbit
+  apply certificate_run_discipline_with_fragments hc hi ha hwidth hdisj hsize hbase hnowrap
+    hsp hl R hsite hR hh hrun
+  · intro k u hu hn
+    exact .inl (hpos u (List.mem_of_getElem? hu) hn)
+  · intro k u t ev hu _ _ hn _ _
+    obtain ⟨b,off,st,i,is,hm,hp,hrel,_⟩ := hpos u (List.mem_of_getElem? hu) hn
+    exact .inl ⟨b,off,st,i,is,hm,hp,hrel,by simp [Env.frameCallAt,hplain]⟩
 
 /-- **Stack discipline of a certified run** whose local obligations hold at every pair of
 related reachable states. -/
@@ -590,13 +653,14 @@ theorem certificate_run_discipline
     (hR : ∀ y, R y → ¬ TraceSpec.BelowEntry p.sp0 env.win.below y)
     {m : HoleMap} (hh : certHoleFailure env ls m cert = none)
     {fuel : Nat} {states : List State} {tr : List Event}
-    (hrun : runStates (p.lr0 &&& ~~~1#32) fuel s = .ok (states, tr)) :
+    (hrun : runStates (p.lr0 &&& ~~~1#32) fuel s = .ok (states, tr))
+    (hplain : env.frameCall = none := by rfl) :
     TraceSpec.StackDiscipline p.sp0 env.win.below states tr ∧
       ∀ (k : Nat) (u : State), states[k]? = some u → u.pc ≠ p.lr0 &&& ~~~1#32 →
         Interrupt.CodePos p.base bytes u :=
   certificate_run_discipline_of hc hi ha hwidth hdisj hsize hbase hnowrap hsp hl R hsite hR hh hrun
-    fun u hu hne => run_position hc hi ha hslots hwidth hdisj hsize hbase hnowrap hlr hlocal h
-      (runStates_beforeStop hrun u hu) hne
+    (fun u hu hne => run_position hc hi ha hslots hwidth hdisj hsize hbase hnowrap hlr hlocal h
+      (runStates_beforeStop hrun u hu) hne hplain) hplain
 
 end
 

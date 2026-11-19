@@ -15,8 +15,7 @@ under QEMU's Cortex-M0 "microbit" machine and single-steps these windows of the 
                 inline add/sub, ten field-routine calls), counter update
   ladder exit   the ladder head with counter = the `cmp` bound -> the `blt` target (taken)
   doubling exit the doubling loop head with counter 1 -> the `beq` target (taken)
-  squaring exit the first squaring loop's head with counter 1 -> the instruction after its
-                `bne` (not taken)
+  inversion     entry and first batch, then the final batch's exit and return to X25519
   epilogue      the return site of the last field-routine call -> the caller's return address
                 (canonical reduction, 32 byte stores, wipe, register restore, `pop {pc}`)
 
@@ -29,7 +28,7 @@ of RAM must be equal. Finally the output buffer must equal the RFC 7748 vector.
 A second run of the image then covers the rest: at the first arrival at each instruction of the
 unit that these windows did not execute, it starts a window that ends at the first instruction
 outside that remainder (typically the entry of the next field routine). Every instruction of
-the unit (m0c_fe_mul .. end of m0c_x25519) must be traced; the code has no data-dependent
+the unit (including the shared inversion after m0c_x25519) must be traced; the code has no data-dependent
 branch, so this call executes all of them.
 
 The windows are found by pattern in the disassembly of the linked image (`llvm-objdump`, symbol
@@ -153,7 +152,7 @@ def target(text):
 
 
 def find_windows(elf, syms, hit):
-    """[(name, start, pick, stop)]: pick is ("hit", n) or ("counter", value)."""
+    """[(name, start, pick, stop)]: pick is ("hit", n) or ("counter", (slot, value))."""
     entry, size = syms["m0c_x25519"]
     ins = disasm(elf, entry, size)
     texts = [t for _, t in ins]
@@ -179,18 +178,27 @@ def find_windows(elf, syms, hit):
     if not texts[i_beq + 1].startswith("b "):
         fail("the doubling loop does not end in `beq END; b HEAD`")
     dbl = target(texts[i_beq + 1])
-    bnes = [i for i, t in enumerate(texts) if t.startswith("bne ")]
-    if not bnes:
-        fail("no squaring loop (bne) found")
-    sq = bnes[0]
+    inv, _ = syms["m0c_fe_inv_shared"]
+    phase0, _ = syms["m0c_inv_phase0"]
+    inv_count, _ = syms["m0c_inv_count"]
+    i_inv = only(lambda t: t.startswith("bl ") and target(t) == inv, "shared inversion call")
+    _, count_load = disasm(elf, inv_count, 2)[0]
+    cm_inv = re.fullmatch(r"ldr r0, \[sp, #(0x[0-9a-f]+)\]", count_load)
+    if not cm_inv:
+        fail("the inversion counter is not loaded at m0c_inv_count")
+    inv_slot = int(cm_inv.group(1), 16)
+    inv_ret = ins[i_inv][0] + 4
     bls = [i for i, t in enumerate(texts) if t.startswith("bl ")]
     last_bl = bls[-1]
     windows = [
         ("prologue", entry, ("hit", 1), ladder),
         ("ladder step", ins[i_blt][0], ("hit", hit), ins[i_cmp][0]),
-        ("ladder exit", ladder, ("counter", int(cm.group(1), 16)), target(texts[i_blt])),
-        ("doubling exit", dbl, ("counter", 1), target(texts[i_beq])),
-        ("squaring exit", target(texts[sq]), ("counter", 1), ins[sq + 1][0]),
+        ("ladder exit", ladder, ("counter", (slot, int(cm.group(1), 16))), target(texts[i_blt])),
+        ("doubling exit", dbl, ("counter", (slot, 1)), target(texts[i_beq])),
+        ("inversion entry", inv, ("hit", 1), phase0),
+        ("first batch", phase0, ("hit", 1), inv_count),
+        ("batch back edge", inv_count, ("hit", 1), phase0),
+        ("inversion exit", inv_count, ("counter", (inv_slot, 1)), inv_ret),
         ("epilogue", ins[last_bl][0] + 4, ("hit", 1), None),   # stop: the caller's return address
     ]
     for name, start, _, stop in windows:
@@ -200,16 +208,17 @@ def find_windows(elf, syms, hit):
 
 
 class Session:
-    def __init__(self, gdb, slot):
-        self.gdb, self.slot = gdb, slot
+    def __init__(self, gdb):
+        self.gdb = gdb
 
     def words(self):
         state = self.gdb.regs()
         return state, state.split()
 
-    def counter(self, words):
+    def counter_agrees(self, words, counter):
+        slot, value = counter
         sp = int(words[13], 16)
-        return int.from_bytes(self.gdb.read(sp + self.slot, 4), "little")
+        return int.from_bytes(self.gdb.read(sp + slot, 4), "little") == value
 
     def run_to(self, addr, pick):
         """Continue to the arrival at `addr` that `pick` selects; return the state there."""
@@ -222,7 +231,7 @@ class Session:
                 state, words = self.words()
             seen += 1
             kind, val = pick
-            if (kind == "hit" and seen == val) or (kind == "counter" and self.counter(words) == val):
+            if (kind == "hit" and seen == val) or (kind == "counter" and self.counter_agrees(words, val)):
                 return state, words
             self.gdb.cmd("s")   # leave the address before the breakpoint is set again
 
@@ -241,7 +250,7 @@ class Session:
                 fail(f"no arrival at {stop:#x} within 200000 steps")
 
 
-def record(qemu, elf, text, windows, slot, syms):
+def record(qemu, elf, text, windows, syms):
     tmp = tempfile.mkdtemp()
     path = os.path.join(tmp, "gdb")
     proc = subprocess.Popen(
@@ -259,7 +268,7 @@ def record(qemu, elf, text, windows, slot, syms):
         if base < 0:
             fail(f"{elf} does not contain the release object's .text")
         cases = [f"flash 0 {flash.hex()}"]
-        s = Session(gdb, slot)
+        s = Session(gdb)
         traced, pcs, ret = {}, set(), None
         for name, start, pick, stop in windows:
             state, words = s.run_to(start, pick)
@@ -393,10 +402,9 @@ def main():
     syms = sized_symbols(elf)
     windows, slot = find_windows(elf, syms, args.hit)
     print(f"image {elf}; counter slot sp+{slot:#x}")
-    cases, traced, pcs = record(args.qemu, elf, text, windows, slot, syms)
+    cases, traced, pcs = record(args.qemu, elf, text, windows, syms)
     lo = syms["m0c_fe_mul"][0]
-    hi = syms["m0c_x25519"][0] + syms["m0c_x25519"][1]
-    unit = {a for a, _ in disasm(elf, lo, hi - lo)}
+    unit = {a for a, _ in disasm(elf, lo, len(text))}
     named = len(pcs & unit)
     more_cases, more, more_pcs = cover(args.qemu, elf, unit - pcs)
     cases += more_cases

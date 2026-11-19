@@ -93,7 +93,7 @@ def blocksFast (env : Env) (tbl : Array (Option Instr)) (entry : Nat)
     | some i => i.size
     | none => 0
   let falls : Pt → Bool := fun p => match succ[p]? with
-    | some [q] => q == (p.1 + size p, p.2) && size p != 0
+    | some [q] => q == (p.1 + size p, p.2) && size p != 0 && (env.frameCallAt p.1).isNone
     | _ => false
   let isHead : Pt → Bool := fun q =>
     q == (entry, none) || match preds.getD q [] with

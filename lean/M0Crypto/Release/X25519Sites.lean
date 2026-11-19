@@ -11,8 +11,7 @@ accesses are the byte loads that decode `scalar` and `point` and the byte stores
 `strb` instructions of the entry, not by offset, so a change of the code moves the lists with
 it.
 
-`entryCode` decodes the entry from its symbol to the end of the artifact (the entry is the last
-function of the release unit). `x25519_code_decodes` checks that this walk covers the entry
+`entryCode` decodes the entry from its symbol up to the first inversion helper. `x25519_code_decodes` checks that this walk covers the entry
 exactly and finds no undecodable halfword.
 
 The two site statements (`LoadSiteOk`, `StoreSiteOk`) say what a run must do at these pcs:
@@ -40,11 +39,12 @@ def scanFrom : Nat → Nat → List (BitVec 8) → Option (List (Nat × Instr))
       if i.size ≤ bs.length then (scanFrom fuel (off + i.size) (bs.drop i.size)).map ((off, i) :: ·)
       else none
 
-/-- Every instruction of the entry with its offset: from the symbol to the end of the artifact.
-The fuel is one step per halfword, enough for any instruction mix. -/
+def entryBytes : List (BitVec 8) :=
+  (Release.bytes.drop Release.x25519).take (Release.inv_canon - Release.x25519)
+
+/-- The entry's instructions with offsets. One step per halfword bounds the scan. -/
 def entryCode : List (Nat × Instr) :=
-  (scanFrom ((Release.size - Release.x25519) / 2 + 1) Release.x25519
-    (Release.bytes.drop Release.x25519)).getD []
+  (scanFrom (entryBytes.length / 2 + 1) Release.x25519 entryBytes).getD []
 
 /-- Offsets of the entry's byte loads: the decode of `scalar` and `point`. -/
 def loadSites : List Nat :=
@@ -60,8 +60,7 @@ def storeSites : List Nat :=
 
 /-- The walk decodes the whole entry. -/
 theorem x25519_code_decodes :
-    (scanFrom ((Release.size - Release.x25519) / 2 + 1) Release.x25519
-      (Release.bytes.drop Release.x25519)).isSome = true := by
+    (scanFrom (entryBytes.length / 2 + 1) Release.x25519 entryBytes).isSome = true := by
   decide +kernel
 
 /-- One load per byte of `scalar` and `point`, one store per byte of `out`. -/

@@ -141,7 +141,9 @@ theorem prologue_w {c : X25519.Ctx} {s : State} (hp : X25519.Pre c s) {Wr : Word
   obtain ⟨rest, hE⟩ : ∃ rest, entryList = prologue ++ rest := ⟨_, by simp only [entryList, List.append_assoc]; exact rfl⟩
   have hseq := entry_at
   rw [hE, seqAt_append, Bool.and_eq_true] at hseq
-  have hsz := entry_size
+  have hsz : Artifacts.Release.x25519 + seqSize entryList ≤ Artifacts.Release.size := by
+    rw [entry_size]
+    decide +kernel
   rw [hE, seqSize_append] at hsz
   have hP := hseq.1
   simp only [prologue, seqAt_append, seqSize_append, Bool.and_eq_true] at hP hsz
