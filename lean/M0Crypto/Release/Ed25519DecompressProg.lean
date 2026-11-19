@@ -37,6 +37,7 @@ open M0Crypto.Release.Ed25519FeCanon (canonS)
 open M0Crypto.Release.X25519Bytes (loadLe32)
 open M0Crypto.Release.Ed25519 (Build)
 open M0Crypto.Artifacts.Ed25519Compact (ge_decompress ed_zero)
+open M0Crypto.Artifacts.Ed25519Compact (dc_body dc_y_test dc_first_candidate dc_first_status dc_second_candidate dc_second_status dc_sqrt_fix dc_canon_x dc_zero_test dc_negate_x dc_output dc_success)
 
 /-! ## Callees and blocks -/
 
@@ -44,10 +45,10 @@ inductive DA where
   | f (a : FA) | pow | eq | canon | copy
   deriving DecidableEq
 
-/-- The field callees, `fe_pow` (kind `1` at the call), `fe_eq`, `fe_canon` and `copy`. -/
+/-- The field callees, `fe_pow` (the decompression power), `fe_eq`, `fe_canon` and `copy`. -/
 def daS : DA → CalleeS
   | .f a => faS a
-  | .pow => (powQ 1).s
+  | .pow => powQ.s
   | .eq => eqS
   | .canon => canonS
   | .copy => paS .copyOut
@@ -131,7 +132,7 @@ def F2 : List FOp :=
   [⟨.mul, S X, S T, S V3⟩, ⟨.mul, S X, S X, S U⟩, ⟨.sqr, S T, S X, .K 0⟩, ⟨.mul, S T, S T, S V⟩]
 
 def F3 : List FOp := [⟨.sub, S X2, cst cZero 44, S U⟩]
-def F4 : List FOp := [⟨.mul, S X, S X, cst cSqrt 37⟩]
+def F4 : List FOp := [⟨.mul, S X, S X, cst cSqrt 38⟩]
 def F5 : List FOp := [⟨.sub, S X, cst cZero 23, S X⟩]
 def F6 : List FOp := [⟨.mul, W OUT 96, S X, S Y⟩]
 
@@ -143,7 +144,7 @@ def seg0 : Prog DA DB := Prog.ofList [spill 0 OUT, blk .load []]
 
 /-- To the first `fe_eq`: `F1`, the `(p − 5)/8` power, `F2`, `v x² = u`. -/
 def seg1 : Prog DA DB :=
-  fragC .f F1 (.op (call .pow [(0, S T), (1, S T), (2, K 1)]) (fragC .f F2 (.op (eqP U) .nil)))
+  fragC .f F1 (.op (call .pow [(0, S T), (1, S T)]) (fragC .f F2 (.op (eqP U) .nil)))
 
 /-- `v x² = −u`. -/
 def seg2 : Prog DA DB := fragC .f F3 (.op (eqP X2) .nil)
@@ -160,16 +161,16 @@ def seg5 : Prog DA DB := fragC .f F5 (.op canonP .nil)
 /-- The output: `x`, `y`, `1`, `x y`. -/
 def seg6 : Prog DA DB := Prog.ofList
   [call .copy [(0, W OUT 0), (1, S X), (2, K 8)], call .copy [(0, W OUT 32), (1, S Y), (2, K 8)],
-   ld 0 (W OUT 64), ld 1 (cst cOne 13), ld 2 (K 8), call .copy []] |>.seq (fragC .f F6 .nil)
+   ld 0 (W OUT 64), ld 1 (cst cOne 14), ld 2 (K 8), call .copy []] |>.seq (fragC .f F6 .nil)
 
 end
 
 /-- The lines at their code offsets. -/
 def segs : List (Nat × Prog DA DB) :=
-  [(0x2040, seg0), (0x212a, seg1), (0x21c4, seg2), (0x21e0, seg3), (0x21ec, seg4), (0x2220, seg5), (0x2232, seg6)]
+  [(dc_body, seg0), (dc_first_candidate, seg1), (dc_second_candidate, seg2), (dc_sqrt_fix, seg3), (dc_canon_x, seg4), (dc_negate_x, seg5), (dc_output, seg6)]
 
 /-- Where each line ends: a branch, a test block or the status. -/
-def segEnds : List Nat := [0x2100, 0x21be, 0x21da, 0x21ec, 0x21f2, 0x2232, 0x2262]
+def segEnds : List Nat := [dc_y_test, dc_first_status, dc_second_status, dc_canon_x, dc_zero_test, dc_output, dc_success]
 
 /-! ## The decided checks, both builds -/
 
@@ -229,7 +230,7 @@ def L1 : FL := ((fresC dcGeo (rs s0) F1).map (·.1)).getD []
 
 /-- The state before the power, after `F1`, and after the power. -/
 def sP : St := ((fresC dcGeo (rs s0) F1).map (·.2)).getD stE
-def sQ : St := ((Op.call DA.pow [(0, Ld.S T), (1, Ld.S T), (2, Ld.K 1)] : Op DA DB).ty daS dbS dcGeo sP).getD stE
+def sQ : St := ((Op.call DA.pow [(0, Ld.S T), (1, Ld.S T)] : Op DA DB).ty daS dbS dcGeo sP).getD stE
 
 def L2 : FL := ((fresC dcGeo sQ F2).map (·.1)).getD []
 
@@ -237,7 +238,7 @@ theorem f1_terms : fresC dcGeo (rs s0) F1 = some (L1, sP) ∧
     [Loc.fr U, .fr V, .fr V3, .fr T].map (symL tm0 L1) = f1T := by
   decide +kernel
 
-theorem f2_terms : (Op.call DA.pow [(0, Ld.S T), (1, Ld.S T), (2, Ld.K 1)] : Op DA DB).ty daS dbS dcGeo sP = some sQ ∧
+theorem f2_terms : (Op.call DA.pow [(0, Ld.S T), (1, Ld.S T)] : Op DA DB).ty daS dbS dcGeo sP = some sQ ∧
     (fresC dcGeo sQ F2).map (·.1) = some L2 ∧ [Loc.fr X, .fr T].map (symL tm0 L2) = f2T := by
   decide +kernel
 

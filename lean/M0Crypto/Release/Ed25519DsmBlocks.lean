@@ -6,20 +6,20 @@ import M0Crypto.Release.Ed25519DecompressBlocks
 
 Each block's effect is decided symbolically (`Eff`, `effOk`) and read as values:
 
-* `scanG` (the top-digit scan, `0x2a20`): `Z` exactly when both digit bytes at index `r0` are
+* `scanG` (the top-digit scan, `dsm_scan`): `Z` exactly when both digit bytes at index `r0` are
   `0` (`scan_z`); `subs r0, #1` sets `N` exactly when `r0 = 0` (`dec_n`).
-* `loopG` (`0x2a46`): `ldr r0, [sp, #I]; cmp r0, #0`; `bge` continues exactly when `0 ≤ I`
+* `loopG` (`dsm_loop`): `ldr r0, [sp, #I]; cmp r0, #0`; `bge` continues exactly when `0 ≤ I`
   (`loop_ge`).
-* `digG` (`0x2a4e`): `DA`, `DB` are the digit bytes at `I` sign-extended (`dig_run`).
-* `orG` (`0x2abe`): `Z` exactly when `DA = DB = 0` (`or_z`); `cmp r0, #0` after `ldr DA` or `DB`
-  (`0x2b10`, `0x2bdc`, `0x2c2c`) by `cmp0_z`.
-* `headA` (`0x2b18`): `r0 = sp + AI + 128 (|δ| / 2)` for the digit `δ` in `DA` (`headA_run`);
-  `headB1` (`0x2c34`): `r0 = 96 (|δ| / 2)` for `δ` in `DB` (`headB1_run`), before the load of
+* `digG` (`dsm_load_digits`): `DA`, `DB` are the digit bytes at `I` sign-extended (`dig_run`).
+* `orG` (`dsm_test_digits`): `Z` exactly when `DA = DB = 0` (`or_z`); `cmp r0, #0` after `ldr DA` or `DB`
+  (`dsm_test_a`, `dsm_a_test_next`, `dsm_a_done`) by `cmp0_z`.
+* `headA` (`dsm_a_index`): `r0 = sp + AI + 128 (|δ| / 2)` for the digit `δ` in `DA` (`headA_run`);
+  `headB1` (`dsm_b_index`): `r0 = 96 (|δ| / 2)` for `δ` in `DB` (`headB1_run`), before the load of
   `m0c_ed_odd_b` and `adds r0, r1`.
-* `tailG` (`0x2b26`, `0x2c48` after its head): the pointers `EP`, `EA`, `EB` (the entry, its
+* `tailG` (`dsm_a_table`, `dsm_b_entry` after its head): the pointers `EP`, `EA`, `EB` (the entry, its
   `y + x` and `y − x`, swapped for a negative digit) and `TZ`, `TT` (the destinations of `D + C`
   and `D − C`, swapped likewise) (`tail_run`).
-* `decG` (`0x2cee`): `I − 1` (`dec_run`).
+* `decG` (`dsm_dec_index`): `I − 1` (`dec_run`).
 
 `*_at` decide the instructions at their offsets in both builds. Over the digits `hd`, `sd` of
 `dsmStep` (`digOf`, the signed bytes of the arrays at `H` and `S`): `scan_spec`, `dig_spec`,
@@ -35,6 +35,8 @@ open M0Crypto.Release.Ed25519DsmProg
 open M0Crypto.Sym (SExpr SBool SMem)
 open M0Crypto.Release.BlockEffect (Eff effOk eff_run)
 open M0Crypto.Release.Ed25519 (Build)
+open M0Crypto.Artifacts.Ed25519Compact (dsm_a_done dsm_a_index dsm_a_table dsm_a_test_next dsm_b_entry dsm_b_index dsm_dec_index
+  dsm_load_digits dsm_loop dsm_scan dsm_scan_dec dsm_test_a dsm_test_digits)
 
 /-! ## The blocks -/
 
@@ -54,19 +56,19 @@ def tailG (ds : Nat) : List Instr :=
    .subReg 1 1 0, .strSp 1 11]
 def decG : List Instr := [.ldrSp 0 1, .subImm8 0 1, .strSp 0 1]
 
-theorem scan_at (b : Build) : seqAt b.bytes 0x2a20 scanG = true ∧ seqAt b.bytes 0x2a2e [.subImm8 0 1] = true := by
+theorem scan_at (b : Build) : seqAt b.bytes dsm_scan scanG = true ∧ seqAt b.bytes dsm_scan_dec [.subImm8 0 1] = true := by
   cases b <;> (rw [seqAt_eq_scan, seqAt_eq_scan]; decide +kernel)
-theorem loop_at (b : Build) : seqAt b.bytes 0x2a46 loopG = true := by cases b <;> (rw [seqAt_eq_scan]; decide +kernel)
-theorem dig_at (b : Build) : seqAt b.bytes 0x2a4e digG = true := by cases b <;> (rw [seqAt_eq_scan]; decide +kernel)
-theorem or_at (b : Build) : seqAt b.bytes 0x2abe orG = true := by cases b <;> (rw [seqAt_eq_scan]; decide +kernel)
-theorem da_at (b : Build) : seqAt b.bytes 0x2b10 [.ldrSp 0 2, .cmpImm 0 0] = true := by cases b <;> (rw [seqAt_eq_scan]; decide +kernel)
-theorem ptrA_at (b : Build) : seqAt b.bytes 0x2b18 (headA ++ tailG 2) = true := by cases b <;> (rw [seqAt_eq_scan]; decide +kernel)
+theorem loop_at (b : Build) : seqAt b.bytes dsm_loop loopG = true := by cases b <;> (rw [seqAt_eq_scan]; decide +kernel)
+theorem dig_at (b : Build) : seqAt b.bytes dsm_load_digits digG = true := by cases b <;> (rw [seqAt_eq_scan]; decide +kernel)
+theorem or_at (b : Build) : seqAt b.bytes dsm_test_digits orG = true := by cases b <;> (rw [seqAt_eq_scan]; decide +kernel)
+theorem da_at (b : Build) : seqAt b.bytes dsm_test_a [.ldrSp 0 2, .cmpImm 0 0] = true := by cases b <;> (rw [seqAt_eq_scan]; decide +kernel)
+theorem ptrA_at (b : Build) : seqAt b.bytes dsm_a_index (headA ++ tailG 2) = true := by cases b <;> (rw [seqAt_eq_scan]; decide +kernel)
 theorem db_at (b : Build) :
-    seqAt b.bytes 0x2bdc [.ldrSp 0 3, .cmpImm 0 0] = true ∧ seqAt b.bytes 0x2c2c [.ldrSp 0 3, .cmpImm 0 0] = true := by
+    seqAt b.bytes dsm_a_test_next [.ldrSp 0 3, .cmpImm 0 0] = true ∧ seqAt b.bytes dsm_a_done [.ldrSp 0 3, .cmpImm 0 0] = true := by
   cases b <;> (rw [seqAt_eq_scan, seqAt_eq_scan]; decide +kernel)
-theorem ptrB_at (b : Build) : seqAt b.bytes 0x2c34 (headB1 ++ [.ldrLit 1 48, .addPc 1, .addReg 0 0 1] ++ tailG 3) = true := by
+theorem ptrB_at (b : Build) : seqAt b.bytes dsm_b_index (headB1 ++ [.ldrLit 1 48, .addPc 1, .addReg 0 0 1] ++ tailG 3) = true := by
   cases b <;> (rw [seqAt_eq_scan]; decide +kernel)
-theorem dec_at (b : Build) : seqAt b.bytes 0x2cee decG = true := by cases b <;> (rw [seqAt_eq_scan]; decide +kernel)
+theorem dec_at (b : Build) : seqAt b.bytes dsm_dec_index decG = true := by cases b <;> (rw [seqAt_eq_scan]; decide +kernel)
 
 /-! ## The decided effects -/
 
@@ -244,7 +246,7 @@ theorem scan_z (t : State) :
   show ((read8 _ _ ||| read8 _ _) == 0#32) = true ↔ _
   rw [beq_iff_eq, BitVec.or_eq_zero_iff, read8, read8, byte_zero, byte_zero]; rfl
 
-/-- `subs r0, #1` (`0x2a2e`): `N` exactly when `r0 = 0`, for `r0 ≤ 2^31`; `r0` becomes `r0 − 1`. -/
+/-- `subs r0, #1` (`dsm_scan_dec`): `N` exactly when `r0 = 0`, for `r0 ≤ 2^31`; `r0` becomes `r0 − 1`. -/
 theorem dec_n (t : State) (h : (t.regs 0).toNat ≤ 2 ^ 31) :
     (((Instr.subImm8 0 1).next t).n = true ↔ t.regs 0 = 0#32) ∧
     ((Instr.subImm8 0 1).next t).regs 0 = t.regs 0 - 1#32 := by
@@ -278,7 +280,7 @@ theorem cmp0_ge (s : State) (n : LowReg) :
   · rw [decide_eq_false (by omega : ¬2 ^ (32 - 1) ≤ x.toNat), ite_eq_left (by omega)]
     rw [decide_eq_true (by omega)]; rfl
 
-/-- **The loop test** (`0x2a46`, then `bge`): continues exactly when `0 ≤ I`. -/
+/-- **The loop test** (`dsm_loop`, then `bge`): continues exactly when `0 ≤ I`. -/
 theorem loop_ge (t : State) :
     ((execAll loopG t).n == (execAll loopG t).v) = true ↔ 0 ≤ (read32 t.mem (t.regs 13 + BitVec.ofNat 32 oI)).toInt := by
   have e : execAll loopG t = (Instr.cmpImm 0 0).next (execAll [.ldrSp 0 1] t) := rfl
@@ -286,7 +288,7 @@ theorem loop_ge (t : State) :
   rw [show LowReg.toReg 0 = 0 from rfl, (eff_run effs_ok.2.2.2.2.2.2.2.2 t).reg 0 (by decide) (by decide)]
   rfl
 
-/-- **Both digits zero** (`0x2abe`): `Z` exactly when `DA = DB = 0`. -/
+/-- **Both digits zero** (`dsm_test_digits`): `Z` exactly when `DA = DB = 0`. -/
 theorem or_z (t : State) :
     (execAll orG t).z = true ↔
       read32 t.mem (t.regs 13 + BitVec.ofNat 32 oDa) = 0#32 ∧ read32 t.mem (t.regs 13 + BitVec.ofNat 32 oDb) = 0#32 := by
@@ -294,7 +296,7 @@ theorem or_z (t : State) :
   show ((read32 _ _ ||| read32 _ _) == 0#32) = true ↔ _
   rw [beq_iff_eq, BitVec.or_eq_zero_iff]; rfl
 
-/-- **The digits** (`0x2a4e`): `DA` and `DB` are the digit bytes at index `r0` read as signed,
+/-- **The digits** (`dsm_load_digits`): `DA` and `DB` are the digit bytes at index `r0` read as signed,
 when `S`'s byte is not in `DA`'s word. -/
 theorem dig_run (t : State)
     (hs : ∀ k < 4, read32 t.mem (t.regs 13 + BitVec.ofNat 32 oSp) + t.regs 0 ≠
@@ -319,7 +321,7 @@ theorem dig_run (t : State)
     rw [read8, hw]
     exact sext_toInt _
 
-/-- **The index step** (`0x2cee`): `I` becomes `I − 1`; nothing else in memory changes. -/
+/-- **The index step** (`dsm_dec_index`): `I` becomes `I − 1`; nothing else in memory changes. -/
 theorem dec_run (t : State) :
     (execAll decG t).mem = M0Crypto.Armv6M.write32 t.mem (t.regs 13 + BitVec.ofNat 32 oI)
       (read32 t.mem (t.regs 13 + BitVec.ofNat 32 oI) - 1#32) := by

@@ -61,9 +61,32 @@ private theorem body_effect (s : State) (modular : Bool) (h : Layout (Pins.load 
   rw [e, execAll_append, traceAll_append, prologue_trace, ht, er]
   exact ⟨hm, hr, hs, rfl⟩
 
-theorem trace_body (s : State) (modular : Bool) (h : Layout (Pins.load s modular)) :
-    traceAll (body modular) s = predictedBody (Pins.load s modular) s.pc modular :=
-  (body_effect s modular h).2.2.2
+private theorem trace_columns (p : Pins) (s : State) (modular : Bool) (i n : Nat)
+    (h : p.held s modular) (hn : i+n ≤ 17) :
+    traceAll (((List.range' i n).flatMap (fun j => column j modular)) ++ finish) s =
+      predicted p s.pc modular (List.range' i n) := by
+  induction n generalizing s i with
+  | zero =>
+    simp only [List.range'_zero,List.flatMap_nil,List.nil_append]
+    exact finish_trace' s p modular h
+  | succ n ih =>
+    simp only [List.range'_succ,Nat.add_one,List.flatMap_cons,List.append_assoc,traceAll_append,predicted]
+    have he := ih (execAll (column i modular) s) (i+1) (column_held i h) (by omega)
+    rw [traceAll_append,execAll_pc _ _ (column_falls i modular)] at he
+    rw [column_trace s p i (by omega) modular h, he]
+    rfl
+
+/-- The trace depends only on the input and output pointers and PC. -/
+theorem trace_body (s : State) (modular : Bool) :
+    traceAll (body modular) s = predictedBody (Pins.load s modular) s.pc modular := by
+  have hp := (prologue_effect s modular).1
+  have hf : (prologue modular).all Instr.falls = true := by cases modular <;> decide
+  have hr : List.range' 0 17 = List.range 17 := by decide +kernel
+  have hB : body modular =
+      prologue modular ++ ((List.range' 0 17).flatMap (fun j => column j modular) ++ finish) := by
+    simp only [body, hr, List.append_assoc]
+  rw [hB,traceAll_append,prologue_trace,trace_columns _ _ _ 0 17 hp (by decide),hr,execAll_pc _ _ hf]
+  rfl
 
 def Aligned (p : Pins) : Prop :=
   p.out.toNat % 4 = 0 ∧ p.x.toNat % 4 = 0 ∧ p.y.toNat % 4 = 0

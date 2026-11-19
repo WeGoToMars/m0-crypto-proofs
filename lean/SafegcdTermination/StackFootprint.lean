@@ -1,5 +1,6 @@
 import SafegcdTermination.LinkedInversion
 import SafegcdTermination.LoopStackEffect
+import SafegcdTermination.TraceStable
 
 namespace SafegcdTermination.LinkedInversion
 
@@ -24,15 +25,12 @@ def Layout.required (l : Layout) (base src : Word) (y : Word) : Prop :=
 def Layout.footprint (l : Layout) (base sp dst src : Word) (y : Word) : Prop :=
   Region sp frameBytes y ∨ Region dst 32 y ∨ l.required base src y
 
-/-- Every internal stack byte read was written since the inversion call began.
-    The source and correction literal may have been initialized by the caller. -/
-theorem stack_effect {l : Layout} {code : List (BitVec 8)} {base : Word} {s : State}
-    (link : Checked l code) (h : Pre s base code l) :
-    EffT 0 (l.footprint base s.sp (s.regs 0) (s.regs 1)) (l.required base (s.regs 1))
-      (Region (s.regs 0) 32) s.sp (l.trace base s.sp (s.regs 0) (s.regs 1)) := by
-  let sp := s.sp
-  let dst := s.regs 0
-  let src := s.regs 1
+/-- The effect is independent of the entry memory and holds for any public
+    pointers and any word-aligned code base. -/
+theorem stack_effect_aligned {l : Layout} {code : List (BitVec 8)} {base : Word}
+    (link : Checked l code) (hBase : base.toNat % 4 = 0) (sp dst src : Word) :
+    EffT 0 (l.footprint base sp dst src) (l.required base src)
+      (Region dst 32) sp (l.trace base sp dst src) := by
   let win := base + BitVec.ofNat 32 l.first
   let trI := RunInit.initTrace win sp src l.start l.canon
   let trL := Run43.loopTrace l.targets win sp l.loop l.final
@@ -41,24 +39,13 @@ theorem stack_effect {l : Layout} {code : List (BitVec 8)} {base : Word} {s : St
   let R := l.required base src
   let F := l.footprint base sp dst src
   let D := Region dst 32
-  have hFits := h.codeFrame.1
-  have hStart := link.bounds
-  have hFirst := link.nonempty
-  have hNum : win.toNat = base.toNat+l.first :=
-    Frame.toNat_add_ofNat base l.first (by omega)
   have hEven : win.toNat % 4 = 0 := by
-    rw [hNum, Nat.add_mod, h.baseAligned, link.start]
-  have hSize : (l.window code).length ≤ l.length := by
-    simp only [Layout.window, List.length_take]
-    exact Nat.min_le_left _ _
-  have hLiteral := link.place.literal.1
-  have hBound : win.toNat + l.targets.literal + 4 ≤ 2^32 := by
-    rw [hNum]
+    have hf := link.start
+    simp only [win,BitVec.toNat_add,BitVec.toNat_ofNat]
     omega
   have hTrace : l.trace base sp dst src = (trI ++ trL) ++ trF := by
     simp only [Layout.trace, Invert.inversionTrace, trI, trL, trF, win, List.append_assoc]
-  have hStack := (trace_io link h).2.2
-  rw [hTrace] at hStack ⊢
+  rw [hTrace]
   intro sp0 n e he _ _ hU hFoot hR
   have hs : e.sp = sp := he
   rw [hs] at hU hFoot ⊢
@@ -68,13 +55,13 @@ theorem stack_effect {l : Layout} {code : List (BitVec 8)} {base : Word} {s : St
       (fun y hy => hAbove y (hy.elim .inl (fun h => .inr (.inr (.inl h)))))).mono
       (fun _ h => .inl h) (fun _ h => h)
   have hl : Seg sp0 n sp (fun y => Initialized sp y ∨ L y) trL (Region sp batchBytes) :=
-    LoopStackEffect.loop (sp0 := sp0) (n := n) (sp := sp) link.place.literal hEven hBound h.frame
-      (fun f hf => hStack f (List.mem_append_left _ (List.mem_append_right _ hf)))
+    LoopStackEffect.loop (sp0 := sp0) (n := n) (sp := sp) link.place.literal hEven
+      (TraceStable.loop l.targets win sp l.loop l.final)
       (fun y hy => hAbove y (hy.elim .inl (fun h => .inr (.inr (.inr h)))))
   have hf : Seg sp0 n sp (fun y => Region sp batchBytes y ∨ Region (addr sp returnAt) 4 y) trF D :=
     (LoopStackEffect.closed (sp0 := sp0) (n := n) (sp := sp) (TraceReads.final l.targets win sp dst l.final l.sub l.select)
       (EndFootprint.final_writes l.targets win sp dst l.final l.sub l.select)
-      (fun f hf => hStack f (List.mem_append_right _ hf))
+      (TraceStable.final l.targets win sp dst l.final l.sub l.select)
       (fun y hy => hAbove y (hy.elim
         (fun h => .inl (h.elim (fun h => Nat.lt_of_lt_of_le h (by decide : batchBytes ≤ frameBytes))
           (subregion (by decide : returnAt+4 ≤ frameBytes))))
@@ -90,5 +77,13 @@ theorem stack_effect {l : Layout} {code : List (BitVec 8)} {base : Word} {s : St
   have hall : Seg sp0 n sp R ((trI ++ trL) ++ trF) D :=
     (hIL.append hf').mono (fun _ h => h) (fun _ h => .inr h)
   exact hall e hs hU hR
+
+/-- The checked linked call reads an internal stack byte only after writing it,
+    except when it is supplied as input. -/
+theorem stack_effect {l : Layout} {code : List (BitVec 8)} {base : Word} {s : State}
+    (link : Checked l code) (h : Pre s base code l) :
+    EffT 0 (l.footprint base s.sp (s.regs 0) (s.regs 1)) (l.required base (s.regs 1))
+      (Region (s.regs 0) 32) s.sp (l.trace base s.sp (s.regs 0) (s.regs 1)) :=
+  stack_effect_aligned link h.baseAligned s.sp (s.regs 0) (s.regs 1)
 
 end SafegcdTermination.LinkedInversion

@@ -38,6 +38,8 @@ open M0Crypto.Release.Ed25519FeEq (eqS)
 open M0Crypto.Release.X25519Bytes (loadLe32)
 open M0Crypto.Release.Ed25519 (Build)
 open M0Crypto.Artifacts.Ed25519Compact (ed25519_verify ge_decompress sc_wnaf ge_dsm ed_l9)
+open M0Crypto.Artifacts.Ed25519Compact (vf_a_status vf_body vf_decode_r vf_hash vf_r_status vf_scalar vf_scalar_branch vf_x_status
+  vf_y_scale vf_y_status)
 
 /-! ## Callees -/
 
@@ -178,15 +180,15 @@ end
 
 /-- The lines at their code offsets. -/
 def segs : List (Nat × Prog VA VB) :=
-  [(0x2f90, seg0), (0x2fa6, seg1), (0x2fb4, seg2), (0x30b4, seg3), (0x3122, seg4)]
+  [(vf_body, seg0), (vf_decode_r, seg1), (vf_scalar, seg2), (vf_hash, seg3), (vf_y_scale, seg4)]
 
 /-- Where each line ends: a status test, or the `blo` after `lt`. -/
-def segEnds : List Nat := [0x2fa0, 0x2fae, 0x30b0, 0x311c, 0x3136]
+def segEnds : List Nat := [vf_a_status, vf_r_status, vf_scalar_branch, vf_x_status, vf_y_status]
 
 /-! ## The decided checks, both builds -/
 
 /-- The body's start: after `abi_enter` of the frame. -/
-theorem body_at : ed25519_verify + seqSize (Ed25519CallProg.abiEnter verifyGeo.top) = 0x2f90 := by decide +kernel
+theorem body_at : ed25519_verify + seqSize (Ed25519CallProg.abiEnter verifyGeo.top) = vf_body := by decide +kernel
 
 theorem enter_at (b : Build) : seqAt b.bytes ed25519_verify (Ed25519CallProg.abiEnter verifyGeo.top) = true := by
   cases b <;> (rw [seqAt_eq_scan]; decide +kernel)

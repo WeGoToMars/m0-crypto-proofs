@@ -31,6 +31,7 @@ open M0Crypto.Release.Ed25519CallProg
 open M0Crypto.Release.Ed25519FragC
 open M0Crypto.Release.Ed25519DecompressProg
 open M0Crypto.Release.Ed25519 (Build)
+open M0Crypto.Artifacts.Ed25519Compact (dc_body dc_load dc_first_candidate dc_first_eq dc_second_candidate dc_second_eq dc_sqrt_fix dc_canon_x dc_zero_test dc_sign_test dc_parity dc_negate_x dc_output dc_success dc_fail dc_done)
 
 /-! ## The load block with the `y ≥ p` test -/
 
@@ -49,7 +50,7 @@ open Op Ld
 
 def p0 : Prog DA DB := Prog.ofList [spill 0 OUT]
 def bL : Op DA DX := blk .loadT []
-def q1 : Prog DA DB := fragC .f F1 (.op (call .pow [(0, S T), (1, S T), (2, K 1)]) (fragC .f F2 .nil))
+def q1 : Prog DA DB := fragC .f F1 (.op (call .pow [(0, S T), (1, S T)]) (fragC .f F2 .nil))
 def e1 : Op DA DB := eqP U
 def q2 : Prog DA DB := fragC .f F3 .nil
 def e2 : Op DA DB := eqP X2
@@ -60,22 +61,22 @@ def sG : List Instr := [.cmpImm 2 0]
 
 /-! ## The layout -/
 
-def oP0 : Nat := 0x2040
-def oL : Nat := 0x2042
-def oQ1 : Nat := 0x212a
-def oE1 : Nat := 0x21b4
-def oQ2 : Nat := 0x21c4
-def oE2 : Nat := 0x21d0
-def oS3 : Nat := 0x21e0
-def oOk1 : Nat := 0x21ec
-def oZ : Nat := 0x21f2
-def oSg : Nat := 0x220e
-def oOkz : Nat := 0x2214
-def oS5 : Nat := 0x2220
-def oSame : Nat := 0x2232
-def oOk : Nat := 0x2262
-def oFail : Nat := 0x2266
-def oDone : Nat := 0x2268
+def oP0 : Nat := dc_body
+def oL : Nat := dc_load
+def oQ1 : Nat := dc_first_candidate
+def oE1 : Nat := dc_first_eq
+def oQ2 : Nat := dc_second_candidate
+def oE2 : Nat := dc_second_eq
+def oS3 : Nat := dc_sqrt_fix
+def oOk1 : Nat := dc_canon_x
+def oZ : Nat := dc_zero_test
+def oSg : Nat := dc_sign_test
+def oOkz : Nat := dc_parity
+def oS5 : Nat := dc_negate_x
+def oSame : Nat := dc_output
+def oOk : Nat := dc_success
+def oFail : Nat := dc_fail
+def oDone : Nat := dc_done
 
 /-- **The sites follow each other.** -/
 theorem sites_at :

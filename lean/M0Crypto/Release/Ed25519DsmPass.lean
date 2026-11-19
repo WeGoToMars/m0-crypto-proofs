@@ -3,7 +3,7 @@ import M0Crypto.Release.Ed25519DsmRun
 /-!
 # One pass of `m0c_ge_dsm`'s loop
 
-The loop at `0x2a46` over the index `I` (a word at `sp + 4`): its test, the digit loads into
+The loop at `dsm_loop` over the index `I` (a word at `sp + 4`): its test, the digit loads into
 `DA` and `DB`, the doubling, the conversions and the signed additions chosen by the digits'
 tests, and the index step. The loop's words `I`, `DA`, `DB` are `.cw` views (`ext`); the pointer
 words of `signed_add` are `.pw` views. The glue sets views only at the words `N`, which no
@@ -27,6 +27,10 @@ open M0Crypto.Release.Ed25519DsmRun
 open M0Crypto.Sym (SExpr)
 open M0Crypto.Release.BlockEffect (Eff effOk eff_run)
 open M0Crypto.Release.Ed25519DsmVal (sgn sgn_lt)
+open M0Crypto.Artifacts.Ed25519Compact (dsm_a_add dsm_a_branch dsm_a_done dsm_a_index dsm_a_jump_join dsm_a_next_branch dsm_a_p2
+  dsm_a_test_next dsm_b_add dsm_b_branch dsm_b_entry dsm_b_index dsm_b_table dsm_dbl_jump
+  dsm_dbl_p2 dsm_dbl_p3 dsm_dec_index dsm_digits_branch dsm_double dsm_jump_loop dsm_load_digits
+  dsm_loop dsm_loop_branch dsm_output dsm_test_a dsm_test_digits)
 
 /-! ## The loop's code -/
 
@@ -41,26 +45,26 @@ def tailB : List Instr := .addReg 0 0 1 :: tailG 3
 
 /-- The loop's glue at its offsets, decided per build. -/
 structure CodeL (B : List (BitVec 8)) (BS : Nat) [CodeBytes B BS] : Prop where
-  loop : piecesAt B 0x2a46 (.seq loopG :: (xitBr 11#4 false 0x2a4a 0x2cf6 ++ [])) = true
-  brL : brOk (B := B) dsGeo false 0x2a4a 0x2cf6 = true
-  dig : piecesAt B 0x2a4e [.seq digG] = true
-  or : piecesAt B 0x2abe (.seq orG :: (xitBr 0#4 false 0x2ac4 0x2af2 ++ [])) = true
-  brO : brOk (B := B) dsGeo false 0x2ac4 0x2af2 = true
-  j1 : piecesAt B 0x2af0 [.b 0x2b10] = true
-  bj1 : bOk (B := B) dsGeo.cs 0x2af0 0x2b10 = true
-  ta : piecesAt B 0x2b10 (.seq (tstG 2) :: (xitBr 0#4 false 0x2b14 0x2c2c ++ [])) = true
-  brA : brOk (B := B) dsGeo false 0x2b14 0x2c2c = true
-  ha : piecesAt B 0x2b18 [.seq (headA ++ tailG 2)] = true
-  tb1 : piecesAt B 0x2bdc (.seq (tstG 3) :: (xitBr 0#4 false 0x2be0 0x2c0e ++ [])) = true
-  brB1 : brOk (B := B) dsGeo false 0x2be0 0x2c0e = true
-  j2 : piecesAt B 0x2c0c [.b 0x2c2c] = true
-  bj2 : bOk (B := B) dsGeo.cs 0x2c0c 0x2c2c = true
-  tb2 : piecesAt B 0x2c2c (.seq (tstG 3) :: (xitBr 0#4 false 0x2c30 0x2cee ++ [])) = true
-  brB2 : brOk (B := B) dsGeo false 0x2c30 0x2cee = true
-  hb : piecesAt B 0x2c34 (.seq headB1 :: (ldB.pieces dsS dbS ++ [.seq tailB])) = true
-  lb : ldB.bok (B := B) dsS dbS dsGeo 0x2c44 = true
-  dec : piecesAt B 0x2cee [.seq decG, .b 0x2a46] = true
-  bj3 : bOk (B := B) dsGeo.cs 0x2cf4 0x2a46 = true
+  loop : piecesAt B dsm_loop (.seq loopG :: (xitBr 11#4 false dsm_loop_branch dsm_output ++ [])) = true
+  brL : brOk (B := B) dsGeo false dsm_loop_branch dsm_output = true
+  dig : piecesAt B dsm_load_digits [.seq digG] = true
+  or : piecesAt B dsm_test_digits (.seq orG :: (xitBr 0#4 false dsm_digits_branch dsm_dbl_p2 ++ [])) = true
+  brO : brOk (B := B) dsGeo false dsm_digits_branch dsm_dbl_p2 = true
+  j1 : piecesAt B dsm_dbl_jump [.b dsm_test_a] = true
+  bj1 : bOk (B := B) dsGeo.cs dsm_dbl_jump dsm_test_a = true
+  ta : piecesAt B dsm_test_a (.seq (tstG 2) :: (xitBr 0#4 false dsm_a_branch dsm_a_done ++ [])) = true
+  brA : brOk (B := B) dsGeo false dsm_a_branch dsm_a_done = true
+  ha : piecesAt B dsm_a_index [.seq (headA ++ tailG 2)] = true
+  tb1 : piecesAt B dsm_a_test_next (.seq (tstG 3) :: (xitBr 0#4 false dsm_a_next_branch dsm_a_p2 ++ [])) = true
+  brB1 : brOk (B := B) dsGeo false dsm_a_next_branch dsm_a_p2 = true
+  j2 : piecesAt B dsm_a_jump_join [.b dsm_a_done] = true
+  bj2 : bOk (B := B) dsGeo.cs dsm_a_jump_join dsm_a_done = true
+  tb2 : piecesAt B dsm_a_done (.seq (tstG 3) :: (xitBr 0#4 false dsm_b_branch dsm_dec_index ++ [])) = true
+  brB2 : brOk (B := B) dsGeo false dsm_b_branch dsm_dec_index = true
+  hb : piecesAt B dsm_b_index (.seq headB1 :: (ldB.pieces dsS dbS ++ [.seq tailB])) = true
+  lb : ldB.bok (B := B) dsS dbS dsGeo dsm_b_table = true
+  dec : piecesAt B dsm_dec_index [.seq decG, .b dsm_loop] = true
+  bj3 : bOk (B := B) dsGeo.cs dsm_jump_loop dsm_loop = true
 
 open M0Crypto.Release.Ed25519 (Build) in
 theorem codeL_c : @CodeL _ _ Build.compact.codeBytes := by
@@ -80,7 +84,7 @@ theorem codeL_b : ∀ b : Build, @CodeL _ _ b.codeBytes
 /-- `r0` after a word load and a compare. -/
 def eLd (o : Nat) : Eff := { regs := [(0, dW o)] }
 
-theorem glue_ok : sglueOk dsGeo.cs loopG 0x2a46 dsGeo.top dsGeo.N [(.reg0 13, 4)] [] [(spW oI, 4)] = true ∧
+theorem glue_ok : sglueOk dsGeo.cs loopG dsm_loop dsGeo.top dsGeo.N [(.reg0 13, 4)] [] [(spW oI, 4)] = true ∧
     traceOkE loopG [.reg0 13] = true ∧ effOk loopG (eLd oI) = true ∧
     effOk [.ldrSp 0 2] (eLd oDa) = true ∧ effOk [.ldrSp 0 3] (eLd oDb) = true := by
   decide +kernel
@@ -108,17 +112,17 @@ def Wd : List (Loc × Kd) := [(.fr oDa, .cw), (.fr oDb, .cw)]
 def wsD : List SR := [⟨.fr oDa, .k 4⟩, ⟨.fr oDb, .k 4⟩]
 def digWg : List (SExpr × Nat) := [(spW oDa, 4), (spW oDb, 4)]
 
-theorem dig_ok : sglueOk dsGeo.cs digG 0x2a4e dsGeo.top dsGeo.N scanAl digWg scanRg = true ∧
+theorem dig_ok : sglueOk dsGeo.cs digG dsm_load_digits dsGeo.top dsGeo.N scanAl digWg scanRg = true ∧
     traceOkE digG scanAs = true ∧ (∀ w ∈ wsD, w.ok dsGeo = true ∧ w.acc dsGeo true = true) ∧
     (∀ p ∈ Wd, (Kd.sr p.1 p.2).ok dsGeo = true) ∧ (Wd.map (·.1)).Nodup ∧ wkB (glueSt LH wsD Wd σsp) E1 = true := by
   decide +kernel
 
 /-- The tests' glue at their offsets. -/
-theorem tst_ok : sglueOk dsGeo.cs orG 0x2abe dsGeo.top dsGeo.N [(.reg0 13, 4)] [] [(spW oDa, 8)] = true ∧
+theorem tst_ok : sglueOk dsGeo.cs orG dsm_test_digits dsGeo.top dsGeo.N [(.reg0 13, 4)] [] [(spW oDa, 8)] = true ∧
     traceOkE orG [.reg0 13] = true ∧
-    sglueOk dsGeo.cs (tstG 2) 0x2b10 dsGeo.top dsGeo.N [(.reg0 13, 4)] [] [(spW oDa, 4)] = true ∧
-    sglueOk dsGeo.cs (tstG 3) 0x2bdc dsGeo.top dsGeo.N [(.reg0 13, 4)] [] [(spW oDb, 4)] = true ∧
-    sglueOk dsGeo.cs (tstG 3) 0x2c2c dsGeo.top dsGeo.N [(.reg0 13, 4)] [] [(spW oDb, 4)] = true ∧
+    sglueOk dsGeo.cs (tstG 2) dsm_test_a dsGeo.top dsGeo.N [(.reg0 13, 4)] [] [(spW oDa, 4)] = true ∧
+    sglueOk dsGeo.cs (tstG 3) dsm_a_test_next dsGeo.top dsGeo.N [(.reg0 13, 4)] [] [(spW oDb, 4)] = true ∧
+    sglueOk dsGeo.cs (tstG 3) dsm_a_done dsGeo.top dsGeo.N [(.reg0 13, 4)] [] [(spW oDb, 4)] = true ∧
     traceOkE (tstG 2) [.reg0 13] = true ∧ traceOkE (tstG 3) [.reg0 13] = true := by
   decide +kernel
 
@@ -137,7 +141,7 @@ def wsT : List SR := [⟨.fr oEp, .k 4⟩, ⟨.fr oEa, .k 4⟩, ⟨.fr oEb, .k 4
 def ptrWg : List (SExpr × Nat) := [(spW oEp, 4), (spW oEa, 4), (spW oEb, 4), (spW oTz, 4), (spW oTt, 4)]
 def nones : List V := [.none, .none, .none, .none, .none]
 
-theorem ptrA_ok : sglueOk dsGeo.cs (headA ++ tailG 2) 0x2b18 dsGeo.top dsGeo.N [(.reg0 13, 4)] ptrWg
+theorem ptrA_ok : sglueOk dsGeo.cs (headA ++ tailG 2) dsm_a_index dsGeo.top dsGeo.N [(.reg0 13, 4)] ptrWg
       [(spW oDa, 4), (spW oEp, 4)] = true ∧ traceOkE (headA ++ tailG 2) [.reg0 13] = true ∧
     (∀ w ∈ wsT, w.ok dsGeo = true ∧ w.acc dsGeo true = true) ∧
     (∀ k < 2, ∀ s < 2, (∀ p ∈ ptrΓ (aiP k) s, (Kd.sr p.1 p.2).ok dsGeo = true) ∧
@@ -150,15 +154,15 @@ def B2 (k : Nat) : St := { B1 k with σ := (1, .ext 5 0) :: (B1 k).σ.filter (·
 
 def eAdd : Eff := { regs := [(0, .add (.reg0 0) (.reg0 1))] }
 
-theorem ptrB_ok : sglueOk dsGeo.cs headB1 0x2c34 dsGeo.top dsGeo.N [(.reg0 13, 4)] [] [(spW oDb, 4)] = true ∧
+theorem ptrB_ok : sglueOk dsGeo.cs headB1 dsm_b_index dsGeo.top dsGeo.N [(.reg0 13, 4)] [] [(spW oDb, 4)] = true ∧
     traceOkE headB1 [.reg0 13] = true ∧
-    sglueOk dsGeo.cs tailB 0x2c48 dsGeo.top dsGeo.N [(.reg0 13, 4)] ptrWg [(spW oDb, 4), (spW oEp, 4)] = true ∧
+    sglueOk dsGeo.cs tailB dsm_b_entry dsGeo.top dsGeo.N [(.reg0 13, 4)] ptrWg [(spW oDb, 4), (spW oEp, 4)] = true ∧
     traceOkE tailB [.reg0 13] = true ∧ effOk [.addReg 0 0 1] eAdd = true ∧ ldB.size dsS dbS = 4 ∧
     (∀ k < 8, ∀ s < 2, (∀ p ∈ ptrΓ (obP k) s, (Kd.sr p.1 p.2).ok dsGeo = true) ∧
       ((ptrΓ (obP k) s).map (·.1)).Nodup ∧ wkB (glueSt (B2 k) wsT (ptrΓ (obP k) s) σsp) (ext (sbSt k s)) = true) := by
   decide +kernel
 
-theorem dec_ok : sglueOk dsGeo.cs decG 0x2cee dsGeo.top dsGeo.N [(.reg0 13, 4)] [(spW oI, 4)] [(spW oI, 4)] = true ∧
+theorem dec_ok : sglueOk dsGeo.cs decG dsm_dec_index dsGeo.top dsGeo.N [(.reg0 13, 4)] [(spW oI, 4)] [(spW oI, 4)] = true ∧
     traceOkE decG [.reg0 13] = true ∧ (⟨.fr oI, .k 4⟩ : SR).ok dsGeo = true ∧ (⟨.fr oI, .k 4⟩ : SR).acc dsGeo true = true ∧
     (Kd.sr (.fr oI) .cw).ok dsGeo = true ∧
     wkB (glueSt E1 [⟨.fr oI, .k 4⟩] [(.fr oI, .cw)] σsp) LH = true := by
@@ -216,18 +220,18 @@ theorem at_g0 {o : Nat} {S S' : St} {σ : List (Reg × SV)} {E : Loc → V} {t :
 
 /-- The loop test's trace: on `d` on to the digits, else to `segEnd`. -/
 def loopTr (c : Ctx) (d : Bool) (Ψc Ψx : TrP) : TrP :=
-  Tr.cat (Tr.is (blockTrE loopG (c.base + BitVec.ofNat 32 0x2a46) [.reg0 13] [dsGeo.fsp c]))
-    (Tr.cat (Tr.is [bcEv c (11#4 ^^^ 1) 0x2a4a (0x2a4a + 4)])
-      (Tr.cond d Ψc (Tr.cat (Tr.is [bEv c (0x2a4a + 2) 0x2cf6]) Ψx)))
+  Tr.cat (Tr.is (blockTrE loopG (c.base + BitVec.ofNat 32 dsm_loop) [.reg0 13] [dsGeo.fsp c]))
+    (Tr.cat (Tr.is [bcEv c (11#4 ^^^ 1) dsm_loop_branch (dsm_loop_branch + 4)])
+      (Tr.cond d Ψc (Tr.cat (Tr.is [bEv c (dsm_loop_branch + 2) dsm_output]) Ψx)))
 
-/-- **The loop test** at `0x2a46` with `I = x`: for `0 ≤ x` to the digits with `r0 = x`, else to
+/-- **The loop test** at `dsm_loop` with `I = x`: for `0 ≤ x` to the digits with `r0 = x`, else to
 `segEnd`. -/
 theorem loop_tst (g : GeoOk c dsGeo Wc Rc) (F : Caller c.base c.sp0 dsGeo.N Wc) (cl : CodeL B BS)
     {E : Loc → V} {Q : State → Prop} {Ψc Ψx : TrP} {x : Word} {t : State}
-    (hat : At Rs B c dsGeo m0 0x2a46 LH E t) (hx : E (.fr oI) = .w x)
-    (kc : 0 ≤ x.toInt → ∀ u, At Rs B c dsGeo m0 0x2a4e (LHr x.toNat) E u →
+    (hat : At Rs B c dsGeo m0 dsm_loop LH E t) (hx : E (.fr oI) = .w x)
+    (kc : 0 ≤ x.toInt → ∀ u, At Rs B c dsGeo m0 dsm_load_digits (LHr x.toNat) E u →
       ReachFT c.base (PcIn c.base dsGeo.cs) (Has Rc) (Has Wc) (InStackWindow c.sp0 dsGeo.N) u Q Ψc)
-    (kx : x.toInt < 0 → ∀ u, At Rs B c dsGeo m0 0x2cf6 LH E u →
+    (kx : x.toInt < 0 → ∀ u, At Rs B c dsGeo m0 dsm_output LH E u →
       ReachFT c.base (PcIn c.base dsGeo.cs) (Has Rc) (Has Wc) (InStackWindow c.sp0 dsGeo.N) u Q Ψx) :
     ReachFT c.base (PcIn c.base dsGeo.cs) (Has Rc) (Has Wc) (InStackWindow c.sp0 dsGeo.N) t Q
       (loopTr c (decide (0 ≤ x.toInt)) Ψc Ψx) := by
@@ -256,7 +260,7 @@ theorem loop_tst (g : GeoOk c dsGeo Wc Rc) (F : Caller c.base c.sp0 dsGeo.N Wc) 
     rcases hp with rfl | rfl
     · exact ⟨show (0 : Nat) < 14 by decide, by rw [h0]; simp [SV.val]⟩
     · exact ⟨by decide, by simpa [SV.val] using h13'⟩
-  · have e : 0x2a46 + seqSize loopG = 0x2a4a := by decide
+  · have e : dsm_loop + seqSize loopG = dsm_loop_branch := by decide
     rw [e] at hu hp2
     refine br_run Rs m0 g F (d := decide (0 ≤ x.toInt)) (by decide) cl.brL hp2 hu ?_
       (fun hd hS _ => kc (by simpa using hd) _ (at_g0 Rs m0 hS (fun _ h => h) (fun _ h => h) (fun _ h => h)
@@ -275,15 +279,15 @@ theorem loop_tst (g : GeoOk c dsGeo Wc Rc) (F : Caller c.base c.sp0 dsGeo.N Wc) 
 
 /-- The digit loads' trace at index `i`. -/
 def digTr (c : Ctx) (i : Nat) (Ψ : TrP) : TrP :=
-  Tr.cat (Tr.is (blockTrE digG (c.base + BitVec.ofNat 32 0x2a4e) scanAs
+  Tr.cat (Tr.is (blockTrE digG (c.base + BitVec.ofNat 32 dsm_load_digits) scanAs
     [dsGeo.fsp c, c.ptr 2 + BitVec.ofNat 32 i, c.ptr 1 + BitVec.ofNat 32 i])) Ψ
 
-/-- **The digits** at `0x2a4e` with `r0 = i`: `DA` and `DB` become the digits of `h` and `s` at
+/-- **The digits** at `dsm_load_digits` with `r0 = i`: `DA` and `DB` become the digits of `h` and `s` at
 `i`, as words. -/
 theorem dig_go (g : GeoOk c dsGeo Wc Rc) (F : Caller c.base c.sp0 dsGeo.N Wc) (cl : CodeL B BS)
     {E : Loc → V} {Q : State → Prop} {Ψ : TrP} {i : Nat} (hi : i < 256) {t : State}
-    (hat : At Rs B c dsGeo m0 0x2a4e (LHr i) E t)
-    (k : ∀ u, At Rs B c dsGeo m0 0x2a62 E1 (updOuts E Wd [.w (dv m0 c 2 i), .w (dv m0 c 1 i)]) u →
+    (hat : At Rs B c dsGeo m0 dsm_load_digits (LHr i) E t)
+    (k : ∀ u, At Rs B c dsGeo m0 dsm_double E1 (updOuts E Wd [.w (dv m0 c 2 i), .w (dv m0 c 1 i)]) u →
       ReachFT c.base (PcIn c.base dsGeo.cs) (Has Rc) (Has Wc) (InStackWindow c.sp0 dsGeo.N) u Q Ψ) :
     ReachFT c.base (PcIn c.base dsGeo.cs) (Has Rc) (Has Wc) (InStackWindow c.sp0 dsGeo.N) t Q (digTr c i Ψ) := by
   have h13 := hat.2.1
@@ -411,18 +415,18 @@ theorem tst_go (g : GeoOk c dsGeo Wc Rc) (F : Caller c.base c.sp0 dsGeo.N Wc) {o
 
 /-- The test of both digits' trace: on `d` to the conversion with `T`, else to the one without. -/
 def orTr (c : Ctx) (d : Bool) (Ψc Ψx : TrP) : TrP :=
-  Tr.cat (Tr.is (blockTrE orG (c.base + BitVec.ofNat 32 0x2abe) [.reg0 13] [dsGeo.fsp c]))
-    (Tr.cat (Tr.is [bcEv c (0#4 ^^^ 1) 0x2ac4 (0x2ac4 + 4)])
-      (Tr.cond d Ψc (Tr.cat (Tr.is [bEv c (0x2ac4 + 2) 0x2af2]) Ψx)))
+  Tr.cat (Tr.is (blockTrE orG (c.base + BitVec.ofNat 32 dsm_test_digits) [.reg0 13] [dsGeo.fsp c]))
+    (Tr.cat (Tr.is [bcEv c (0#4 ^^^ 1) dsm_digits_branch (dsm_digits_branch + 4)])
+      (Tr.cond d Ψc (Tr.cat (Tr.is [bEv c (dsm_digits_branch + 2) dsm_dbl_p2]) Ψx)))
 
-/-- **The test of both digits** at `0x2abe`, after the doubling: unless both are `0` to the
-conversion with `T` at `0x2ac8`, else to the one without at `0x2af2`. -/
+/-- **The test of both digits** at `dsm_test_digits`, after the doubling: unless both are `0` to the
+conversion with `T` at `dsm_dbl_p3`, else to the one without at `dsm_dbl_p2`. -/
 theorem or_go (g : GeoOk c dsGeo Wc Rc) (F : Caller c.base c.sp0 dsGeo.N Wc) (cl : CodeL B BS)
     {E : Loc → V} {Q : State → Prop} {Ψc Ψx : TrP} {wa wb : Word} {t : State}
-    (ha : E (.fr oDa) = .w wa) (hb : E (.fr oDb) = .w wb) (hat : At Rs B c dsGeo m0 0x2abe E2 E t)
-    (kc : (wa.toInt != 0 || wb.toInt != 0) = true → ∀ u, At Rs B c dsGeo m0 0x2ac8 E2 E u →
+    (ha : E (.fr oDa) = .w wa) (hb : E (.fr oDb) = .w wb) (hat : At Rs B c dsGeo m0 dsm_test_digits E2 E t)
+    (kc : (wa.toInt != 0 || wb.toInt != 0) = true → ∀ u, At Rs B c dsGeo m0 dsm_dbl_p3 E2 E u →
       ReachFT c.base (PcIn c.base dsGeo.cs) (Has Rc) (Has Wc) (InStackWindow c.sp0 dsGeo.N) u Q Ψc)
-    (kx : wa.toInt = 0 ∧ wb.toInt = 0 → ∀ u, At Rs B c dsGeo m0 0x2af2 E2 E u →
+    (kx : wa.toInt = 0 ∧ wb.toInt = 0 → ∀ u, At Rs B c dsGeo m0 dsm_dbl_p2 E2 E u →
       ReachFT c.base (PcIn c.base dsGeo.cs) (Has Rc) (Has Wc) (InStackWindow c.sp0 dsGeo.N) u Q Ψx) :
     ReachFT c.base (PcIn c.base dsGeo.cs) (Has Rc) (Has Wc) (InStackWindow c.sp0 dsGeo.N) t Q
       (orTr c (wa.toInt != 0 || wb.toInt != 0) Ψc Ψx) := by
@@ -448,7 +452,7 @@ theorem or_go (g : GeoOk c dsGeo Wc Rc) (F : Caller c.base c.sp0 dsGeo.N Wc) (cl
   · intro h13' p hp
     simp only [σsp, List.mem_singleton] at hp; subst hp
     exact ⟨by decide, by simpa [SV.val] using h13'⟩
-  · have e : 0x2abe + seqSize orG = 0x2ac4 := by decide
+  · have e : dsm_test_digits + seqSize orG = dsm_digits_branch := by decide
     rw [e] at hu hp2
     have hσ : ∀ p ∈ E2.σ, p ∈ σsp := fun p hp => by rw [hf.1] at hp; exact hp
     refine br_run Rs m0 g F (d := wa.toInt != 0 || wb.toInt != 0) (by decide) cl.brO hp2 hu ?_
@@ -486,16 +490,16 @@ theorem ptr_all {u : State} {ds : Nat} (hds : ds = 2 ∨ ds = 3) {ep : Nat → S
     congr 2; omega
   · rw [r4, sub2 _ _ _ (by simp only [oT]; omega) (by simp only [oT]; omega)]; rfl
 
-/-- **`DA`'s pointers** at `0x2b18` from the digit word `wa`: the views of `signed_add` over
+/-- **`DA`'s pointers** at `dsm_a_index` from the digit word `wa`: the views of `signed_add` over
 `AI[|δ| / 2]` with `δ`'s sign. -/
 theorem ptrA_go (g : GeoOk c dsGeo Wc Rc) (F : Caller c.base c.sp0 dsGeo.N Wc) (cl : CodeL B BS)
     {E : Loc → V} {Q : State → Prop} {Ψ : TrP} {wa : Word} {t : State} (hk : wa.toInt.natAbs / 2 < 2)
-    (ha : E (.fr oDa) = .w wa) (hat : At Rs B c dsGeo m0 0x2b18 E3 E t)
-    (k : ∀ u, At Rs B c dsGeo m0 0x2b4a (ext (saSt (wa.toInt.natAbs / 2) (sgn wa.toInt)))
+    (ha : E (.fr oDa) = .w wa) (hat : At Rs B c dsGeo m0 dsm_a_index E3 E t)
+    (k : ∀ u, At Rs B c dsGeo m0 dsm_a_add (ext (saSt (wa.toInt.natAbs / 2) (sgn wa.toInt)))
       (updOuts E (ptrΓ (aiP (wa.toInt.natAbs / 2)) (sgn wa.toInt)) nones) u →
       ReachFT c.base (PcIn c.base dsGeo.cs) (Has Rc) (Has Wc) (InStackWindow c.sp0 dsGeo.N) u Q Ψ) :
     ReachFT c.base (PcIn c.base dsGeo.cs) (Has Rc) (Has Wc) (InStackWindow c.sp0 dsGeo.N) t Q
-      (Tr.cat (Tr.is (blockTrE (headA ++ tailG 2) (c.base + BitVec.ofNat 32 0x2b18) [.reg0 13] [dsGeo.fsp c])) Ψ) := by
+      (Tr.cat (Tr.is (blockTrE (headA ++ tailG 2) (c.base + BitVec.ofNat 32 dsm_a_index) [.reg0 13] [dsGeo.fsp c])) Ψ) := by
   have h13 := hat.2.1
   have hf := ext_facts E3 (by simp)
   have hI : read32 t.mem (t.regs 13 + BitVec.ofNat 32 oDa) = wa := by
@@ -540,19 +544,19 @@ theorem ptrA_go (g : GeoOk c dsGeo Wc Rc) (F : Caller c.base c.sp0 dsGeo.N Wc) (
 
 /-- `DB`'s pointers' trace. -/
 def pbTr (c : Ctx) (Ψ : TrP) : TrP :=
-  Tr.cat (Tr.is (blockTrE headB1 (c.base + BitVec.ofNat 32 0x2c34) [.reg0 13] [dsGeo.fsp c]))
-    (Tr.cat (Tr.is [⟨c.base + BitVec.ofNat 32 0x2c44, .ldrLit 1 (BitVec.ofNat 8 48),
-        [⟨.read, c.base + BitVec.ofNat 32 (litOff 0x2c44 (BitVec.ofNat 8 48)), 4⟩]⟩])
-      (Tr.cat (Tr.is (blockTr [.addPc 1] (c.base + BitVec.ofNat 32 (0x2c44 + 2)) [13] [dsGeo.fsp c]))
-        (Tr.cat (Tr.is (blockTrE tailB (c.base + BitVec.ofNat 32 0x2c48) [.reg0 13] [dsGeo.fsp c])) Ψ)))
+  Tr.cat (Tr.is (blockTrE headB1 (c.base + BitVec.ofNat 32 dsm_b_index) [.reg0 13] [dsGeo.fsp c]))
+    (Tr.cat (Tr.is [⟨c.base + BitVec.ofNat 32 dsm_b_table, .ldrLit 1 (BitVec.ofNat 8 48),
+        [⟨.read, c.base + BitVec.ofNat 32 (litOff dsm_b_table (BitVec.ofNat 8 48)), 4⟩]⟩])
+      (Tr.cat (Tr.is (blockTr [.addPc 1] (c.base + BitVec.ofNat 32 (dsm_b_table + 2)) [13] [dsGeo.fsp c]))
+        (Tr.cat (Tr.is (blockTrE tailB (c.base + BitVec.ofNat 32 dsm_b_entry) [.reg0 13] [dsGeo.fsp c])) Ψ)))
 
-/-- **`DB`'s pointers** at `0x2c34` from the digit word `wb`: the views of `signed_add` over
+/-- **`DB`'s pointers** at `dsm_b_index` from the digit word `wb`: the views of `signed_add` over
 `odd_b[|δ| / 2]` with `δ`'s sign. -/
 theorem ptrB_go (ads : ∀ a, Ad Rs B BS (dsS a)) (g : GeoOk c dsGeo Wc Rc) (F : Caller c.base c.sp0 dsGeo.N Wc)
     (hcR : Sub [codeR c.base] Rc) (cl : CodeL B BS)
     {E : Loc → V} {Q : State → Prop} {Ψ : TrP} {wb : Word} {t : State} (hk : wb.toInt.natAbs / 2 < 8)
-    (hb : E (.fr oDb) = .w wb) (hat : At Rs B c dsGeo m0 0x2c34 E3 E t)
-    (k : ∀ u, At Rs B c dsGeo m0 0x2c6a (ext (sbSt (wb.toInt.natAbs / 2) (sgn wb.toInt)))
+    (hb : E (.fr oDb) = .w wb) (hat : At Rs B c dsGeo m0 dsm_b_index E3 E t)
+    (k : ∀ u, At Rs B c dsGeo m0 dsm_b_add (ext (sbSt (wb.toInt.natAbs / 2) (sgn wb.toInt)))
       (updOuts E (ptrΓ (obP (wb.toInt.natAbs / 2)) (sgn wb.toInt)) nones) u →
       ReachFT c.base (PcIn c.base dsGeo.cs) (Has Rc) (Has Wc) (InStackWindow c.sp0 dsGeo.N) u Q Ψ) :
     ReachFT c.base (PcIn c.base dsGeo.cs) (Has Rc) (Has Wc) (InStackWindow c.sp0 dsGeo.N) t Q (pbTr c Ψ) := by
@@ -588,11 +592,11 @@ theorem ptrB_go (ads : ∀ a, Ad Rs B BS (dsS a)) (g : GeoOk c dsGeo Wc Rc) (F :
     rcases hp with rfl | rfl
     · exact ⟨show (0 : Nat) < 14 by decide, by rw [hB0, hI]; rfl⟩
     · exact ⟨by decide, by simpa [SV.val] using h13'⟩
-  have e : 0x2c34 + seqSize headB1 = 0x2c44 := by decide
+  have e : dsm_b_index + seqSize headB1 = dsm_b_table := by decide
   rw [e] at hu hp2
   refine ld_run Rs ads m0 g F hcR (r := 1) (l := .C 5 0 48) (st := B1 (wb.toInt.natAbs / 2))
     (st' := B2 (wb.toInt.natAbs / 2)) rfl cl.lb hp2 hu (fun u hu' hp3 => ?_)
-  have e2 : 0x2c44 + (Op.ld 1 (.C 5 0 48) : Op DS DB).size dsS dbS = 0x2c48 := by decide
+  have e2 : dsm_b_table + (Op.ld 1 (.C 5 0 48) : Op DS DB).size dsS dbS = dsm_b_entry := by decide
   rw [e2] at hu' hp3
   have hu13 := hu'.2.1
   have hσ := hu'.2.2.2.1
@@ -635,14 +639,14 @@ theorem ptrB_go (ads : ∀ a, Ad Rs B BS (dsS a)) (g : GeoOk c dsGeo Wc Rc) (F :
 
 /-- The index step's trace. -/
 def decTr (c : Ctx) (Ψ : TrP) : TrP :=
-  Tr.cat (Tr.is (blockTrE decG (c.base + BitVec.ofNat 32 0x2cee) [.reg0 13] [dsGeo.fsp c]))
-    (Tr.cat (Tr.is [bEv c 0x2cf4 0x2a46]) Ψ)
+  Tr.cat (Tr.is (blockTrE decG (c.base + BitVec.ofNat 32 dsm_dec_index) [.reg0 13] [dsGeo.fsp c]))
+    (Tr.cat (Tr.is [bEv c dsm_jump_loop dsm_loop]) Ψ)
 
-/-- **The index step** at `0x2cee` with `I = x`, and back to the loop's test with `I = x − 1`. -/
+/-- **The index step** at `dsm_dec_index` with `I = x`, and back to the loop's test with `I = x − 1`. -/
 theorem dec_go (g : GeoOk c dsGeo Wc Rc) (F : Caller c.base c.sp0 dsGeo.N Wc) (cl : CodeL B BS)
     {E : Loc → V} {Q : State → Prop} {Ψ : TrP} {x : Word} {t : State}
-    (hx : E (.fr oI) = .w x) (hat : At Rs B c dsGeo m0 0x2cee E1 E t)
-    (k : ∀ u, At Rs B c dsGeo m0 0x2a46 LH (updOuts E [(.fr oI, .cw)] [.w (x - 1#32)]) u →
+    (hx : E (.fr oI) = .w x) (hat : At Rs B c dsGeo m0 dsm_dec_index E1 E t)
+    (k : ∀ u, At Rs B c dsGeo m0 dsm_loop LH (updOuts E [(.fr oI, .cw)] [.w (x - 1#32)]) u →
       ReachFT c.base (PcIn c.base dsGeo.cs) (Has Rc) (Has Wc) (InStackWindow c.sp0 dsGeo.N) u Q Ψ) :
     ReachFT c.base (PcIn c.base dsGeo.cs) (Has Rc) (Has Wc) (InStackWindow c.sp0 dsGeo.N) t Q (decTr c Ψ) := by
   have h13 := hat.2.1
@@ -683,7 +687,7 @@ theorem dec_go (g : GeoOk c dsGeo Wc Rc) (F : Caller c.base c.sp0 dsGeo.N Wc) (c
   · intro h13' p hp
     simp only [σsp, List.mem_singleton] at hp; subst hp
     exact ⟨by decide, by simpa [SV.val] using h13'⟩
-  · have e : 0x2cee + seqSize decG = 0x2cf4 := by decide
+  · have e : dsm_dec_index + seqSize decG = dsm_jump_loop := by decide
     rw [e] at hu hp2
     exact jmp_run Rs m0 g F cl.bj3 hp2 hu fun hX => k _ (at_wk Rs m0 hX dec_ok.2.2.2.2.2)
 

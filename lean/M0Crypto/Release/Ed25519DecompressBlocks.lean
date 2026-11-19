@@ -7,11 +7,11 @@ import M0Crypto.Release.Ed25519DecompressProg
   and at `SIGN` its bit 255, when the input lies apart from `Y`. The group of word `i`
   (`grp_run`) stores the input's word `i`, read through `r2 = r1`; `loads_run` chains the
   eight; the mask (`mask_mem`) moves bit 255 to `SIGN`; `sign_word` reads it back as a word.
-* `yp_run`: the test at `0x2100`, the carry chain of `y + 19` over `Y`'s words, clears `Z`
+* `yp_run`: the test at `dc_y_test`, the carry chain of `y + 19` over `Y`'s words, clears `Z`
   exactly when `p ≤ y` (`decodeCode`'s rejection), for `y` below `2^255`.
-* `z_run`, `z_spec`: the test at `0x21f2` sets `Z` exactly when `x = 0`, and leaves the `SIGN`
+* `z_run`, `z_spec`: the test at `dc_zero_test` sets `Z` exactly when `x = 0`, and leaves the `SIGN`
   word in `r2`; `s_spec`: `cmp r2, #0` sets `Z` exactly when the sign is `0`.
-* `p_run`, `p_spec`: the test at `0x2214` sets `Z` exactly when `x mod 2` is the sign.
+* `p_run`, `p_spec`: the test at `dc_parity` sets `Z` exactly when `x mod 2` is the sign.
 * `st_spec`: `cmp r0, #0` after `fe_eq` sets `Z` exactly when the field values agree.
 
 `yp_at`, `z_at`, `p_at`, `s_at` and `st_at` decide each test's instructions at its offset in
@@ -31,6 +31,7 @@ open M0Crypto.Spec.Ed25519 (decodeInt)
 open M0Crypto.Release.X25519Bytes (loadLe32 loadLe32_exec loadLe32_noW loadLe32_regs_other)
 open M0Crypto.Release.Ed25519 (Build)
 open M0Crypto.Release.Ed25519PrimeCert (p)
+open M0Crypto.Artifacts.Ed25519Compact (dc_y_test dc_first_status dc_second_status dc_zero_test dc_sign_test dc_parity dc_success dc_fail)
 
 /-! ## Words -/
 
@@ -228,13 +229,13 @@ theorem sign_word {m : Mem} {a : Word} {l : List (BitVec 8)} (hl : l.length = 32
 /-- `ldr r1, [r0, #4k]; adcs r1, r3`. -/
 def pairG (k : Nat) : List Instr := [.memImm .ldr 1 0 (BitVec.ofNat 5 k), .dp .adcs 1 3]
 
-/-- The test at `0x2100`: the carry chain of `y + 19` over `Y`'s words, bit 255 of the sum in
+/-- The test at `dc_y_test`: the carry chain of `y + 19` over `Y`'s words, bit 255 of the sum in
 `r1`; `beq` continues on `Z`. -/
 def ypG : List Instr :=
   [.addRdSp 0 2, .memImm .ldr 1 0 0, .addImm8 1 19, .movImm 3 0] ++
     (List.range 7).flatMap (fun i => pairG (i + 1)) ++ [.lsrImm 1 1 31]
 
-theorem yp_at (b : Build) : seqAt b.bytes 0x2100 ypG = true := by cases b <;> decide +kernel
+theorem yp_at (b : Build) : seqAt b.bytes dc_y_test ypG = true := by cases b <;> decide +kernel
 
 /-- Word `j` from `a`, as a number. -/
 def wf (m : Mem) (a : Word) (j : Nat) : Nat := (read32 m (a + BitVec.ofNat 32 (4 * j))).toNat
@@ -397,13 +398,13 @@ def signW : SExpr := .ld32 .mem0 (.add (.reg0 13) (.const (BitVec.ofNat 32 SIGN)
 def zPre : List Instr :=
   [.addRdSp 0 42, .ldm 0 0x1e, .dp .orrs 1 2, .dp .orrs 1 3, .dp .orrs 1 4, .ldm 0 0x3c, .dp .orrs 1 2,
    .dp .orrs 1 3, .dp .orrs 1 4, .dp .orrs 1 5, .ldrSp 2 1]
-/-- The test at `0x21f2`: `Z` when `x = 0`. -/
+/-- The test at `dc_zero_test`: `Z` when `x = 0`. -/
 def zG : List Instr := zPre ++ [.cmpImm 1 0]
 
 def eZ : Eff := { regs := [(1, orX 7), (2, signW)], clob := [0, 3, 4, 5] }
 theorem eZ_ok : effOk zPre eZ = true := by decide +kernel
 
-theorem z_at (b : Build) : seqAt b.bytes 0x21f2 zG = true := by cases b <;> decide +kernel
+theorem z_at (b : Build) : seqAt b.bytes dc_zero_test zG = true := by cases b <;> decide +kernel
 
 theorem xW_den (t : State) (i : Nat) :
     (xW i).denote t = read32 t.mem (slot (t.regs 13 + BitVec.ofNat 32 X) i) := by
@@ -454,17 +455,17 @@ theorem z_spec (t : State) {x : Int}
 
 /-- `ldr r0, [sp, #X]; movs r1, #1; ands r0, r1; ldr r1, [sp, #SIGN]`. -/
 def pPre : List Instr := [.ldrSp 0 42, .movImm 1 1, .dp .ands 0 1, .ldrSp 1 1]
-/-- The test at `0x2214`: `Z` when the parity of `x` is the sign. -/
+/-- The test at `dc_parity`: `Z` when the parity of `x` is the sign. -/
 def pG : List Instr := pPre ++ [.dp .cmp 0 1]
 
 def eP : Eff := { regs := [(0, .and (xW 0) (.const 1#32)), (1, signW)] }
 theorem eP_ok : effOk pPre eP = true := by decide +kernel
 
-theorem p_at (b : Build) : seqAt b.bytes 0x2214 pG = true := by cases b <;> decide +kernel
-/-- The sign test at `0x220e`. -/
-theorem s_at (b : Build) : seqAt b.bytes 0x220e [.cmpImm 2 0] = true := by cases b <;> decide +kernel
-/-- `fe_eq`'s status tests at `0x21be` and `0x21da`. -/
-theorem st_at (b : Build) : seqAt b.bytes 0x21be [.cmpImm 0 0] = true ∧ seqAt b.bytes 0x21da [.cmpImm 0 0] = true := by
+theorem p_at (b : Build) : seqAt b.bytes dc_parity pG = true := by cases b <;> decide +kernel
+/-- The sign test at `dc_sign_test`. -/
+theorem s_at (b : Build) : seqAt b.bytes dc_sign_test [.cmpImm 2 0] = true := by cases b <;> decide +kernel
+/-- `fe_eq`'s status tests at `dc_first_status` and `dc_second_status`. -/
+theorem st_at (b : Build) : seqAt b.bytes dc_first_status [.cmpImm 0 0] = true ∧ seqAt b.bytes dc_second_status [.cmpImm 0 0] = true := by
   cases b <;> decide +kernel
 
 theorem and1 (w : Word) : (w &&& 1#32).toNat = w.toNat % 2 := by
@@ -606,8 +607,8 @@ theorem movImm_r0 (s : State) (k : BitVec 8) : ((Instr.movImm 0 k).next s).regs 
   have e0 : LowReg.toReg 0 = 0 := rfl
   simp [Instr.next, Instr.exec, State.setReg, State.setNZ, e0]
 
-/-- The status words at `0x2262` (success, then `b` to the epilogue) and `0x2266` (rejection). -/
-theorem stat_at (b : Build) : seqAt b.bytes 0x2262 [.movImm 0 0] = true ∧ seqAt b.bytes 0x2266 [.movImm 0 1] = true := by
+/-- The status words at `dc_success` (success, then `b` to the epilogue) and `dc_fail` (rejection). -/
+theorem stat_at (b : Build) : seqAt b.bytes dc_success [.movImm 0 0] = true ∧ seqAt b.bytes dc_fail [.movImm 0 1] = true := by
   cases b <;> exact ⟨by decide +kernel, by decide +kernel⟩
 
 /-- **The status of `m0c_ge_decompress`**: with `r0` set by the exit the tests choose, `r0 = 0`

@@ -40,6 +40,9 @@ open M0Crypto.Release.Ed25519 (Build)
 open M0Crypto.Artifacts.Ed25519Compact (ge_dsm ed_zero ed_odd_b copy zero)
 open M0Crypto.Release.Ed25519Group (EdPt)
 open Lean.Grind
+open M0Crypto.Artifacts.Ed25519Compact (dsm_a_add dsm_a_done dsm_a_jump_join dsm_a_p2 dsm_a_p3 dsm_a_test_next dsm_b_add dsm_b_p2
+  dsm_body dsm_dbl_jump dsm_dbl_p2 dsm_dbl_p3 dsm_dec_index dsm_double dsm_identity dsm_leave
+  dsm_loop dsm_output dsm_start_scan dsm_test_a dsm_test_digits)
 
 /-! ## The frame -/
 
@@ -182,11 +185,11 @@ end
 
 /-- The lines at their code offsets, and where each ends. -/
 def segs : List (Nat × Prog DS DB) :=
-  [(0x2832, segPre), (0x2a36, segId), (0x2a62, segDbl), (0x2ac8, segP3), (0x2af2, segP2), (0x2b4a, segSA),
-   (0x2be4, segP3), (0x2c0e, segP2), (0x2c6a, segSB), (0x2cd0, segP2), (0x2cf6, segEnd)]
+  [(dsm_body, segPre), (dsm_identity, segId), (dsm_double, segDbl), (dsm_dbl_p3, segP3), (dsm_dbl_p2, segP2), (dsm_a_add, segSA),
+   (dsm_a_p3, segP3), (dsm_a_p2, segP2), (dsm_b_add, segSB), (dsm_b_p2, segP2), (dsm_output, segEnd)]
 
 def segEnds : List Nat :=
-  [0x2a1e, 0x2a46, 0x2abe, 0x2af0, 0x2b10, 0x2bdc, 0x2c0c, 0x2c2c, 0x2cd0, 0x2cee, 0x2d00]
+  [dsm_start_scan, dsm_loop, dsm_test_digits, dsm_dbl_jump, dsm_test_a, dsm_a_test_next, dsm_a_jump_join, dsm_a_done, dsm_b_p2, dsm_dec_index, dsm_leave]
 
 /-! ## The decided checks, both builds -/
 

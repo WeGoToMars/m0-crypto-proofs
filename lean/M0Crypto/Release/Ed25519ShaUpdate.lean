@@ -115,6 +115,7 @@ structure Ok : Prop where
   sz : O + oN ≤ BS ∧ O % 2 = 0
 end ok
 
+set_option maxHeartbeats 1200000 in
 open M0Crypto.Release.Ed25519 (Build) in
 theorem ok_b : ∀ b : Build, @Ok _ _ b.codeBytes := by
   intro b; cases b <;>

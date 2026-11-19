@@ -5,6 +5,7 @@ namespace SafegcdTermination.CodeStack
 
 open M0Crypto.Armv6M (State Word)
 open M0Crypto.Thumb
+open M0Crypto.Release (CodeBytes StepsOk runH_succ_ok)
 open M0Crypto.Release.StackEffect (keep_sp exec_sp)
 
 /-- Scan halfword offsets in the linked window for instructions that could change SP.
@@ -44,10 +45,10 @@ private theorem instr_keeps_sp (bytes : List (BitVec 8)) (off : Nat) (i : Instr)
       | nil => change off + i.size ≤ 1 at hl; omega
       | cons b rest => exact False.elim (hRest a b rest rfl)
 
-theorem step_keeps_sp {bytes : List (BitVec 8)} {base : Word} {s t : State} {e : Event}
-    (hChk : check bytes = true) (hBase : base.toNat % 2 = 0)
+theorem step_instruction {bytes : List (BitVec 8)} {base : Word} {s t : State} {e : Event}
     (h : stepH bytes base s = .ok (t,e)) :
-    (!(e.instr.dsts.contains 13)) = true ∧ t.sp = s.sp := by
+    e.instr.exec s = .ok t ∧ ¬ s.pc.getLsbD 0 = true ∧
+      instrAt bytes (s.pc-base).toNat = some e.instr ∧ (s.pc-base).toNat + e.instr.size ≤ bytes.length := by
   unfold stepH at h
   simp only at h
   split at h
@@ -62,16 +63,23 @@ theorem step_keeps_sp {bytes : List (BitVec 8)} {base : Word} {s t : State} {e :
         · split at h
           · rename_i t' hExec
             cases h
-            have hp : s.pc.toNat % 2 = 0 := by
-              simp only [BitVec.getLsbD,Nat.testBit_zero,decide_eq_true_eq] at hOdd
-              omega
-            have ho : (s.pc-base).toNat % 2 = 0 := by bv_omega
-            have hI := instr_keeps_sp bytes _ i hChk ho hBound hi
-            have hS := keep_sp hI s.sp
-            exact ⟨hI,(exec_sp hS.2 hExec).trans hS.1⟩
+            exact ⟨hExec,hOdd,hi,hBound⟩
           · cases h
         · cases h
       · cases h
+
+theorem step_keeps_sp {bytes : List (BitVec 8)} {base : Word} {s t : State} {e : Event}
+    (hChk : check bytes = true) (hBase : base.toNat % 2 = 0)
+    (h : stepH bytes base s = .ok (t,e)) :
+    (!(e.instr.dsts.contains 13)) = true ∧ t.sp = s.sp := by
+  obtain ⟨hExec,hOdd,hAt,hBound⟩ := step_instruction h
+  have hp : s.pc.toNat % 2 = 0 := by
+    simp only [BitVec.getLsbD,Nat.testBit_zero,decide_eq_true_eq] at hOdd
+    omega
+  have ho : (s.pc-base).toNat % 2 = 0 := by bv_omega
+  have hI := instr_keeps_sp bytes _ e.instr hChk ho hBound hAt
+  have hS := keep_sp hI s.sp
+  exact ⟨hI,(exec_sp hS.2 hExec).trans hS.1⟩
 
 /-- Every recorded instruction keeps SP. The proof uses the checked bytes, including
     for branch and return events that are outside straight-line block checks. -/
@@ -94,5 +102,23 @@ theorem trace_keeps_sp {bytes : List (BitVec 8)} {base : Word} {s t : State} {k 
         rcases List.mem_cons.mp hf with rfl | hf
         · exact (step_keeps_sp hChk hBase hU).1
         · exact ih hV f hf
+
+/-- A fixed-SP run with proved event bounds satisfies the stepwise release judgment. -/
+theorem steps_of_run {bytes : List (BitVec 8)} {sz : Nat} [CodeBytes bytes sz]
+    {base : Word} {s t : State} {k : Nat} {tr : List Event} {P : Event → Prop}
+    (h : runH bytes base k s = .ok (t,tr)) (hP : ∀ e ∈ tr, P e)
+    (hSp : ∀ e ∈ tr, (!(e.instr.dsts.contains 13)) = true) :
+    StepsOk base (fun u e => P e ∧ u.sp = s.sp) k s := by
+  induction k generalizing s t tr with
+  | zero => trivial
+  | succ k ih =>
+    obtain ⟨u,e,tail,hU,hTail,rfl⟩ := runH_succ_ok h
+    have hE := List.mem_cons_self (a := e) (l := tail)
+    have hs := keep_sp (hSp e hE) s.sp
+    have hkeep : u.sp = s.sp := (exec_sp hs.2 (step_instruction hU).1).trans hs.1
+    have hOk := ih hTail (fun e he => hP e (List.mem_cons_of_mem _ he))
+      (fun e he => hSp e (List.mem_cons_of_mem _ he))
+    rw [hkeep] at hOk
+    exact StepsOk.cons hU ⟨hP e hE,rfl⟩ hOk
 
 end SafegcdTermination.CodeStack

@@ -3,7 +3,7 @@ import M0Crypto.Release.Ed25519DsmLoop
 /-!
 # The body of `m0c_ge_dsm`
 
-From the body's start at `0x2832` with the frame's state `stE` to the epilogue at `0x2d00`:
+From the body's start at `dsm_body` with the frame's state `stE` to the epilogue at `dsm_leave`:
 `segPre`, `movs r0, #255`, the top-digit scan, the store of `I`, `segId`, the loop and `segEnd`.
 `body_go` ends with the views agreeing off the glue's words with the reference run
 `preR ++ idR ++ runsR ++ endR`; its trace `bodyTr` is a function of the context, the digits'
@@ -30,13 +30,14 @@ open M0Crypto.Release.Ed25519DsmVal (preR idR endR runsR)
 open M0Crypto.Release.Ed25519DecompressOut (keeps run_keep)
 open M0Crypto.Sym (SExpr)
 open M0Crypto.Release.BlockEffect (Eff effOk eff_run)
+open M0Crypto.Artifacts.Ed25519Compact (dsm_body dsm_identity dsm_leave dsm_loop dsm_output dsm_save_top dsm_scan dsm_start_scan)
 
 /-! ## The glue around the scan -/
 
 /-- The body's glue at its offsets, decided per build. -/
 structure CodeB (B : List (BitVec 8)) (BS : Nat) [CodeBytes B BS] : Prop where
-  mv : piecesAt B 0x2a1e [.seq [.movImm 0 255]] = true
-  st : piecesAt B 0x2a34 [.seq [.strSp 0 1]] = true
+  mv : piecesAt B dsm_start_scan [.seq [.movImm 0 255]] = true
+  st : piecesAt B dsm_save_top [.seq [.strSp 0 1]] = true
 
 open M0Crypto.Release.Ed25519 (Build) in
 theorem codeB_c : @CodeB _ _ Build.compact.codeBytes := by
@@ -62,16 +63,16 @@ def SI : St := { rs s0 with Γ := (.fr oI, .cw) :: s0.Γ }
 /-- The state after `segEnd`. -/
 def Send : St := ((segEnd.lin dsS dbS dsGeo LH).map (·.2)).getD stE
 
-theorem body_ok : sglueOk dsGeo.cs [.movImm 0 255] 0x2a1e dsGeo.top dsGeo.N [] [] [] = true ∧
+theorem body_ok : sglueOk dsGeo.cs [.movImm 0 255] dsm_start_scan dsGeo.top dsGeo.N [] [] [] = true ∧
     traceOkE [.movImm 0 255] [] = true ∧
-    sglueOk dsGeo.cs [.strSp 0 1] 0x2a34 dsGeo.top dsGeo.N [(.reg0 13, 4)] [(spW oI, 4)] [] = true ∧
+    sglueOk dsGeo.cs [.strSp 0 1] dsm_save_top dsGeo.top dsGeo.N [(.reg0 13, 4)] [(spW oI, 4)] [] = true ∧
     traceOkE [.strSp 0 1] [.reg0 13] = true ∧ effOk [.strSp 0 1] eSt = true ∧
     (⟨.fr oI, .k 4⟩ : SR).ok dsGeo = true ∧ (⟨.fr oI, .k 4⟩ : SR).acc dsGeo true = true ∧
     (Kd.sr (.fr oI) .cw).ok dsGeo = true ∧ wkB (glueSt (stS 0) [⟨.fr oI, .k 4⟩] [(.fr oI, .cw)] σsp) SI = true ∧
     segOk segPre stE preR s0 = true ∧ segOk segId SI idR LH = true ∧ segOk segEnd LH endR Send = true ∧
-    goodL idR = true ∧ goodL endR = true ∧ (0x2832, segPre) ∈ segs ∧ (0x2a36, segId) ∈ segs ∧
-    (0x2cf6, segEnd) ∈ segs ∧ 0x2832 + segPre.size dsS dbS = 0x2a1e ∧ 0x2a36 + segId.size dsS dbS = 0x2a46 ∧
-    0x2cf6 + segEnd.size dsS dbS = 0x2d00 := by
+    goodL idR = true ∧ goodL endR = true ∧ (dsm_body, segPre) ∈ segs ∧ (dsm_identity, segId) ∈ segs ∧
+    (dsm_output, segEnd) ∈ segs ∧ dsm_body + segPre.size dsS dbS = dsm_start_scan ∧ dsm_identity + segId.size dsS dbS = dsm_loop ∧
+    dsm_output + segEnd.size dsS dbS = dsm_leave := by
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, by simp [segs], by simp [segs], by simp [segs],
     ?_, ?_, ?_⟩ <;> decide +kernel
 
@@ -106,17 +107,17 @@ variable (T : DS → Word → (Nat → Word) → List Event) (c : Ctx)
 
 /-- `movs r0, #255`. -/
 def mvTr (Ψ : TrP) : TrP :=
-  Tr.cat (Tr.is (blockTrE [.movImm 0 255] (c.base + BitVec.ofNat 32 0x2a1e) [] [])) Ψ
+  Tr.cat (Tr.is (blockTrE [.movImm 0 255] (c.base + BitVec.ofNat 32 dsm_start_scan) [] [])) Ψ
 
 /-- The store of `I`. -/
 def stTr (Ψ : TrP) : TrP :=
-  Tr.cat (Tr.is (blockTrE [.strSp 0 1] (c.base + BitVec.ofNat 32 0x2a34) [.reg0 13] [dsGeo.fsp c])) Ψ
+  Tr.cat (Tr.is (blockTrE [.strSp 0 1] (c.base + BitVec.ofNat 32 dsm_save_top) [.reg0 13] [dsGeo.fsp c])) Ψ
 
 /-- **The body's trace** with the digits' zero tests `z` and digit words `da`, `db`, then `Ψ` at
 the epilogue. -/
 def bodyTr (z : Nat → Bool) (da db : Nat → Word) (Ψ : TrP) : TrP :=
-  pt T c segPre 0x2832 stE (mvTr c (scanTr (c := c) z
-    (fun j => stTr c (pt T c segId 0x2a36 SI (lpTr T c da db (pt T c segEnd 0x2cf6 LH Ψ) (nOf j)))) 255))
+  pt T c segPre dsm_body stE (mvTr c (scanTr (c := c) z
+    (fun j => stTr c (pt T c segId dsm_identity SI (lpTr T c da db (pt T c segEnd dsm_output LH Ψ) (nOf j)))) 255))
 
 end tr
 
@@ -147,14 +148,14 @@ theorem seg_ex {P : Prog DS DB} {o : Nat} (hP : (o, P) ∈ segs) {S S' : St} {L 
     exact seg_run Rs m0 ads bds g F hcR cd hP hlin hex hex1 hw hat k
   · exact absurd hs (by simp)
 
-/-- **The body** from `0x2832` with `stE` and the values `E`: to the epilogue at `0x2d00` with
+/-- **The body** from `dsm_body` with `stE` and the values `E`: to the epilogue at `dsm_leave` with
 views that agree off the glue's words with the reference run. -/
 theorem body_go (hka : ∀ i < 256, (dv m0 c 2 i).toInt ≠ 0 → Ed25519DsmLoop.kOf (dv m0 c 2 i) < 2)
     (hkb : ∀ i < 256, (dv m0 c 1 i).toInt ≠ 0 → Ed25519DsmLoop.kOf (dv m0 c 1 i) < 8)
-    {E : Loc → V} {t : State} {Q : State → Prop} {Ψ : TrP} (hat : At Rs B c dsGeo m0 0x2832 stE E t)
+    {E : Loc → V} {t : State} {Q : State → Prop} {Ψ : TrP} (hat : At Rs B c dsGeo m0 dsm_body stE E t)
     (k : ∀ E' u, Agree N E' (runA ads bds c m0 (preR ++ idR ++
         runsR (fun i => (dv m0 c 2 i).toInt) (fun i => (dv m0 c 1 i).toInt) (nOf (topI (zd m0 c) 255)) ++ endR) E) →
-      At Rs B c dsGeo m0 0x2d00 Send E' u →
+      At Rs B c dsGeo m0 dsm_leave Send E' u →
       ReachFT c.base (PcIn c.base dsGeo.cs) (Has Rc) (Has Wc) (InStackWindow c.sp0 dsGeo.N) u Q Ψ) :
     ReachFT c.base (PcIn c.base dsGeo.cs) (Has Rc) (Has Wc) (InStackWindow c.sp0 dsGeo.N) t Q
       (bodyTr (TA ads) c (zd m0 c) (dv m0 c 2) (dv m0 c 1) Ψ) := by
@@ -178,9 +179,9 @@ theorem body_go (hka : ∀ i < 256, (dv m0 c 2 i).toInt ≠ 0 → Ed25519DsmLoop
         have e0 : LowReg.toReg 0 = 0 := rfl
         simp [execAll, Instr.next, Instr.exec, State.setReg, State.setNZ, e0]⟩
     · exact ⟨by decide, by simpa [SV.val] using h13'⟩
-  have e1 : 0x2a1e + seqSize [Instr.movImm 0 255] = 0x2a20 := by decide
+  have e1 : dsm_start_scan + seqSize [Instr.movImm 0 255] = dsm_scan := by decide
   rw [e1] at hu2
-  have hu3 : At Rs B c dsGeo m0 0x2a20 (stS 255) (runA ads bds c m0 preR E) (execAll [.movImm 0 255] u) :=
+  have hu3 : At Rs B c dsGeo m0 dsm_scan (stS 255) (runA ads bds c m0 preR E) (execAll [.movImm 0 255] u) :=
     at_weak Rs m0 hu2 (by simp [glueSt, keep_nil, stS, rs]) (by simp [glueSt, stS, rs]) (fun _ h => h)
       (by simp [stS, rs, hs0.2.2.2])
   -- the scan
@@ -226,7 +227,7 @@ theorem body_go (hka : ∀ i < 256, (dv m0 c 2 i).toInt ≠ 0 → Ed25519DsmLoop
   · intro h13' p hp
     simp only [σsp, List.mem_singleton] at hp; subst hp
     exact ⟨by decide, by simpa [SV.val] using h13'⟩
-  have e4 : 0x2a34 + seqSize [Instr.strSp 0 1] = 0x2a36 := by decide
+  have e4 : dsm_save_top + seqSize [Instr.strSp 0 1] = dsm_identity := by decide
   rw [e4] at hu5
   have hu6 := at_wk Rs m0 hu5 (by rw [show glueSt (stS j) [⟨.fr oI, .k 4⟩] [(.fr oI, .cw)] σsp =
     glueSt (stS 0) [⟨.fr oI, .k 4⟩] [(.fr oI, .cw)] σsp from rfl]; exact bo.2.2.2.2.2.2.2.2.1)

@@ -375,6 +375,7 @@ theorem pass_run {base : Word} {s t : State} {P : Nat → Word} (C : Cx (B := B)
       decide (j + 1 = 6) := by decide
     exact this j hj
 
+set_option maxHeartbeats 500000 in
 /-- **The tail** after the swap: `out + 96 = -(out + 64)` by `fe_sub`, then `cmov` of it into
 `out + 64` under the sign mask, from the words of the swapped entry at `x`. -/
 theorem tail_run {base : Word} {s t : State} {P : Nat → Word} (C : Cx (B := B) base s t P)

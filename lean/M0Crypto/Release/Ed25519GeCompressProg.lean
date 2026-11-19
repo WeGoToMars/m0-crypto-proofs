@@ -1,3 +1,4 @@
+import M0Crypto.Release.Ed25519Safegcd
 import M0Crypto.Release.Ed25519FePow
 import M0Crypto.Release.Ed25519SignRun
 import M0Crypto.Release.Ed25519Encode
@@ -198,14 +199,14 @@ inductive CA where
   deriving DecidableEq
 
 def caS : CA → CalleeS
-  | .inv => (powQ 0).s
+  | .inv => Ed25519Safegcd.invS
   | .mul => paS .mul
   | .canon => canonS
 
 section
 open Op Ld
 def cpP : Prog CA CB := Prog.ofList
-  [spill 0 OUT, spill 1 PT, call .inv [(0, S ZI), (1, W PT CZ), (2, K 0)], call .mul [(0, S XS), (1, W PT CX), (2, S ZI)],
+  [spill 0 OUT, spill 1 PT, call .inv [(0, S ZI), (1, W PT CZ)], call .mul [(0, S XS), (1, W PT CX), (2, S ZI)],
    call .mul [(0, S YS), (1, W PT CY), (2, S ZI)], call .canon [(0, S XS)], call .canon [(0, S YS)], blk .sign [],
    blk .store [(2, W OUT 0), (3, S YS)]]
 end
@@ -249,7 +250,7 @@ def cpV : CA → List V → List V
   | .canon => canonV
 
 noncomputable def cpAd (b : Build) (Rs : Rels) : ∀ a, AdE Rs (cb := b.codeBytes) (caS a)
-  | .inv => powAd b Rs 0
+  | .inv => Ed25519Safegcd.invAd b Rs
   | .mul => mulAd b Rs
   | .canon => canonAd b Rs
 

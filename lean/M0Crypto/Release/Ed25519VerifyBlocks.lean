@@ -31,6 +31,7 @@ open M0Crypto.Release.Ed25519VerifyProg (ltW ltG loadSG ioLoadS SS vbS VB)
 open M0Crypto.Release.Ed25519DecompressProg (wf awc div_step psum_wsum grp loads_run rel_bytes)
 open M0Crypto.Spec.Ed25519 (decodeInt)
 open M0Crypto.Release.Ed25519 (Build)
+open M0Crypto.Artifacts.Ed25519Compact (vf_fail vf_success)
 
 /-! ## One word -/
 
@@ -311,7 +312,7 @@ theorem eq_test (s : State) {a b : Nat} {x y : Int} {X Y : Fp} (ha : ModP a x) (
 def okG : List Instr := [.movImm 0 0]
 def failG : List Instr := [.movImm 0 0, .dp .mvns 0 0]
 
-theorem verdict_at (b : Build) : seqAt b.bytes 0x313c okG = true ∧ seqAt b.bytes 0x3140 failG = true := by
+theorem verdict_at (b : Build) : seqAt b.bytes vf_success okG = true ∧ seqAt b.bytes vf_fail failG = true := by
   cases b <;> exact ⟨by decide +kernel, by decide +kernel⟩
 
 theorem ok_r0 (s : State) : (execAll okG s).regs 0 = 0#32 := by

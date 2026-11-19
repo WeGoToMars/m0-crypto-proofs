@@ -99,7 +99,7 @@ private theorem column_keeps (i : Nat) (s : State) (r : Reg) (modular : Bool)
       simp [column, correctionFor, correction, splitAccumulator, accumulate, emitShifted, h0, h15, hz,
         Instr.dsts, MemOp.isLoad, List.contains_eq_mem, h.1, h.2.1] <;> omega
 
-private theorem column_held (i : Nat) {s : State} {p : Pins} {modular : Bool}
+theorem column_held (i : Nat) {s : State} {p : Pins} {modular : Bool}
     (h : p.held s modular) : p.held (execAll (column i modular) s) modular := by
   simp only [Pins.held, State.sp] at h ⊢
   rw [column_keeps i s 7 modular (by decide), column_keeps i s 8 modular (by decide),

@@ -58,7 +58,8 @@ end Build
 open Ed25519Compact in
 /-- The function offsets of `compact`, in address order. -/
 def compactOffsets : List Nat :=
-  [fe_mul, fe_sqr, fe_add, fe_sub, fe_canon, fe_eq, cmov, copy, zero, fe_pow, sha512_block,
+  [fe_mul, fe_sqr, fe_add, fe_sub, fe_canon, fe_eq, cmov, copy, zero, fe_pow, fe_inv, inv_canon, inv_sub,
+   inv_select, fe_inv_shared, inv_matrix, inv_row_exact, inv_row_mod, inv_fold, sha512_block,
    sha512_init, sha512_update, sha512_final, mp_mul, sc_reduce, sc_muladd, ge_compress,
    ge_decompress, sc_recode_comb, ge_lookup, ge_mul_base, sbit, sc_wnaf, ge_dsm, ed25519_pubkey,
    ed25519_sign, ed25519_verify, ed_zero, ed_one, ed_d, ed_d2, ed_sqrtm1, ed_mu, ed_l9, sha512_K,
@@ -67,7 +68,8 @@ def compactOffsets : List Nat :=
 open Ed25519Fast in
 /-- The same offsets in `fast`. -/
 def fastOffsets : List Nat :=
-  [fe_mul, fe_sqr, fe_add, fe_sub, fe_canon, fe_eq, cmov, copy, zero, fe_pow, sha512_block,
+  [fe_mul, fe_sqr, fe_add, fe_sub, fe_canon, fe_eq, cmov, copy, zero, fe_pow, fe_inv, inv_canon, inv_sub,
+   inv_select, fe_inv_shared, inv_matrix, inv_row_exact, inv_row_mod, inv_fold, sha512_block,
    sha512_init, sha512_update, sha512_final, mp_mul, sc_reduce, sc_muladd, ge_compress,
    ge_decompress, sc_recode_comb, ge_lookup, ge_mul_base, sbit, sc_wnaf, ge_dsm, ed25519_pubkey,
    ed25519_sign, ed25519_verify, ed_zero, ed_one, ed_d, ed_d2, ed_sqrtm1, ed_mu, ed_l9, sha512_K,

@@ -3,7 +3,7 @@ import M0Crypto.Release.Ed25519DsmPass
 /-!
 # The passes of `m0c_ge_dsm`'s loop
 
-A pass from the digits' loads at `0x2a4e` to the index step at `0x2cee`, on the four cases of
+A pass from the digits' loads at `dsm_load_digits` to the index step at `dsm_dec_index`, on the four cases of
 the digits `a` of `h` and `b` of `s`, then the loop from `I = n − 1` to its exit. Values are
 tracked off the glue's words `N` (`PV`): the views agree there with the reference run of the
 updates (`passR`, `runsR`), and `I`, `DA`, `DB` hold their words.
@@ -27,6 +27,9 @@ open M0Crypto.Release.Ed25519DsmPass
 open M0Crypto.Release.Ed25519DsmVal (dblR cvR saL sbL sgn sgn_lt passR runsR)
 open M0Crypto.Release.Ed25519MulBaseVal (frR)
 open M0Crypto.Release.Ed25519DecompressOut (keeps run_keep)
+open M0Crypto.Artifacts.Ed25519Compact (dsm_a_add dsm_a_branch dsm_a_done dsm_a_index dsm_a_jump_join dsm_a_next_branch dsm_a_p2
+  dsm_a_p3 dsm_a_test_next dsm_b_add dsm_b_branch dsm_b_p2 dsm_dbl_jump dsm_dbl_p2 dsm_dbl_p3
+  dsm_dec_index dsm_double dsm_load_digits dsm_loop dsm_output dsm_test_a dsm_test_digits)
 
 /-! ## The straight lines at the pass's states -/
 
@@ -53,15 +56,15 @@ theorem good_facts : goodL dblR = true ∧ goodL (cvR true) = true ∧ goodL (cv
     (∀ k < 2, ∀ s < 2, goodL (frR DS.f (saL k s)) = true) ∧ (∀ k < 8, ∀ s < 2, goodL (frR DS.f (sbL k s)) = true) := by
   decide +kernel
 
-theorem seg_mem : (0x2a62, segDbl) ∈ segs ∧ (0x2ac8, segP3) ∈ segs ∧ (0x2af2, segP2) ∈ segs ∧
-    (0x2b4a, segSA) ∈ segs ∧ (0x2be4, segP3) ∈ segs ∧ (0x2c0e, segP2) ∈ segs ∧ (0x2c6a, segSB) ∈ segs ∧
-    (0x2cd0, segP2) ∈ segs := by
+theorem seg_mem : (dsm_double, segDbl) ∈ segs ∧ (dsm_dbl_p3, segP3) ∈ segs ∧ (dsm_dbl_p2, segP2) ∈ segs ∧
+    (dsm_a_add, segSA) ∈ segs ∧ (dsm_a_p3, segP3) ∈ segs ∧ (dsm_a_p2, segP2) ∈ segs ∧ (dsm_b_add, segSB) ∈ segs ∧
+    (dsm_b_p2, segP2) ∈ segs := by
   simp [segs]
 
-theorem seg_size : 0x2a62 + segDbl.size dsS dbS = 0x2abe ∧ 0x2ac8 + segP3.size dsS dbS = 0x2af0 ∧
-    0x2af2 + segP2.size dsS dbS = 0x2b10 ∧ 0x2b4a + segSA.size dsS dbS = 0x2bdc ∧
-    0x2be4 + segP3.size dsS dbS = 0x2c0c ∧ 0x2c0e + segP2.size dsS dbS = 0x2c2c ∧
-    0x2c6a + segSB.size dsS dbS = 0x2cd0 ∧ 0x2cd0 + segP2.size dsS dbS = 0x2cee := by
+theorem seg_size : dsm_double + segDbl.size dsS dbS = dsm_test_digits ∧ dsm_dbl_p3 + segP3.size dsS dbS = dsm_dbl_jump ∧
+    dsm_dbl_p2 + segP2.size dsS dbS = dsm_test_a ∧ dsm_a_add + segSA.size dsS dbS = dsm_a_test_next ∧
+    dsm_a_p3 + segP3.size dsS dbS = dsm_a_jump_join ∧ dsm_a_p2 + segP2.size dsS dbS = dsm_a_done ∧
+    dsm_b_add + segSB.size dsS dbS = dsm_b_p2 ∧ dsm_b_p2 + segP2.size dsS dbS = dsm_dec_index := by
   decide +kernel
 
 /-! ## Values off the glue's words -/
@@ -124,28 +127,28 @@ variable (T : DS → Word → (Nat → Word) → List Event) (c : Ctx)
 
 def pt (P : Prog DS DB) (o : Nat) (S : St) (Ψ : TrP) : TrP := Prog.tr dsS dbS dsGeo T c P o S Ψ [] []
 
-/-- From the second test of `DB` at `0x2c2c` to the index step. -/
+/-- From the second test of `DB` at `dsm_a_done` to the index step. -/
 def tDB2 (b : Word) (Ψ : TrP) : TrP :=
-  tstTr c 0x2c2c 3 0x2c30 0x2cee (b.toInt != 0)
-    (pbTr c (pt T c segSB 0x2c6a (ext (sbSt (kOf b) (sgn b.toInt))) (pt T c segP2 0x2cd0 E3 Ψ))) Ψ
+  tstTr c dsm_a_done 3 dsm_b_branch dsm_dec_index (b.toInt != 0)
+    (pbTr c (pt T c segSB dsm_b_add (ext (sbSt (kOf b) (sgn b.toInt))) (pt T c segP2 dsm_b_p2 E3 Ψ))) Ψ
 
-/-- From the first test of `DB` at `0x2bdc`. -/
+/-- From the first test of `DB` at `dsm_a_test_next`. -/
 def tDB1 (b : Word) (Ψ : TrP) : TrP :=
-  tstTr c 0x2bdc 3 0x2be0 0x2c0e (b.toInt != 0)
-    (pt T c segP3 0x2be4 E3 (Tr.cat (Tr.is [bEv c 0x2c0c 0x2c2c]) (tDB2 T c b Ψ))) (pt T c segP2 0x2c0e E3 (tDB2 T c b Ψ))
+  tstTr c dsm_a_test_next 3 dsm_a_next_branch dsm_a_p2 (b.toInt != 0)
+    (pt T c segP3 dsm_a_p3 E3 (Tr.cat (Tr.is [bEv c dsm_a_jump_join dsm_a_done]) (tDB2 T c b Ψ))) (pt T c segP2 dsm_a_p2 E3 (tDB2 T c b Ψ))
 
-/-- From the test of `DA` at `0x2b10`. -/
+/-- From the test of `DA` at `dsm_test_a`. -/
 def tDA (a b : Word) (Ψ : TrP) : TrP :=
-  tstTr c 0x2b10 2 0x2b14 0x2c2c (a.toInt != 0)
-    (Tr.cat (Tr.is (blockTrE (headA ++ tailG 2) (c.base + BitVec.ofNat 32 0x2b18) [.reg0 13] [dsGeo.fsp c]))
-      (pt T c segSA 0x2b4a (ext (saSt (kOf a) (sgn a.toInt))) (tDB1 T c b Ψ))) (tDB2 T c b Ψ)
+  tstTr c dsm_test_a 2 dsm_a_branch dsm_a_done (a.toInt != 0)
+    (Tr.cat (Tr.is (blockTrE (headA ++ tailG 2) (c.base + BitVec.ofNat 32 dsm_a_index) [.reg0 13] [dsGeo.fsp c]))
+      (pt T c segSA dsm_a_add (ext (saSt (kOf a) (sgn a.toInt))) (tDB1 T c b Ψ))) (tDB2 T c b Ψ)
 
-/-- From the doubling at `0x2a62`. -/
+/-- From the doubling at `dsm_double`. -/
 def restTr (a b : Word) (Ψ : TrP) : TrP :=
-  pt T c segDbl 0x2a62 E1 (orTr c (a.toInt != 0 || b.toInt != 0)
-    (pt T c segP3 0x2ac8 E2 (Tr.cat (Tr.is [bEv c 0x2af0 0x2b10]) (tDA T c a b Ψ))) (pt T c segP2 0x2af2 E2 (tDA T c a b Ψ)))
+  pt T c segDbl dsm_double E1 (orTr c (a.toInt != 0 || b.toInt != 0)
+    (pt T c segP3 dsm_dbl_p3 E2 (Tr.cat (Tr.is [bEv c dsm_dbl_jump dsm_test_a]) (tDA T c a b Ψ))) (pt T c segP2 dsm_dbl_p2 E2 (tDA T c a b Ψ)))
 
-/-- **The loop's trace** from the test at `0x2a46` with `n` passes left (`I = n − 1`), then `Ψx`
+/-- **The loop's trace** from the test at `dsm_loop` with `n` passes left (`I = n − 1`), then `Ψx`
 after the exit; `da i`, `db i` are the digit words at `i`. -/
 def lpTr (da db : Nat → Word) (Ψx : TrP) : Nat → TrP
   | 0 => loopTr c (decide (0 ≤ (BitVec.ofNat 32 0 - 1#32).toInt)) (Tr.is []) Ψx
@@ -210,12 +213,12 @@ variable (g : GeoOk c dsGeo Wc Rc) (F : Caller c.base c.sp0 dsGeo.N Wc) (hcR : S
   (cd : Code B BS) (cl : CodeL B BS)
 include g F hcR cd cl
 
-/-- **The second test of `DB`** at `0x2c2c`: for `b ≠ 0` `DB`'s pointers, `signed_add` over
+/-- **The second test of `DB`** at `dsm_a_done`: for `b ≠ 0` `DB`'s pointers, `signed_add` over
 `odd_b` and the conversion without `T`, then on to the index step. -/
 theorem db2_go {S : St} {E R : Loc → V} {x a b : Word} {t : State} {Q : State → Prop} {Ψ : TrP}
     (hS : S = E1 ∧ b.toInt = 0 ∨ S = E3) (hkb : b.toInt ≠ 0 → kOf b < 8) (hpv : PV E R x a b)
-    (hat : At Rs B c dsGeo m0 0x2c2c S E t)
-    (k : ∀ E' u, PV E' (runA ads bds c m0 (tailL b) R) x a b → At Rs B c dsGeo m0 0x2cee E1 E' u →
+    (hat : At Rs B c dsGeo m0 dsm_a_done S E t)
+    (k : ∀ E' u, PV E' (runA ads bds c m0 (tailL b) R) x a b → At Rs B c dsGeo m0 dsm_dec_index E1 E' u →
       ReachFT c.base (PcIn c.base dsGeo.cs) (Has Rc) (Has Wc) (InStackWindow c.sp0 dsGeo.N) u Q Ψ) :
     ReachFT c.base (PcIn c.base dsGeo.cs) (Has Rc) (Has Wc) (InStackWindow c.sp0 dsGeo.N) t Q (tDB2 (TA ads) c b Ψ) := by
   have hf := ext_facts S (by rcases hS with ⟨rfl, -⟩ | rfl <;> simp)
@@ -237,11 +240,11 @@ theorem db2_go {S : St} {E R : Loc → V} {x a b : Word} {t : State} {Q : State 
     refine k E u (by rw [e]; exact hpv) (at_wk Rs m0 hu ?_)
     rcases hS with ⟨rfl, -⟩ | rfl <;> decide
 
-/-- **The first test of `DB`** at `0x2bdc`, after `signed_add` over `AI`: for `b ≠ 0` the conversion
+/-- **The first test of `DB`** at `dsm_a_test_next`, after `signed_add` over `AI`: for `b ≠ 0` the conversion
 with `T` and on to the second test, else the conversion without. -/
 theorem db1_go {E R : Loc → V} {x a b : Word} {t : State} {Q : State → Prop} {Ψ : TrP}
-    (hkb : b.toInt ≠ 0 → kOf b < 8) (hpv : PV E R x a b) (hat : At Rs B c dsGeo m0 0x2bdc E3 E t)
-    (k : ∀ E' u, PV E' (runA ads bds c m0 (cvR (b.toInt != 0) ++ tailL b) R) x a b → At Rs B c dsGeo m0 0x2cee E1 E' u →
+    (hkb : b.toInt ≠ 0 → kOf b < 8) (hpv : PV E R x a b) (hat : At Rs B c dsGeo m0 dsm_a_test_next E3 E t)
+    (k : ∀ E' u, PV E' (runA ads bds c m0 (cvR (b.toInt != 0) ++ tailL b) R) x a b → At Rs B c dsGeo m0 dsm_dec_index E1 E' u →
       ReachFT c.base (PcIn c.base dsGeo.cs) (Has Rc) (Has Wc) (InStackWindow c.sp0 dsGeo.N) u Q Ψ) :
     ReachFT c.base (PcIn c.base dsGeo.cs) (Has Rc) (Has Wc) (InStackWindow c.sp0 dsGeo.N) t Q (tDB1 (TA ads) c b Ψ) := by
   have hf := ext_facts E3 (by simp)
@@ -260,12 +263,12 @@ theorem db1_go {E R : Loc → V} {x a b : Word} {t : State} {Q : State → Prop}
     refine db2_go Rs m0 ads bds g F hcR cd cl (.inl ⟨rfl, hb⟩) hkb hpv2 hu2 (fun E' u' hpv' hu' => k E' u' ?_ hu')
     rw [show (b.toInt != 0) = false by simpa using hb, runA_app]; exact hpv'
 
-/-- **The test of `DA`** at `0x2b10`: for `a ≠ 0` `DA`'s pointers and `signed_add` over `AI`, then
+/-- **The test of `DA`** at `dsm_test_a`: for `a ≠ 0` `DA`'s pointers and `signed_add` over `AI`, then
 the tests of `DB`. -/
 theorem da_go {S : St} {E R : Loc → V} {x a b : Word} {t : State} {Q : State → Prop} {Ψ : TrP}
     (hS : S = E1 ∧ a.toInt = 0 ∧ b.toInt = 0 ∨ S = E3) (hka : a.toInt ≠ 0 → kOf a < 2)
-    (hkb : b.toInt ≠ 0 → kOf b < 8) (hpv : PV E R x a b) (hat : At Rs B c dsGeo m0 0x2b10 S E t)
-    (k : ∀ E' u, PV E' (runA ads bds c m0 (headL a b ++ tailL b) R) x a b → At Rs B c dsGeo m0 0x2cee E1 E' u →
+    (hkb : b.toInt ≠ 0 → kOf b < 8) (hpv : PV E R x a b) (hat : At Rs B c dsGeo m0 dsm_test_a S E t)
+    (k : ∀ E' u, PV E' (runA ads bds c m0 (headL a b ++ tailL b) R) x a b → At Rs B c dsGeo m0 dsm_dec_index E1 E' u →
       ReachFT c.base (PcIn c.base dsGeo.cs) (Has Rc) (Has Wc) (InStackWindow c.sp0 dsGeo.N) u Q Ψ) :
     ReachFT c.base (PcIn c.base dsGeo.cs) (Has Rc) (Has Wc) (InStackWindow c.sp0 dsGeo.N) t Q (tDA (TA ads) c a b Ψ) := by
   have hf := ext_facts S (by rcases hS with ⟨rfl, -⟩ | rfl <;> simp)
@@ -287,12 +290,12 @@ theorem da_go {S : St} {E R : Loc → V} {x a b : Word} {t : State} {Q : State �
     have e : headL a b = [] := by simp [headL, ha]
     rw [e, List.nil_append]; exact hpv'
 
-/-- **From the doubling** at `0x2a62` to the index step, with the digit words `a`, `b`: the
+/-- **From the doubling** at `dsm_double` to the index step, with the digit words `a`, `b`: the
 updates `passR`. -/
 theorem rest_go {E R : Loc → V} {x a b : Word} {t : State} {Q : State → Prop} {Ψ : TrP}
     (hka : a.toInt ≠ 0 → kOf a < 2) (hkb : b.toInt ≠ 0 → kOf b < 8) (hpv : PV E R x a b)
-    (hat : At Rs B c dsGeo m0 0x2a62 E1 E t)
-    (k : ∀ E' u, PV E' (runA ads bds c m0 (passR a.toInt b.toInt) R) x a b → At Rs B c dsGeo m0 0x2cee E1 E' u →
+    (hat : At Rs B c dsGeo m0 dsm_double E1 E t)
+    (k : ∀ E' u, PV E' (runA ads bds c m0 (passR a.toInt b.toInt) R) x a b → At Rs B c dsGeo m0 dsm_dec_index E1 E' u →
       ReachFT c.base (PcIn c.base dsGeo.cs) (Has Rc) (Has Wc) (InStackWindow c.sp0 dsGeo.N) u Q Ψ) :
     ReachFT c.base (PcIn c.base dsGeo.cs) (Has Rc) (Has Wc) (InStackWindow c.sp0 dsGeo.N) t Q (restTr (TA ads) c a b Ψ) := by
   unfold restTr
@@ -312,14 +315,14 @@ theorem rest_go {E R : Loc → V} {x a b : Word} {t : State} {Q : State → Prop
     have e : (a.toInt != 0 || b.toInt != 0) = false := by simp [hd.1, hd.2]
     rw [passR_eq, e, List.append_assoc, runA_app, runA_app]; exact hpv'
 
-/-- **The loop** from its test at `0x2a46` with `n` passes left: to `segEnd` at `0x2cf6` with the
+/-- **The loop** from its test at `dsm_loop` with `n` passes left: to `segEnd` at `dsm_output` with the
 updates of the passes `n − 1, …, 0` (`runsR`) off the glue's words. -/
 theorem loop_go (hka : ∀ i < 256, (dv m0 c 2 i).toInt ≠ 0 → kOf (dv m0 c 2 i) < 2)
     (hkb : ∀ i < 256, (dv m0 c 1 i).toInt ≠ 0 → kOf (dv m0 c 1 i) < 8) {Q : State → Prop} {Ψx : TrP} :
     ∀ n, n ≤ 256 → ∀ (E R : Loc → V) (t : State), Agree N E R → E (.fr oI) = .w (BitVec.ofNat 32 n - 1#32) →
-      At Rs B c dsGeo m0 0x2a46 LH E t →
+      At Rs B c dsGeo m0 dsm_loop LH E t →
       (∀ E' u, Agree N E' (runA ads bds c m0 (runsR (fun i => (dv m0 c 2 i).toInt) (fun i => (dv m0 c 1 i).toInt) n) R) →
-        At Rs B c dsGeo m0 0x2cf6 LH E' u →
+        At Rs B c dsGeo m0 dsm_output LH E' u →
         ReachFT c.base (PcIn c.base dsGeo.cs) (Has Rc) (Has Wc) (InStackWindow c.sp0 dsGeo.N) u Q Ψx) →
       ReachFT c.base (PcIn c.base dsGeo.cs) (Has Rc) (Has Wc) (InStackWindow c.sp0 dsGeo.N) t Q
         (lpTr (TA ads) c (dv m0 c 2) (dv m0 c 1) Ψx n)

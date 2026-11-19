@@ -175,7 +175,7 @@ private theorem prepare_footprint (q : Targets) (off : Nat) (phase : Fin 3) (i :
     decide +kernel
 
 open SafegcdTermination.RunRows (literalAt rowPc rowsTrace)
-open SafegcdTermination.Literal (LiteralLinks literal_address)
+open SafegcdTermination.Literal (LiteralLinks literal_address_aligned)
 open SafegcdTermination.RunBatch (batchTrace)
 open SafegcdTermination.Run43 (tripletTrace tripletsTrace loopTrace)
 open SafegcdTermination.LoopLinks (counterSite phaseAt backSite)
@@ -327,15 +327,14 @@ private theorem count (q : Targets) (base sp : Word) (off done : Nat) (last : Bo
   · exact h.append (event _ _ _)
 
 theorem loop {code : List (BitVec 8)} {q : Targets} {entry done : Nat} {base sp : Word}
-    (h : LiteralLinks code q entry done) (hb : base.toNat % 4 = 0)
-    (hBound : base.toNat + q.literal + 4 ≤ 2^32) :
+    (h : LiteralLinks code q entry done) (hb : base.toNat % 4 = 0) :
     LoopReads base sp q (loopTrace q base sp entry done) := by
   have hBatch (j : Fin 3) : LoopReads base sp q
       (batchTrace q base sp (phaseAt q entry done j) j) := by
     apply batch
     intro i hi
     have he := h.2.2 j i hi
-    rw [literal_address _ _ _ _ hb (by rw [he]; exact hBound), he]
+    rw [literal_address_aligned _ _ _ _ hb, he]
   have hTriplet : LoopReads base sp q (tripletTrace q base sp entry done) := by
     exact ((((hBatch 0).append (count q base sp _ _ false)).append (hBatch 1)).append
       (hBatch 2)).append (event _ _ _)
@@ -348,14 +347,13 @@ theorem loop {code : List (BitVec 8)} {q : Targets} {entry done : Nat} {base sp 
 /-- All reads of the inversion are from its frame, source, or the checked literal. -/
 theorem inversion {code : List (BitVec 8)} {q : Targets} {base sp dst src : Word}
     {start canon entry done subOff selectOff : Nat}
-    (h : LiteralLinks code q entry done) (hb : base.toNat % 4 = 0)
-    (hBound : base.toNat + q.literal + 4 ≤ 2^32) :
+    (h : LiteralLinks code q entry done) (hb : base.toNat % 4 = 0) :
     ReadsFrom (fun y => Region sp frameBytes y ∨ Region src 32 y ∨
       Region (base + BitVec.ofNat 32 q.literal) 4 y)
       (Invert.inversionTrace q base sp dst src start canon entry done subOff selectOff) := by
   exact (((init base sp src start canon).mono (fun _ h =>
       h.elim (fun h => .inl h) (fun h => .inr (.inl h)))).append
-    ((loop (sp := sp) h hb hBound).mono (fun _ h =>
+    ((loop (sp := sp) h hb).mono (fun _ h =>
       h.elim (fun h => .inl (Nat.lt_of_lt_of_le h (by decide : batchBytes ≤ frameBytes)))
         (fun h => .inr (.inr h))))).append
     ((final q base sp dst done subOff selectOff).mono (fun _ h =>

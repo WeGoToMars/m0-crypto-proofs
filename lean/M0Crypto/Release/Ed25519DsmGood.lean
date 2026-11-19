@@ -30,6 +30,7 @@ open M0Crypto.Release.Ed25519DsmLoop
 open M0Crypto.Release.Ed25519DsmBody
 open M0Crypto.Release.Ed25519DsmVal (sgn sgn_lt)
 open M0Crypto.Release.Ed25519DsmAd
+open M0Crypto.Artifacts.Ed25519Compact (dsm_b_table)
 
 /-! ## Decided facts -/
 
@@ -167,15 +168,15 @@ theorem pt_gp (hT : ∀ a base p, (dsS a).Eff p base (T a base p)) (cd : Code B 
       (fun _ => GP.pre (fun _ hq => BI.sub hsub hq) hΨ) fun l hl => by rw [hx1] at hl; cases hl
   · cases hs
 
-/-- **The table's literal** at `0x2c44`: a code word. -/
+/-- **The table's literal** at `dsm_b_table`: a code word. -/
 theorem lit_gp (cl : CodeL B BS) {S : St} :
-    GP sp0 n (BI c dsGeo sp0 n X0 S) (Tr.is [⟨c.base + BitVec.ofNat 32 0x2c44, .ldrLit 1 (BitVec.ofNat 8 48),
-      [⟨.read, c.base + BitVec.ofNat 32 (litOff 0x2c44 (BitVec.ofNat 8 48)), 4⟩]⟩]) (BI c dsGeo sp0 n X0 S) := by
+    GP sp0 n (BI c dsGeo sp0 n X0 S) (Tr.is [⟨c.base + BitVec.ofNat 32 dsm_b_table, .ldrLit 1 (BitVec.ofNat 8 48),
+      [⟨.read, c.base + BitVec.ofNat 32 (litOff dsm_b_table (BitVec.ofNat 8 48)), 4⟩]⟩]) (BI c dsGeo sp0 n X0 S) := by
   have hb := cl.lb
   simp only [ldB, Op.bok, Bool.and_eq_true] at hb
   obtain ⟨⟨⟨hlit, -⟩, -⟩, -⟩ := hb
   simp only [litOk, Bool.and_eq_true, decide_eq_true_eq] at hlit
-  have hcd : ∀ y, Reads [⟨.read, c.base + BitVec.ofNat 32 (litOff 0x2c44 (BitVec.ofNat 8 48)), 4⟩] y →
+  have hcd : ∀ y, Reads [⟨.read, c.base + BitVec.ofNat 32 (litOff dsm_b_table (BitVec.ofNat 8 48)), 4⟩] y →
       Has [@codeR B BS _ c.base] y := by
     rintro y ⟨_, ha, -, k, hk, rfl⟩
     rw [List.mem_singleton] at ha; subst ha

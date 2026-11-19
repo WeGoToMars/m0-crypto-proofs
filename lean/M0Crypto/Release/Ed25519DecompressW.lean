@@ -7,7 +7,7 @@ import M0Crypto.Release.Ed25519VerifyStitch
 # `m0c_ge_decompress` at verify's calls
 
 * `dq`, `bszX`: the callee with interface `ioDecZ` (no unconditional outputs); the body is
-  `0x2040 … 0x2268`;
+  `dc_body … dc_done`;
 * `xpX`, `xpvX`: its extra public values, the 32 input bytes as 8 words; `inP` reads them back;
 * `ΨX`: the body's trace, with `decodeCode`'s tests on the input bytes;
 * `PostX`: `r0 = 0` exactly when the input bytes decode, and then `out` holds the field values
@@ -35,13 +35,14 @@ open M0Crypto.Release.Ed25519Bridge (ofSpec)
 open M0Crypto.Release.Field25519Congr (ModP)
 open M0Crypto.Release.Ed25519 (Build)
 open M0Crypto.Spec.Ed25519 (decodeInt)
+open M0Crypto.Artifacts.Ed25519Compact (dc_body dc_done)
 
 /-! ## The callee and its public values -/
 
 abbrev dq : CalleeP DA DB := dcQ ioDecZ .nil
 
-/-- The body's size: from `0x2040` to the epilogue at `0x2268`. -/
-def bszX : Nat := 0x228
+/-- The body's size: from `dc_body` to the epilogue at `dc_done`. -/
+def bszX : Nat := dc_done - dc_body
 
 theorem dq_facts : dq.body = oP0 ∧ dq.st0 = stE ∧ dq.epiW bszX = oDone ∧ dq.okF = true := by decide +kernel
 
@@ -174,7 +175,7 @@ theorem post_of {Rs : Rels} {b : Build} {c : Ctx} {m0 : Mem} {s u : State} (hk :
 section body
 variable {B : List (BitVec 8)} {BS : Nat} [CodeBytes B BS] {Rs : Rels}
 
-/-- **The body** from its start to the epilogue at `0x2268`: the trace `ΨX` of the public values
+/-- **The body** from its start to the epilogue at `dc_done`: the trace `ΨX` of the public values
 and the result `PostX`. -/
 theorem dec_body (b : Build) (hB : B = b.bytes) (base : Word) (s : State) (t : State) {Wc Rc : List Rgn}
     (g : GeoOk (dq.ctx base (pubX base s)) dcGeo Wc Rc)

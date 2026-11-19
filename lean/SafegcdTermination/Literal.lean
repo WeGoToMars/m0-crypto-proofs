@@ -34,6 +34,17 @@ def litSite (o : Nat) (r : RowCall) : Nat := o + seqSize (prepareRow r) + seqSiz
 def litOff (q : Targets) (o : Nat) (r : RowCall) : Nat :=
   (litSite o r + 4) / 4 * 4 + (rowLit q o r).toNat * 4
 
+/-- A word-aligned base gives the same literal offset even across modular
+    address addition. -/
+theorem literal_address_aligned (base : Word) (q : Targets) (o : Nat) (r : RowCall)
+    (hb : base.toNat % 4 = 0) :
+    literalAt base q o r = base + BitVec.ofNat 32 (litOff q o r) := by
+  unfold literalAt litOff litSite
+  apply BitVec.eq_of_toNat_eq
+  rw [BitVec.toNat_add, M0Crypto.Release.Frame.and_not3_toNat]
+  simp only [BitVec.toNat_add,BitVec.toNat_ofNat]
+  omega
+
 theorem literal_address (base : Word) (q : Targets) (o : Nat) (r : RowCall)
     (hb : base.toNat % 4 = 0) (hl : base.toNat + litOff q o r + 4 ≤ 2^32) :
     literalAt base q o r = base + BitVec.ofNat 32 (litOff q o r) := by

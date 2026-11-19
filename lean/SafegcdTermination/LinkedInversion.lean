@@ -117,13 +117,9 @@ theorem trace_io {l : Layout} {code : List (BitVec 8)} {base : Word} {s : State}
       TraceCoverage.Covers (Region (s.regs 0) 32) tr ∧
       ∀ e ∈ tr, (!(e.instr.dsts.contains 13)) = true := by
   have hw := window_pre link h
-  have hFit := hw.codeFrame.1
-  have hLit := link.place.literal.1
-  have hBound : (base + BitVec.ofNat 32 l.first).toNat + l.targets.literal + 4 ≤ 2^32 := by
-    omega
   have hReads := TraceReads.inversion (sp := s.sp) (dst := s.regs 0) (src := s.regs 1)
     (start := l.start) (canon := l.canon) (subOff := l.sub) (selectOff := l.select)
-    link.place.literal hw.baseAligned hBound
+    link.place.literal hw.baseAligned
   obtain ⟨t,n,hRun,_,_⟩ := Invert.functional link.place hw
   have hEven : (base + BitVec.ofNat 32 l.first).toNat % 2 = 0 := by
     have := hw.baseAligned

@@ -31,6 +31,8 @@ open M0Crypto.Release.Ed25519GeProg (FA faS)
 open M0Crypto.Release.Ed25519FeEq (eqS)
 open M0Crypto.Release.Ed25519 (Build)
 open M0Crypto.Artifacts.Ed25519Compact (ge_decompress)
+open M0Crypto.Artifacts.Ed25519Compact (vf_body vf_decode_a vf_decode_r vf_done vf_dsm vf_fail vf_hash vf_scalar vf_scalar_sub
+  vf_success vf_wnaf_h vf_wnaf_s vf_x_eq vf_x_scale vf_y_eq vf_y_scale)
 
 /-! ## Callees -/
 
@@ -101,22 +103,22 @@ end
 /-! ## The layout -/
 
 /-- The offsets of the sites, the verdict blocks and the leave. -/
-def oP0 : Nat := 0x2f90
-def oC0 : Nat := 0x2f98
-def oC1 : Nat := 0x2fa6
-def oP2 : Nat := 0x2fb4
-def oB2 : Nat := 0x3070
-def oP3 : Nat := 0x30b4
-def oW5 : Nat := 0x30e8
-def oW3 : Nat := 0x30f2
-def oDm : Nat := 0x30fc
-def oM3 : Nat := 0x3108
-def oE3 : Nat := 0x3112
-def oM4 : Nat := 0x3122
-def oE4 : Nat := 0x312c
-def oOk : Nat := 0x313c
-def oFail : Nat := 0x3140
-def oLeave : Nat := 0x3144
+def oP0 : Nat := vf_body
+def oC0 : Nat := vf_decode_a
+def oC1 : Nat := vf_decode_r
+def oP2 : Nat := vf_scalar
+def oB2 : Nat := vf_scalar_sub
+def oP3 : Nat := vf_hash
+def oW5 : Nat := vf_wnaf_s
+def oW3 : Nat := vf_wnaf_h
+def oDm : Nat := vf_dsm
+def oM3 : Nat := vf_x_scale
+def oE3 : Nat := vf_x_eq
+def oM4 : Nat := vf_y_scale
+def oE4 : Nat := vf_y_eq
+def oOk : Nat := vf_success
+def oFail : Nat := vf_fail
+def oLeave : Nat := vf_done
 
 /-- The scalar at `r1` below `L` after the `lt` test passes. -/
 def ltCo : List (Reg × Nat × Kd) := [(1, 0, .sc)]

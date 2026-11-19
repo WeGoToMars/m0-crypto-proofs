@@ -4,12 +4,12 @@ import SafegcdTermination.TraceReads
 namespace SafegcdTermination.LoopStackEffect
 
 open SafegcdRow SafegcdRow.BatchCode
-open SafegcdTermination.Bank (addr FrameOk)
+open SafegcdTermination.Bank (addr)
 open SafegcdTermination.InitStackEffect
 open SafegcdTermination.TraceReads (batchBytes)
 open SafegcdTermination.TraceWrites (subregion)
 open SafegcdTermination.PublicTrace (stackState publicState)
-open SafegcdTermination.BatchSlots (row row_layout)
+open SafegcdTermination.BatchSlots (row)
 open SafegcdTermination.RunBatch (batchTrace)
 open SafegcdTermination.RunRow (rowTrace rowPre)
 open SafegcdTermination.RunRows (rowPc rowsTrace)
@@ -91,16 +91,14 @@ private theorem first_row_prepare (pc : Word) (hA : Above sp0 n sp (Region sp fr
 
 abbrev FullTemp (sp : Word) := Region (addr sp temp) vectorBytes
 
-private theorem first_row_leaf (pc : Word) (hF : FrameOk sp)
+private theorem first_row_leaf (pc : Word)
     (hA : Above sp0 n sp (Region sp frameBytes)) :
     Seg sp0 n sp (InitialBanks sp) (predictedBody
       ⟨addr sp temp,addr sp bankF,addr sp bankG,0,0,0,0,0⟩ pc false) (FullTemp sp) := by
   let s := publicState [(15,pc),(0,addr sp temp),(1,addr sp bankF),(2,addr sp bankG)]
   let q := Pins.load s false
-  have hLayout := (row_layout 0 0 sp hF).layout s.mem 0 0 0 0
-  have hL : Layout q := ⟨hLayout.dst,hLayout.srcX,hLayout.srcY,hLayout.aliasX,hLayout.aliasY⟩
   change Seg sp0 n sp _ (predictedBody q s.pc false) _
-  rw [← trace_body s false hL]
+  rw [← trace_body s false]
   let r : List (SExpr × Nat) := [(.reg0 1,vectorBytes),(.reg0 2,vectorBytes)]
   let out : List (SExpr × Nat) := [(.reg0 0,vectorBytes)]
   have hBound : ∀ y, InR s r y → InitialBanks sp y := by
@@ -174,7 +172,7 @@ private theorem matrix_effect (q : Targets) (base : Word) (entry : Nat)
     (fun _ h => h) (fun _ h => .inr h)
 
 private theorem first_row (q : Targets) (base : Word) (off : Nat)
-    (hF : FrameOk sp) (hA : Above sp0 n sp (Region sp frameBytes)) :
+    (hA : Above sp0 n sp (Region sp frameBytes)) :
     Seg sp0 n sp (fun y => MatrixBytes sp y ∨ InitialBanks sp y)
       (rowTrace q base sp off (row 0 0)) (FullTemp sp) := by
   let call := off+seqSize (rowPre q off (row 0 0))
@@ -186,7 +184,7 @@ private theorem first_row (q : Targets) (base : Word) (off : Nat)
       [⟨nextPC leaf (body false),.bx 12,[]⟩] NoBytes := quiet (by rfl) rfl
   have hPre := (first_row_prepare (base+BitVec.ofNat 32 off) hA).mono (X' := R) (Y := NoBytes)
     (fun _ h => .inl h) (fun _ h => h)
-  have hCore := (first_row_leaf leaf hF hA).mono (X' := R) (Y := FullTemp sp)
+  have hCore := (first_row_leaf leaf hA).mono (X' := R) (Y := FullTemp sp)
     (fun _ h => .inr h) (fun _ h => h)
   have h := (hPre.cat (hCall.cat (hCore.cat hRet))).mono (X' := R) (Y' := FullTemp sp)
     (fun _ h => h) (fun _ h => .inr (.inr (.inl h)))
@@ -227,11 +225,11 @@ private theorem covered_prefix {y : Word} (h : Region sp batchBytes y) :
   · exact .inl (.inr (.inr (.inr (.inr (offset_region hA (by omega) (by omega))))))
   exact .inr (.inl (offset_region hA (by omega) (by omega)))
 
-private theorem prefix_effect (q : Targets) (base : Word) (entry : Nat) (hF : FrameOk sp)
+private theorem prefix_effect (q : Targets) (base : Word) (entry : Nat)
     (hA : Above sp0 n sp (Region sp frameBytes)) :
     Seg sp0 n sp (Initialized sp) (firstRowPrefix q base sp entry) (Region sp batchBytes) := by
   have hM := matrix_effect q base entry hA
-  have hR := first_row q base (rowPc q (firstRow q entry (phases 0)) 0 0) hF hA
+  have hR := first_row q base (rowPc q (firstRow q entry (phases 0)) 0 0) hA
   have h := hM.append (hR.mono (fun y hy => hy.elim (fun hm => .inr hm)
     (fun hb => .inl (.inr (.inr (.inl hb))))) (fun _ h => h))
   exact (Seg.keep_inputs h).mono (fun _ h => h) (fun _ h => covered_prefix h)
@@ -274,7 +272,6 @@ private theorem starts_with_row (q : Targets) (base sp : Word) (entry done : Nat
     banks and control words and the public correction literal are read. -/
 theorem loop {code : List (BitVec 8)} {q : Targets} {base : Word} {entry done : Nat}
     (h : LiteralLinks code q entry done) (hBase : base.toNat % 4 = 0)
-    (hBound : base.toNat + q.literal + 4 ≤ 2^32) (hF : FrameOk sp)
     (hSp : ∀ e ∈ loopTrace q base sp entry done, (!(e.instr.dsts.contains 13)) = true)
     (hA : Above sp0 n sp (fun y => Region sp frameBytes y ∨ Region (base+BitVec.ofNat 32 q.literal) 4 y)) :
     Seg sp0 n sp (fun y => Initialized sp y ∨ Region (base+BitVec.ofNat 32 q.literal) 4 y)
@@ -284,11 +281,11 @@ theorem loop {code : List (BitVec 8)} {q : Targets} {base : Word} {entry done : 
   let In := fun y => Initialized sp y ∨ L y
   let Ready := fun y => Region sp batchBytes y ∨ L y
   have hInit : Seg sp0 n sp In (firstRowPrefix q base sp entry) (Region sp batchBytes) :=
-    (prefix_effect q base entry hF (fun y h => hA y (.inl h))).mono (fun _ h => .inl h) (fun _ h => h)
+    (prefix_effect q base entry (fun y h => hA y (.inl h))).mono (fun _ h => .inl h) (fun _ h => h)
   have hStart : Seg sp0 n sp In (firstRowPrefix q base sp entry) Ready :=
     (Seg.keep_inputs hInit).mono (fun _ h => h) (fun _ h => h.elim .inr (fun hb => .inl (.inr hb)))
   have hReads : ReadsFrom Ready rest := by
-    have r := TraceReads.loop (sp := sp) h hBase hBound
+    have r := TraceReads.loop (sp := sp) h hBase
     intro e he
     exact r e (by rw [hr]; exact List.mem_append_right _ he)
   have hWrites : WritesTo (Region sp frameBytes) rest := by

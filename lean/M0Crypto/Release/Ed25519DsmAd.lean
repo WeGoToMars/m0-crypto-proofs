@@ -5,7 +5,7 @@ import M0Crypto.Release.Ed25519WnafAd
 /-!
 # `m0c_ge_dsm` at verify's call
 
-* `dq`, `bszD`: the callee with no program body; the body is `0x2832 … 0x2d00`;
+* `dq`, `bszD`: the callee with no program body; the body is `dsm_body … dsm_leave`;
 * `xpD`, `xpvD`: its extra public values, the 64 words of each digit array; `dP`, `zP`: the digit
   words and the zero tests from them;
 * `xpreD`: the digits are of widths `5` and `3`; `PostD`: under `dsmPre`, the outputs hold
@@ -38,15 +38,16 @@ open M0Crypto.Release.Ed25519WnafAd (wordsAt wordsOf bytesOfW bytes_words wordsA
 open M0Crypto.Release.Ed25519VerifyProg (ioDsm)
 open M0Crypto.Release.Ed25519ScalarMul (dsmTop)
 open M0Crypto.Release.Field25519Congr (ModP)
+open M0Crypto.Artifacts.Ed25519Compact (dsm_body dsm_leave)
 
 /-! ## The callee and its public values -/
 
 abbrev dq : CalleeP DS DB := dsQ ioDsm .nil
 
-/-- The body's size: from `0x2832` to the epilogue at `0x2d00`. -/
+/-- The body's size: from `dsm_body` to the epilogue at `dsm_leave`. -/
 def bszD : Nat := 0x4ce
 
-theorem dq_facts : dq.body = 0x2832 ∧ dq.st0 = stE ∧ dq.epiW bszD = 0x2d00 ∧ dq.okF = true := by decide +kernel
+theorem dq_facts : dq.body = dsm_body ∧ dq.st0 = stE ∧ dq.epiW bszD = dsm_leave ∧ dq.okF = true := by decide +kernel
 
 /-- The extra public values: the 64 words of each digit array. -/
 def xpD (st : State) : List Word := wordsAt st.mem (st.regs 1) 64 ++ wordsAt st.mem (st.regs 2) 64
@@ -166,7 +167,7 @@ theorem send_outs : (∀ o ∈ [0, 32, 64], (Loc.ex 0 o, Kd.fe) ∈ Send.Γ ∧ 
 section body
 variable {B : List (BitVec 8)} {BS : Nat} [CodeBytes B BS] {Rs : Rels}
 
-/-- **The body** from its start to the epilogue at `0x2d00`: the trace `ΨD` of the public values
+/-- **The body** from its start to the epilogue at `dsm_leave`: the trace `ΨD` of the public values
 and, under `dsmPre`, the outputs of `dsmSem`. -/
 theorem dsm_body (b : Ed25519.Build) (hB : B = b.bytes) (cd : Code B BS) (cl : CodeL B BS) (cb : CodeB B BS)
     (ads : ∀ a, Ad Rs B BS (dsS a)) (bds : ∀ k, Bd Rs (dbS k)) (hA : ∀ a, (ads a).sem = dsV a)

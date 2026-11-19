@@ -27,6 +27,7 @@ open M0Crypto.Release.Ed25519DsmProg
 open M0Crypto.Release.Ed25519DsmBlocks
 open M0Crypto.Sym (SExpr)
 open M0Crypto.Release.BlockEffect (eff_run)
+open M0Crypto.Artifacts.Ed25519Compact (dsm_save_top dsm_scan dsm_scan_back dsm_scan_branch dsm_scan_dec)
 
 /-! ## The scan's blocks -/
 
@@ -37,18 +38,18 @@ def scanAl : List (SExpr × Nat) := [(.reg0 13, 4), (bA oHp, 1), (bA oSp, 1)]
 def scanRg : List (SExpr × Nat) := [(spW 20, 8), (bA oHp, 1), (bA oSp, 1)]
 def scanAs : List SExpr := [.reg0 13, bA oHp, bA oSp]
 
-theorem scan_ok : sglueOk dsGeo.cs scanG 0x2a20 dsGeo.top dsGeo.N scanAl [] scanRg = true ∧
+theorem scan_ok : sglueOk dsGeo.cs scanG dsm_scan dsGeo.top dsGeo.N scanAl [] scanRg = true ∧
     traceOkE scanG scanAs = true ∧
-    sglueOk dsGeo.cs [.subImm8 0 1] 0x2a2e dsGeo.top dsGeo.N [] [] [] = true ∧
+    sglueOk dsGeo.cs [.subImm8 0 1] dsm_scan_dec dsGeo.top dsGeo.N [] [] [] = true ∧
     traceOkE [.subImm8 0 1] [] = true := by
   decide +kernel
 
 /-- The code of the body at its offsets, decided per build. -/
 structure Code (B : List (BitVec 8)) (BS : Nat) [CodeBytes B BS] : Prop where
-  scan : piecesAt B 0x2a20 (.seq scanG :: (xitBr 1#4 false 0x2a2a 0x2a34 ++ [])) = true
-  dec : piecesAt B 0x2a2e (.seq [.subImm8 0 1] :: (xitBr 5#4 false 0x2a30 0x2a20 ++ [])) = true
-  br1 : brOk (B := B) dsGeo false 0x2a2a 0x2a34 = true
-  br2 : brOk (B := B) dsGeo false 0x2a30 0x2a20 = true
+  scan : piecesAt B dsm_scan (.seq scanG :: (xitBr 1#4 false dsm_scan_branch dsm_save_top ++ [])) = true
+  dec : piecesAt B dsm_scan_dec (.seq [.subImm8 0 1] :: (xitBr 5#4 false dsm_scan_back dsm_scan ++ [])) = true
+  br1 : brOk (B := B) dsGeo false dsm_scan_branch dsm_save_top = true
+  br2 : brOk (B := B) dsGeo false dsm_scan_back dsm_scan = true
   pieces : segs.all (fun p => piecesAt B p.1 (Prog.emit dsS dbS [] p.1 p.2)) = true
   bok : segs.all (fun p => Prog.bok (B := B) dsS dbS dsGeo [] p.2 p.1) = true
 
@@ -167,18 +168,18 @@ variable (Rs : Rels) {B : List (BitVec 8)} {BS : Nat} [CodeBytes B BS] {c : Ctx}
 
 /-- One pass of the scan at index `j`, with the trace `k` after the decrement's test. -/
 def scanHd (z : Nat → Bool) (Ψ : Nat → TrP) (j : Nat) (k : TrP) : TrP :=
-  Tr.cat (Tr.is (blockTrE scanG (c.base + BitVec.ofNat 32 0x2a20) scanAs
+  Tr.cat (Tr.is (blockTrE scanG (c.base + BitVec.ofNat 32 dsm_scan) scanAs
       [dsGeo.fsp c, c.ptr 2 + BitVec.ofNat 32 j, c.ptr 1 + BitVec.ofNat 32 j]))
-    (Tr.cat (Tr.is [bcEv c (1#4 ^^^ 1) 0x2a2a (0x2a2a + 4)]) (Tr.cond (z j)
-      (Tr.cat (Tr.is (blockTrE [.subImm8 0 1] (c.base + BitVec.ofNat 32 0x2a2e) [] []))
-        (Tr.cat (Tr.is [bcEv c (5#4 ^^^ 1) 0x2a30 (0x2a30 + 4)]) k))
-      (Tr.cat (Tr.is [bEv c (0x2a2a + 2) 0x2a34]) (Ψ j))))
+    (Tr.cat (Tr.is [bcEv c (1#4 ^^^ 1) dsm_scan_branch (dsm_scan_branch + 4)]) (Tr.cond (z j)
+      (Tr.cat (Tr.is (blockTrE [.subImm8 0 1] (c.base + BitVec.ofNat 32 dsm_scan_dec) [] []))
+        (Tr.cat (Tr.is [bcEv c (5#4 ^^^ 1) dsm_scan_back (dsm_scan_back + 4)]) k))
+      (Tr.cat (Tr.is [bEv c (dsm_scan_branch + 2) dsm_save_top]) (Ψ j))))
 
 /-- **The scan's trace** from index `j`, then `Ψ` of the result. -/
 def scanTr (z : Nat → Bool) (Ψ : Nat → TrP) : Nat → TrP
-  | 0 => scanHd (c := c) z Ψ 0 (Tr.cond true (Ψ (2 ^ 32 - 1)) (Tr.cat (Tr.is [bEv c (0x2a30 + 2) 0x2a20]) (Tr.is [])))
+  | 0 => scanHd (c := c) z Ψ 0 (Tr.cond true (Ψ (2 ^ 32 - 1)) (Tr.cat (Tr.is [bEv c (dsm_scan_back + 2) dsm_scan]) (Tr.is [])))
   | j + 1 => scanHd (c := c) z Ψ (j + 1)
-      (Tr.cond false (Ψ 0) (Tr.cat (Tr.is [bEv c (0x2a30 + 2) 0x2a20]) (scanTr z Ψ j)))
+      (Tr.cond false (Ψ 0) (Tr.cat (Tr.is [bEv c (dsm_scan_back + 2) dsm_scan]) (scanTr z Ψ j)))
 
 /-- The views of `s0` at the digit pointers. -/
 theorem s0_ptrs : (Loc.fr 24, Kd.pw (.ext 2 0)) ∈ s0.Γ ∧ (Loc.fr 20, Kd.pw (.ext 1 0)) ∈ s0.Γ ∧ s0.X = [] ∧
@@ -196,16 +197,16 @@ theorem at_stS {o i j : Nat} {σ : List (Reg × SV)} {E : Loc → V} {t : State}
   at_weak Rs m0 h (by simp [glueSt, keep_nil, stS, rs]) (by simp [glueSt, stS, rs])
     hσ (by simp [stS, rs, s0_ptrs.2.2.2])
 
-/-- **One scan test** at index `j`: on both digits zero to the decrement at `0x2a2e` with the trace
-`K` after it, else to `0x2a34`. -/
+/-- **One scan test** at index `j`: on both digits zero to the decrement at `dsm_scan_dec` with the trace
+`K` after it, else to `dsm_save_top`. -/
 theorem scan_hd (g : GeoOk c dsGeo Wc Rc) (F : Caller c.base c.sp0 dsGeo.N Wc) (cd : Code B BS)
     {E : Loc → V} {Q : State → Prop} {Ψ : Nat → TrP} {K : TrP} {j : Nat} (hj : j < 256) {t : State}
-    (hat : At Rs B c dsGeo m0 0x2a20 (stS j) E t)
-    (kz : zd m0 c j = true → ∀ u, At Rs B c dsGeo m0 0x2a2e (stS j) E u →
+    (hat : At Rs B c dsGeo m0 dsm_scan (stS j) E t)
+    (kz : zd m0 c j = true → ∀ u, At Rs B c dsGeo m0 dsm_scan_dec (stS j) E u →
       ReachFT c.base (PcIn c.base dsGeo.cs) (Has Rc) (Has Wc) (InStackWindow c.sp0 dsGeo.N) u Q
-        (Tr.cat (Tr.is (blockTrE [.subImm8 0 1] (c.base + BitVec.ofNat 32 0x2a2e) [] []))
-          (Tr.cat (Tr.is [bcEv c (5#4 ^^^ 1) 0x2a30 (0x2a30 + 4)]) K)))
-    (kn : zd m0 c j = false → ∀ u, At Rs B c dsGeo m0 0x2a34 (stS j) E u →
+        (Tr.cat (Tr.is (blockTrE [.subImm8 0 1] (c.base + BitVec.ofNat 32 dsm_scan_dec) [] []))
+          (Tr.cat (Tr.is [bcEv c (5#4 ^^^ 1) dsm_scan_back (dsm_scan_back + 4)]) K)))
+    (kn : zd m0 c j = false → ∀ u, At Rs B c dsGeo m0 dsm_save_top (stS j) E u →
       ReachFT c.base (PcIn c.base dsGeo.cs) (Has Rc) (Has Wc) (InStackWindow c.sp0 dsGeo.N) u Q (Ψ j)) :
     ReachFT c.base (PcIn c.base dsGeo.cs) (Has Rc) (Has Wc) (InStackWindow c.sp0 dsGeo.N) t Q
       (scanHd (c := c) (zd m0 c) Ψ j K) := by
@@ -249,7 +250,7 @@ theorem scan_hd (g : GeoOk c dsGeo Wc Rc) (F : Caller c.base c.sp0 dsGeo.N Wc) (
       show (execAll scanG t).regs 0 = BitVec.ofNat 32 j
       rw [(eff_run effs_ok.1 t).reg 0 (by decide) (by decide)]; exact h0
     · exact ⟨by decide, by simpa [SV.val] using h13'⟩
-  · have e : 0x2a20 + seqSize scanG = 0x2a2a := by decide
+  · have e : dsm_scan + seqSize scanG = dsm_scan_branch := by decide
     rw [e] at hu hp2
     refine br_run Rs m0 g F (d := zd m0 c j) (by decide) cd.br1 hp2 hu ?_
       (fun hz hS _ => kz hz _ (at_stS Rs m0 hS (by simp [stS])))
@@ -266,19 +267,19 @@ theorem scan_hd (g : GeoOk c dsGeo Wc Rc) (F : Caller c.base c.sp0 dsGeo.N Wc) (
       · rfl
       · exact absurd (hz.mp h) hzz
 
-/-- **The decrement** at `0x2a2e` and `bpl` back to the scan: at `j = 0` to `0x2a34` with `r0 = −1`,
-else back to `0x2a20` at `j − 1`. -/
+/-- **The decrement** at `dsm_scan_dec` and `bpl` back to the scan: at `j = 0` to `dsm_save_top` with `r0 = −1`,
+else back to `dsm_scan` at `j − 1`. -/
 theorem scan_dec (g : GeoOk c dsGeo Wc Rc) (F : Caller c.base c.sp0 dsGeo.N Wc) (cd : Code B BS)
     {E : Loc → V} {Q : State → Prop} {Ψk Ψx : TrP} {j : Nat} (hj : j < 256) {t : State}
-    (hat : At Rs B c dsGeo m0 0x2a2e (stS j) E t)
-    (k0 : j = 0 → ∀ u, At Rs B c dsGeo m0 0x2a34 (stS (2 ^ 32 - 1)) E u →
+    (hat : At Rs B c dsGeo m0 dsm_scan_dec (stS j) E t)
+    (k0 : j = 0 → ∀ u, At Rs B c dsGeo m0 dsm_save_top (stS (2 ^ 32 - 1)) E u →
       ReachFT c.base (PcIn c.base dsGeo.cs) (Has Rc) (Has Wc) (InStackWindow c.sp0 dsGeo.N) u Q Ψk)
-    (k1 : ∀ i, j = i + 1 → ∀ u, At Rs B c dsGeo m0 0x2a20 (stS i) E u →
+    (k1 : ∀ i, j = i + 1 → ∀ u, At Rs B c dsGeo m0 dsm_scan (stS i) E u →
       ReachFT c.base (PcIn c.base dsGeo.cs) (Has Rc) (Has Wc) (InStackWindow c.sp0 dsGeo.N) u Q Ψx) :
     ReachFT c.base (PcIn c.base dsGeo.cs) (Has Rc) (Has Wc) (InStackWindow c.sp0 dsGeo.N) t Q
-      (Tr.cat (Tr.is (blockTrE [.subImm8 0 1] (c.base + BitVec.ofNat 32 0x2a2e) [] []))
-        (Tr.cat (Tr.is [bcEv c (5#4 ^^^ 1) 0x2a30 (0x2a30 + 4)])
-          (Tr.cond (j == 0) Ψk (Tr.cat (Tr.is [bEv c (0x2a30 + 2) 0x2a20]) Ψx)))) := by
+      (Tr.cat (Tr.is (blockTrE [.subImm8 0 1] (c.base + BitVec.ofNat 32 dsm_scan_dec) [] []))
+        (Tr.cat (Tr.is [bcEv c (5#4 ^^^ 1) dsm_scan_back (dsm_scan_back + 4)])
+          (Tr.cond (j == 0) Ψk (Tr.cat (Tr.is [bEv c (dsm_scan_back + 2) dsm_scan]) Ψx)))) := by
   have h0 : t.regs 0 = BitVec.ofNat 32 j := (hat.2.2.2.1 (0, .k j) (by simp [stS])).2
   have hd := dec_n t (by rw [h0, BitVec.toNat_ofNat]; omega)
   let n : Nat := if j = 0 then 2 ^ 32 - 1 else j - 1
@@ -296,7 +297,7 @@ theorem scan_dec (g : GeoOk c dsGeo Wc Rc) (F : Caller c.base c.sp0 dsGeo.N Wc) 
     rcases hp with rfl | rfl
     · exact ⟨show (0 : Nat) < 14 by decide, hd.2.trans hn⟩
     · exact ⟨by decide, by simpa [SV.val] using h13'⟩
-  · have e : 0x2a2e + seqSize [Instr.subImm8 0 1] = 0x2a30 := by decide
+  · have e : dsm_scan_dec + seqSize [Instr.subImm8 0 1] = dsm_scan_back := by decide
     rw [e] at hu hp2
     refine br_run Rs m0 g F (d := j == 0) (by decide) cd.br2 hp2 hu ?_ (fun hz hS _ => ?_) (fun hz hX => ?_)
     · show (!((Instr.subImm8 0 1).next t).n) = !(j == 0)
@@ -315,12 +316,12 @@ theorem scan_dec (g : GeoOk c dsGeo Wc Rc) (F : Caller c.base c.sp0 dsGeo.N Wc) 
       obtain ⟨i, rfl⟩ : ∃ i, j = i + 1 := ⟨j - 1, by omega⟩
       exact k1 i rfl _ (at_stS Rs m0 hX (by simp [stS, n]))
 
-/-- **The scan** from index `j`: to `0x2a34` with `r0` the highest index up to `j` whose digits are
+/-- **The scan** from index `j`: to `dsm_save_top` with `r0` the highest index up to `j` whose digits are
 not both zero, or `2 ^ 32 − 1` (`topI`). -/
 theorem scan_loop (g : GeoOk c dsGeo Wc Rc) (F : Caller c.base c.sp0 dsGeo.N Wc) (cd : Code B BS)
     {E : Loc → V} {Q : State → Prop} {Ψ : Nat → TrP} :
-    ∀ j, j < 256 → ∀ t, At Rs B c dsGeo m0 0x2a20 (stS j) E t →
-      (∀ u, At Rs B c dsGeo m0 0x2a34 (stS (topI (zd m0 c) j)) E u →
+    ∀ j, j < 256 → ∀ t, At Rs B c dsGeo m0 dsm_scan (stS j) E t →
+      (∀ u, At Rs B c dsGeo m0 dsm_save_top (stS (topI (zd m0 c) j)) E u →
         ReachFT c.base (PcIn c.base dsGeo.cs) (Has Rc) (Has Wc) (InStackWindow c.sp0 dsGeo.N) u Q
           (Ψ (topI (zd m0 c) j))) →
       ReachFT c.base (PcIn c.base dsGeo.cs) (Has Rc) (Has Wc) (InStackWindow c.sp0 dsGeo.N) t Q
