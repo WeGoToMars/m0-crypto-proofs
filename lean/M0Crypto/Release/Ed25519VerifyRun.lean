@@ -30,20 +30,18 @@ def CS : BitVec 4 := 2
 /-- **The sites follow each other**: each starts where the previous one and its test end. -/
 theorem sites_at :
     oP0 + p0.size vpS vbS = oC0 ∧
-    oC0 + (c0 : Op VX VB).size vxS vbS + seqSize [.cmpImm 0 0] + 4 = oC1 ∧
-    oC1 + (c1 : Op VX VB).size vxS vbS + seqSize [.cmpImm 0 0] + 4 = oP2 ∧
+    oC0 + (c0 : Op VX VB).size vxS vbS + seqSize [.cmpImm 0 0] + 4 = oR ∧
+    oR + (checkR : Op VX VB).size vxS vbS + seqSize [.cmpImm 0 0] + 4 = oP2 ∧
     oP2 + p2.size vpS vbS = oB2 ∧
     oB2 + (b2 : Op VX VB).size vxS vbS + seqSize [] + 4 = oP3 ∧
     oP3 + p3.size vpS vbS = oW5 ∧
     oW5 + (w5 : Op VX VB).size vxS vbS = oW3 ∧
     oW3 + (w3 : Op VX VB).size vxS vbS = oDm ∧
-    oDm + (dm : Op VX VB).size vxS vbS = oM3 ∧
-    oM3 + m3.size vpS vbS = oE3 ∧
-    oE3 + (e3 : Op VX VB).size vxS vbS + seqSize [.cmpImm 0 0] + 4 = oM4 ∧
-    oM4 + m4.size vpS vbS = oE4 ∧
-    oE4 + (e4 : Op VX VB).size vxS vbS + seqSize [.cmpImm 0 0] + 4 = oOk ∧
+    oDm + (dm : Op VX VB).size vxS vbS = oEncode ∧
+    oEncode + encode.size vpS vbS = oCompare ∧
+    oCompare + (compare : Op VX VB).size vxS vbS + seqSize [.cmpImm 0 0] + 4 = oOk ∧
     oOk + seqSize okG + 2 = oFail ∧ oFail + seqSize failG = oLeave ∧
-    bodyAt verifyGeo ed25519_verify = oP0 ∧ oP0 + 436 = oLeave := by
+    bodyAt verifyGeo ed25519_verify = oP0 ∧ oP0 + verifyBodyBytes = oLeave := by
   decide +kernel
 
 /-! ## The code checks, both builds -/
@@ -56,8 +54,7 @@ def linesChk (B : List (BitVec 8)) (BS : Nat) [CodeBytes B BS] : Prop :=
   (p0.bok vpS vbS verifyGeo [] oP0 = true ∧ piecesAt B oP0 (Prog.emit vpS vbS [] oP0 p0 ++ []) = true) ∧
   (p2.bok vpS vbS verifyGeo [] oP2 = true ∧ piecesAt B oP2 (Prog.emit vpS vbS [] oP2 p2 ++ []) = true) ∧
   (p3.bok vpS vbS verifyGeo [] oP3 = true ∧ piecesAt B oP3 (Prog.emit vpS vbS [] oP3 p3 ++ []) = true) ∧
-  (m3.bok vpS vbS verifyGeo [] oM3 = true ∧ piecesAt B oM3 (Prog.emit vpS vbS [] oM3 m3 ++ []) = true) ∧
-  (m4.bok vpS vbS verifyGeo [] oM4 = true ∧ piecesAt B oM4 (Prog.emit vpS vbS [] oM4 m4 ++ []) = true)
+  (encode.bok vpS vbS verifyGeo [] oEncode = true ∧ piecesAt B oEncode (Prog.emit vpS vbS [] oEncode encode ++ []) = true)
 
 theorem lines_code : @linesChk b.bytes b.size b.codeBytes := by
   cases b <;> (simp only [linesChk, piecesAt_eq_scan]; decide +kernel)
@@ -70,8 +67,9 @@ def zChk (B : List (BitVec 8)) (BS : Nat) [CodeBytes B BS] (x : Op VX VB) (o : N
   piecesAt B o (x.pieces vxS vbS ++ (.seq [.cmpImm 0 0] ::
     xitBr NE false (o + x.size vxS vbS + seqSize [.cmpImm 0 0]) oFail ++ [])) = true
 
-theorem sites_code : @zChk b.bytes b.size b.codeBytes c0 oC0 ∧ @zChk b.bytes b.size b.codeBytes c1 oC1 ∧
-    @zChk b.bytes b.size b.codeBytes e3 oE3 ∧ @zChk b.bytes b.size b.codeBytes e4 oE4 := by
+theorem sites_code : @zChk b.bytes b.size b.codeBytes c0 oC0 ∧
+    @zChk b.bytes b.size b.codeBytes checkR oR ∧
+    @zChk b.bytes b.size b.codeBytes compare oCompare := by
   cases b <;> (simp only [zChk, piecesAt_eq_scan]; decide +kernel)
 
 /-- The checks of the `lt` block at `oB2`, its test and the exit to `oFail`. -/
@@ -104,16 +102,15 @@ theorem xsites_code : @xChk b.bytes b.size b.codeBytes w5 oW5 ∧ @xChk b.bytes 
 theorem tail_code : @tailChk b.bytes b.size b.codeBytes := by
   cases b <;> (simp only [tailChk, piecesAt_eq_scan, seqAt_eq_scan]; decide +kernel)
 
-theorem verify_entryOk : entryOkP verifyGeo 436 ed25519_verify = true := by decide +kernel
+theorem verify_entryOk : entryOkP verifyGeo verifyBodyBytes ed25519_verify = true := by decide +kernel
 
 end
 
 /-! ## The static facts the run uses -/
 
-theorem starts_ex : (addViews v2 l1).ex = none ∧ (addViews v4 l2).ex = none ∧ v8.ex = none ∧
-    (addViews v10 []).ex = none := by decide +kernel
+theorem starts_ex : vR.ex = none ∧ (addViews v4 l2).ex = none ∧ v8.ex = none := by decide +kernel
 
-theorem ends_X : v1.X = [] ∧ v2.X = [] ∧ v4.X = [] ∧ v10.X = [] ∧ v12.X = [] := by decide +kernel
+theorem ends_X : v1.X = [] ∧ vR.X = [] ∧ v4.X = [] ∧ v10.X = [] := by decide +kernel
 
 /-! ## The adapters -/
 
@@ -121,7 +118,7 @@ section
 variable (Rs : Rels) (B : List (BitVec 8)) (BS : Nat) [cb : CodeBytes B BS]
 
 /-- **The adapters of the body**: the straight lines' callees, the `lt` block with its test,
-`ge_decompress` and `fe_eq` with their status, `sc_wnaf` at both widths and `ge_dsm`. -/
+`ge_decompress` and exact byte comparison with their status, `sc_wnaf` at both widths and `ge_dsm`. -/
 structure VAd where
   ap : ∀ a, Ad Rs B BS (vpS a)
   apE : ∀ a base p, (vpS a).Eff p base ((ap a).T base p)
@@ -132,12 +129,15 @@ structure VAd where
   dc : AdX Rs (cb := cb) (vxS .dec)
   zd : ZSt Rs dc
   zd_co : zd.co = decCo
+  rc : AdX Rs (cb := cb) (vxS .checkR)
+  zr : ZSt Rs rc
+  zr_co : zr.co = []
   w5 : AdX Rs (cb := cb) (vxS (.wnaf 5))
   w3 : AdX Rs (cb := cb) (vxS (.wnaf 3))
   dm : AdX Rs (cb := cb) (vxS .dsm)
-  eq : AdX Rs (cb := cb) (vxS .eq)
-  ze : ZSt Rs eq
-  ze_co : ze.co = []
+  cmp : AdX Rs (cb := cb) (vxS .compare)
+  zc : ZSt Rs cmp
+  zc_co : zc.co = []
 
 variable {Rs B BS}
 
@@ -159,15 +159,16 @@ def i0 : List V := ioVs verifyGeo c m0 v0 (regsOf v0.Γ v0.σ aC0) (vxS .dec).io
 def d0 : Bool := D.zd.ok (D.i0 c m0)
 def E2 : Loc → V := updOuts (xcallEv verifyGeo c m0 v0 (regsOf v0.Γ v0.σ aC0) (vxS .dec).io D.dc.sem (D.E1 c m0))
   l0 (D.zd.csem (D.i0 c m0))
-/-- `R`'s. -/
-def i1 : List V := ioVs verifyGeo c m0 (addViews v1 l0) (regsOf (addViews v1 l0).Γ (addViews v1 l0).σ aC1)
-  (vxS .dec).io (D.E2 c m0)
-def d1 : Bool := D.zd.ok (D.i1 c m0)
-def E3 : Loc → V := updOuts (xcallEv verifyGeo c m0 (addViews v1 l0)
-  (regsOf (addViews v1 l0).Γ (addViews v1 l0).σ aC1) (vxS .dec).io D.dc.sem (D.E2 c m0)) l1 (D.zd.csem (D.i1 c m0))
+/-- The early R check reads the signature's first 32 bytes. -/
+def iR : List V := ioVs verifyGeo c m0 (addViews v1 l0)
+  (regsOf (addViews v1 l0).Γ (addViews v1 l0).σ aR) (vxS .checkR).io (D.E2 c m0)
+def dR : Bool := D.zr.ok (D.iR c m0)
+def ER : Loc → V := updOuts (xcallEv verifyGeo c m0 (addViews v1 l0)
+  (regsOf (addViews v1 l0).Γ (addViews v1 l0).σ aR) (vxS .checkR).io D.rc.sem (D.E2 c m0))
+  [] (D.zr.csem (D.iR c m0))
 /-- `s` and the operands of `lt`, its status and the values after it. -/
 def E4 : Loc → V := Prog.ev vpS vbS verifyGeo (fun a => (D.ap a).sem) (fun b => (D.bds b).sem) c m0 p2
-  (addViews v2 l1) (D.E3 c m0)
+  vR (D.ER c m0)
 def i2 : List V := ioVs verifyGeo c m0 v3 (regsOf v3.Γ v3.σ []) (vbS .lt).io (D.E4 c m0)
 def d2 : Bool := D.zl.ok (D.i2 c m0)
 def E5 : Loc → V := updOuts ((b2 : Op VX VB).ev vxS vbS verifyGeo (fun _ _ => []) (fun _ => D.lt.sem) c m0 v3
@@ -181,41 +182,33 @@ def i6 : List V := ioVs verifyGeo c m0 v6 (regsOf v6.Γ v6.σ aW3) (vxS (.wnaf 3
 def E8 : Loc → V := xcallEv verifyGeo c m0 v6 (regsOf v6.Γ v6.σ aW3) (vxS (.wnaf 3)).io D.w3.sem (D.E7 c m0)
 def i7 : List V := ioVs verifyGeo c m0 v7 (regsOf v7.Γ v7.σ aDm) (vxS .dsm).io (D.E8 c m0)
 def E9 : Loc → V := xcallEv verifyGeo c m0 v7 (regsOf v7.Γ v7.σ aDm) (vxS .dsm).io D.dm.sem (D.E8 c m0)
-/-- `x_R Z` and the `X` comparison. -/
-def E10 : Loc → V := Prog.ev vpS vbS verifyGeo (fun a => (D.ap a).sem) (fun b => (D.bds b).sem) c m0 m3 v8
+/-- Compress the projective result and compare its encoding with raw R. -/
+def E10 : Loc → V := Prog.ev vpS vbS verifyGeo (fun a => (D.ap a).sem) (fun b => (D.bds b).sem) c m0 encode v8
   (D.E9 c m0)
-def i9 : List V := ioVs verifyGeo c m0 v9 (regsOf v9.Γ v9.σ aE3) (vxS .eq).io (D.E10 c m0)
-def d3 : Bool := D.ze.ok (D.i9 c m0)
-def E11 : Loc → V := updOuts (xcallEv verifyGeo c m0 v9 (regsOf v9.Γ v9.σ aE3) (vxS .eq).io D.eq.sem (D.E10 c m0))
-  [] (D.ze.csem (D.i9 c m0))
-/-- `y_R Z` and the `Y` comparison. -/
-def E12 : Loc → V := Prog.ev vpS vbS verifyGeo (fun a => (D.ap a).sem) (fun b => (D.bds b).sem) c m0 m4
-  (addViews v10 []) (D.E11 c m0)
-def i11 : List V := ioVs verifyGeo c m0 v11 (regsOf v11.Γ v11.σ aE4) (vxS .eq).io (D.E12 c m0)
-def d4 : Bool := D.ze.ok (D.i11 c m0)
+def i9 : List V := ioVs verifyGeo c m0 v9 (regsOf v9.Γ v9.σ aCompare) (vxS .compare).io (D.E10 c m0)
+def d3 : Bool := D.zc.ok (D.i9 c m0)
 
 /-- **The verdict of the tests**. -/
-def ok : Bool := D.d0 c m0 && D.d1 c m0 && D.d2 c m0 && D.d3 c m0 && D.d4 c m0
+def ok : Bool := D.d0 c m0 && D.dR c m0 && D.d2 c m0 && D.d3 c m0
 
 /-! ## The public values of the stitched calls -/
 
 def P0 : Nat → Word := xcallPub verifyGeo c v0 aC0 (vxS .dec) (D.dc.xpv (D.i0 c m0))
-def P1 : Nat → Word := xcallPub verifyGeo c (addViews v1 l0) aC1 (vxS .dec) (D.dc.xpv (D.i1 c m0))
+def PR : Nat → Word := xcallPub verifyGeo c (addViews v1 l0) aR (vxS .checkR) (D.rc.xpv (D.iR c m0))
 def P5 : Nat → Word := xcallPub verifyGeo c v5 aW5 (vxS (.wnaf 5)) (D.w5.xpv (D.i5 c m0))
 def P6 : Nat → Word := xcallPub verifyGeo c v6 aW3 (vxS (.wnaf 3)) (D.w3.xpv (D.i6 c m0))
 def P7 : Nat → Word := xcallPub verifyGeo c v7 aDm (vxS .dsm) (D.dm.xpv (D.i7 c m0))
-def P9 : Nat → Word := xcallPub verifyGeo c v9 aE3 (vxS .eq) (D.eq.xpv (D.i9 c m0))
-def P11 : Nat → Word := xcallPub verifyGeo c v11 aE4 (vxS .eq) (D.eq.xpv (D.i11 c m0))
+def P9 : Nat → Word := xcallPub verifyGeo c v9 aCompare (vxS .compare) (D.cmp.xpv (D.i9 c m0))
 
 /-- **The premises of the callees' effects** at the calls the passing tests reach, and the status
 tests as functions of the public values. -/
 def pubOk : Prop :=
   (D.dc.ppre (D.P0 c m0) ∧ D.zd.okp (D.P0 c m0) = D.d0 c m0) ∧
-  (D.d0 c m0 = true → (D.dc.ppre (D.P1 c m0) ∧ D.zd.okp (D.P1 c m0) = D.d1 c m0) ∧
-    (D.d1 c m0 = true → D.d2 c m0 = true →
-      D.w5.ppre (D.P5 c m0) ∧ D.w3.ppre (D.P6 c m0) ∧ D.dm.ppre (D.P7 c m0) ∧
-      (D.eq.ppre (D.P9 c m0) ∧ D.ze.okp (D.P9 c m0) = D.d3 c m0) ∧
-      (D.d3 c m0 = true → D.eq.ppre (D.P11 c m0) ∧ D.ze.okp (D.P11 c m0) = D.d4 c m0)))
+  (D.d0 c m0 = true →
+    (D.rc.ppre (D.PR c m0) ∧ D.zr.okp (D.PR c m0) = D.dR c m0) ∧
+    (D.dR c m0 = true → D.d2 c m0 = true →
+    D.w5.ppre (D.P5 c m0) ∧ D.w3.ppre (D.P6 c m0) ∧ D.dm.ppre (D.P7 c m0) ∧
+    (D.cmp.ppre (D.P9 c m0) ∧ D.zc.okp (D.P9 c m0) = D.d3 c m0)))
 
 /-! ## The trace of the body -/
 
@@ -227,16 +220,12 @@ def tOk : TrP := Tr.cat (Tr.is (blockTr okG (c.base + BitVec.ofNat 32 oOk) [13] 
   (Tr.cat (Tr.is [⟨c.base + BitVec.ofNat 32 (oOk + seqSize okG), .b (brImm11 (oOk + seqSize okG) oLeave), []⟩])
     (Tr.is []))
 
-def tE4 : TrP := xcallTr verifyGeo c oE4 aE4 (vxS .eq).entry
-  (D.eq.T c.base (D.P11 c m0))
-  (tstTr verifyGeo c (oE4 + (e4 : Op VX VB).size vxS vbS) [.cmpImm 0 0] NE oFail (D.d4 c m0) (tOk c) (tFail c))
-def tM4 : TrP := Prog.tr vpS vbS verifyGeo (fun a => (D.ap a).T) c m4 oM4 (addViews v10 []) (D.tE4 c m0) [] []
-def tE3 : TrP := xcallTr verifyGeo c oE3 aE3 (vxS .eq).entry
-  (D.eq.T c.base (D.P9 c m0))
-  (tstTr verifyGeo c (oE3 + (e3 : Op VX VB).size vxS vbS) [.cmpImm 0 0] NE oFail (D.d3 c m0) (D.tM4 c m0) (tFail c))
-def tM3 : TrP := Prog.tr vpS vbS verifyGeo (fun a => (D.ap a).T) c m3 oM3 v8 (D.tE3 c m0) [] []
+def tCompare : TrP := xcallTr verifyGeo c oCompare aCompare (vxS .compare).entry
+  (D.cmp.T c.base (D.P9 c m0))
+  (tstTr verifyGeo c (oCompare + (compare : Op VX VB).size vxS vbS) [.cmpImm 0 0] NE oFail (D.d3 c m0) (tOk c) (tFail c))
+def tEncode : TrP := Prog.tr vpS vbS verifyGeo (fun a => (D.ap a).T) c encode oEncode v8 (D.tCompare c m0) [] []
 def tDm : TrP := xcallTr verifyGeo c oDm aDm (vxS .dsm).entry
-  (D.dm.T c.base (D.P7 c m0)) (D.tM3 c m0)
+  (D.dm.T c.base (D.P7 c m0)) (D.tEncode c m0)
 def tW3 : TrP := xcallTr verifyGeo c oW3 aW3 (vxS (.wnaf 3)).entry
   (D.w3.T c.base (D.P6 c m0)) (D.tDm c m0)
 def tW5 : TrP := xcallTr verifyGeo c oW5 aW5 (vxS (.wnaf 5)).entry
@@ -244,13 +233,13 @@ def tW5 : TrP := xcallTr verifyGeo c oW5 aW5 (vxS (.wnaf 5)).entry
 def tP3 : TrP := Prog.tr vpS vbS verifyGeo (fun a => (D.ap a).T) c p3 oP3 (addViews v4 l2) (D.tW5 c m0) [] []
 def tB2 : TrP := (b2 : Op VX VB).tr vxS vbS verifyGeo (fun _ _ _ => []) c oB2 v3
   (tstTr verifyGeo c (oB2 + (b2 : Op VX VB).size vxS vbS) [] D.zl.cc oFail (D.d2 c m0) (D.tP3 c m0) (tFail c))
-def tP2 : TrP := Prog.tr vpS vbS verifyGeo (fun a => (D.ap a).T) c p2 oP2 (addViews v2 l1) (D.tB2 c m0) [] []
-def tC1 : TrP := xcallTr verifyGeo c oC1 aC1 (vxS .dec).entry
-  (D.dc.T c.base (D.P1 c m0))
-  (tstTr verifyGeo c (oC1 + (c1 : Op VX VB).size vxS vbS) [.cmpImm 0 0] NE oFail (D.d1 c m0) (D.tP2 c m0) (tFail c))
+def tP2 : TrP := Prog.tr vpS vbS verifyGeo (fun a => (D.ap a).T) c p2 oP2 vR (D.tB2 c m0) [] []
+def tR : TrP := xcallTr verifyGeo c oR aR (vxS .checkR).entry
+  (D.rc.T c.base (D.PR c m0))
+  (tstTr verifyGeo c (oR + (checkR : Op VX VB).size vxS vbS) [.cmpImm 0 0] NE oFail (D.dR c m0) (D.tP2 c m0) (tFail c))
 def tC0 : TrP := xcallTr verifyGeo c oC0 aC0 (vxS .dec).entry
   (D.dc.T c.base (D.P0 c m0))
-  (tstTr verifyGeo c (oC0 + (c0 : Op VX VB).size vxS vbS) [.cmpImm 0 0] NE oFail (D.d0 c m0) (D.tC1 c m0) (tFail c))
+  (tstTr verifyGeo c (oC0 + (c0 : Op VX VB).size vxS vbS) [.cmpImm 0 0] NE oFail (D.d0 c m0) (D.tR c m0) (tFail c))
 /-- **The trace of the body**. -/
 def bodyTr : TrP := Prog.tr vpS vbS verifyGeo (fun a => (D.ap a).T) c p0 oP0 stE (D.tC0 c m0) [] []
 
@@ -316,71 +305,68 @@ theorem ok_tail (g : GeoOk c verifyGeo Wc Rc) (F : Caller c.base c.sp0 verifyGeo
 callees' premises on the input values of each site that the passing tests reach. -/
 theorem body_run (D : VAd Rs B BS) (g : GeoOk c verifyGeo Wc Rc) (F : Caller c.base c.sp0 verifyGeo.N Wc)
     (hcR : Sub [codeR c.base] Rc) (hln : linesChk B BS)
-    (hs : zChk B BS c0 oC0 ∧ zChk B BS c1 oC1 ∧ zChk B BS e3 oE3 ∧ zChk B BS e4 oE4) (hlt : ltChk B BS)
+    (hs : zChk B BS c0 oC0 ∧ zChk B BS checkR oR ∧ zChk B BS compare oCompare) (hlt : ltChk B BS)
     (hx : xChk B BS w5 oW5 ∧ xChk B BS w3 oW3 ∧ xChk B BS dm oDm) (htl : tailChk B BS)
-    (hv0 : D.dc.vpre (D.i0 c m0)) (hv1 : D.d0 c m0 = true → D.dc.vpre (D.i1 c m0))
-    (hv2 : D.d0 c m0 = true → D.d1 c m0 = true → D.zl.vpre (D.i2 c m0))
-    (hv5 : D.d0 c m0 = true → D.d1 c m0 = true → D.d2 c m0 = true → D.w5.vpre (D.i5 c m0))
-    (hv6 : D.d0 c m0 = true → D.d1 c m0 = true → D.d2 c m0 = true → D.w3.vpre (D.i6 c m0))
-    (hv7 : D.d0 c m0 = true → D.d1 c m0 = true → D.d2 c m0 = true → D.dm.vpre (D.i7 c m0))
-    (hv9 : D.d0 c m0 = true → D.d1 c m0 = true → D.d2 c m0 = true → D.eq.vpre (D.i9 c m0))
-    (hv11 : D.d0 c m0 = true → D.d1 c m0 = true → D.d2 c m0 = true → D.d3 c m0 = true → D.eq.vpre (D.i11 c m0))
+    (hv0 : D.dc.vpre (D.i0 c m0))
+    (hvR : D.d0 c m0 = true → D.rc.vpre (D.iR c m0))
+    (hv2 : D.d0 c m0 = true → D.zl.vpre (D.i2 c m0))
+    (hv5 : D.d0 c m0 = true → D.d2 c m0 = true → D.w5.vpre (D.i5 c m0))
+    (hv6 : D.d0 c m0 = true → D.d2 c m0 = true → D.w3.vpre (D.i6 c m0))
+    (hv7 : D.d0 c m0 = true → D.d2 c m0 = true → D.dm.vpre (D.i7 c m0))
+    (hv9 : D.d0 c m0 = true → D.d2 c m0 = true → D.cmp.vpre (D.i9 c m0))
     {t : State} (hat : At Rs B c verifyGeo m0 oP0 stE (fun _ => .none) t) :
     ReachFT c.base (PcIn c.base verifyGeo.cs) (Has Rc) (Has Wc) (InStackWindow c.sp0 verifyGeo.N) t
       (QB c m0 (D.ok c m0) (D.pubOk c m0)) (D.bodyTr c m0) := by
-  obtain ⟨⟨hb0, hp0⟩, ⟨hb2, hp2⟩, ⟨hb3, hp3⟩, ⟨hbm3, hpm3⟩, ⟨hbm4, hpm4⟩⟩ := hln
-  obtain ⟨zc0, zc1, ze3, ze4⟩ := hs
+  obtain ⟨⟨hb0, hp0⟩, ⟨hb2, hp2⟩, ⟨hb3, hp3⟩, ⟨hbEnc, hpEnc⟩⟩ := hln
+  obtain ⟨zc0, zr, zcmp⟩ := hs
   obtain ⟨hl1, hl2, hl3, hl4⟩ := hlt
   obtain ⟨⟨hw5b, hw5p⟩, ⟨hw3b, hw3p⟩, ⟨hdmb, hdmp⟩⟩ := hx
-  obtain ⟨t0, t0x, -, t1, -, t1r, t1o, -, t2, -, t2r, t2o, t3, t3x, -, t4, -, t4r, t4o, -, t5, t5x, -, t6, -, t7, -,
-    t8, -, t9, t9x, -, t10, -, t11, t11x, -, t12, -⟩ := sites_ty
-  obtain ⟨sx2, sx4, sx8, sx10⟩ := starts_ex
-  obtain ⟨X1, X2, X4, X10, X12⟩ := ends_X
+  obtain ⟨t0, t0x, -, t1, -, t1r, t1o, -, t3, t3x, -, t4, -, t4r, t4o, -, t5, t5x, -,
+    t6, -, t7, -, t8, -, t9, t9x, -, t10, -⟩ := sites_ty
+  obtain ⟨sx2, sx4, sx8⟩ := starts_ex
+  obtain ⟨X1, XR, X4, X10⟩ := ends_X
   refine prog_run Rs D.ap D.bds m0 g F hcR p0 t0 rfl hb0 hp0 hat (fun _ u0 hu0 _ => ?_)
     (fun l hl => by rw [t0x] at hl; cases hl)
   refine zcall_run Rs m0 g F hcR D.zd (cl := l0) (d := D.d0 c m0) t1 zc0.1 zc0.2.1 zc0.2.2.1 zc0.2.2.2
     (atMv (by decide +kernel) hu0) hv0 (by rw [D.zd_co]; exact t1r) t1o rfl (fun hd0 hk0 u1 hu1 _ => ?_)
     (fun hd0 hk0 u hu => fail_tail g F htl hu (by dsimp only; exact X1) (by simp [VAd.ok, hd0])
       ⟨hk0, fun h => absurd h (by simp [hd0])⟩)
-  refine zcall_run Rs m0 g F hcR D.zd (cl := l1) (d := D.d1 c m0) t2 zc1.1 zc1.2.1 zc1.2.2.1 zc1.2.2.2
-    (atMv (by decide +kernel) hu1) (hv1 hd0) (by rw [D.zd_co]; exact t2r) t2o rfl (fun hd1 hk1 u2 hu2 _ => ?_)
-    (fun hd1 hk1 u hu => fail_tail g F htl hu (by dsimp only; exact X2) (by simp [VAd.ok, hd1])
-      ⟨hk0, fun _ => ⟨hk1, fun h => absurd h (by simp [hd1])⟩⟩)
-  refine prog_run Rs D.ap D.bds m0 g F hcR p2 t3 sx2 hb2 hp2 (atMv (by decide +kernel) hu2) (fun _ u3 hu3 _ => ?_)
+  refine zcall_run Rs m0 g F hcR D.zr (cl := []) (d := D.dR c m0) checkR_ty.1
+    zr.1 zr.2.1 zr.2.2.1 zr.2.2.2 (atMv (by decide +kernel) hu1) (hvR hd0)
+    (by rw [D.zr_co]; rfl) (by decide) rfl
+    (fun hdR hkR uR huR _ => ?_)
+    (fun hdR hkR _ hu => fail_tail g F htl hu (by dsimp only; exact XR) (by simp [VAd.ok, hdR])
+      ⟨hk0, fun _ => ⟨hkR, fun h _ => absurd h (by simp [hdR])⟩⟩)
+  refine prog_run Rs D.ap D.bds m0 g F hcR p2 t3 sx2 hb2 hp2 (atMv (by decide +kernel) huR) (fun _ u3 hu3 _ => ?_)
     (fun l hl => by rw [t3x] at hl; cases hl)
   refine zblk_run Rs m0 g F (semA := fun _ _ => []) (T' := fun _ _ _ => []) D.zl (cl := l2) (d := D.d2 c m0)
     (by rw [D.zl_cc]; decide) t4 hl1 hl2 hl3 (by rw [D.zl_cc]; exact hl4) (atMv (by decide +kernel) hu3)
-    (by rw [D.zl_co]; exact t4r) t4o rfl (hv2 hd0 hd1) (fun hd2 u4 hu4 _ => ?_)
+    (by rw [D.zl_co]; exact t4r) t4o rfl (hv2 hd0) (fun hd2 u4 hu4 _ => ?_)
     (fun hd2 u hu => fail_tail g F htl hu (by dsimp only; exact X4) (by simp [VAd.ok, hd2])
-      ⟨hk0, fun _ => ⟨hk1, fun _ h => absurd h (by simp [hd2])⟩⟩)
+      ⟨hk0, fun _ => ⟨hkR, fun _ h => absurd h (by simp [hd2])⟩⟩)
   refine prog_run Rs D.ap D.bds m0 g F hcR p3 t5 sx4 hb3 hp3 (atMv (by decide +kernel) hu4) (fun _ u5 hu5 _ => ?_)
     (fun l hl => by rw [t5x] at hl; cases hl)
-  refine xcall_run Rs m0 g F hcR D.w5 t6 hw5b hw5p (atMv (by decide +kernel) hu5) (hv5 hd0 hd1 hd2)
+  refine xcall_run Rs m0 g F hcR D.w5 t6 hw5b hw5p (atMv (by decide +kernel) hu5) (hv5 hd0 hd2)
     (fun u6 hu6 ⟨s5, _, hpr5, hpv5, hin5, _, hpx5⟩ _ => ?_)
   have f5 : D.w5.ppre (D.P5 c m0) := by
-    have h := D.w5.ppre_of c _ s5 _ hpr5 hpv5 hin5 (hv5 hd0 hd1 hd2); rw [hpx5] at h; exact h
-  refine xcall_run Rs m0 g F hcR D.w3 t7 hw3b hw3p (atMv (by decide +kernel) hu6) (hv6 hd0 hd1 hd2)
+    have h := D.w5.ppre_of c _ s5 _ hpr5 hpv5 hin5 (hv5 hd0 hd2); rw [hpx5] at h; exact h
+  refine xcall_run Rs m0 g F hcR D.w3 t7 hw3b hw3p (atMv (by decide +kernel) hu6) (hv6 hd0 hd2)
     (fun u7 hu7 ⟨s6, _, hpr6, hpv6, hin6, _, hpx6⟩ _ => ?_)
   have f6 : D.w3.ppre (D.P6 c m0) := by
-    have h := D.w3.ppre_of c _ s6 _ hpr6 hpv6 hin6 (hv6 hd0 hd1 hd2); rw [hpx6] at h; exact h
-  refine xcall_run Rs m0 g F hcR D.dm t8 hdmb hdmp (atMv (by decide +kernel) hu7) (hv7 hd0 hd1 hd2)
+    have h := D.w3.ppre_of c _ s6 _ hpr6 hpv6 hin6 (hv6 hd0 hd2); rw [hpx6] at h; exact h
+  refine xcall_run Rs m0 g F hcR D.dm t8 hdmb hdmp (atMv (by decide +kernel) hu7) (hv7 hd0 hd2)
     (fun u8 hu8 ⟨s7, _, hpr7, hpv7, hin7, _, hpx7⟩ _ => ?_)
   have f7 : D.dm.ppre (D.P7 c m0) := by
-    have h := D.dm.ppre_of c _ s7 _ hpr7 hpv7 hin7 (hv7 hd0 hd1 hd2); rw [hpx7] at h; exact h
-  refine prog_run Rs D.ap D.bds m0 g F hcR m3 t9 sx8 hbm3 hpm3 (atMv (by decide +kernel) hu8) (fun _ u9 hu9 _ => ?_)
-    (fun l hl => by rw [t9x] at hl; cases hl)
-  refine zcall_run Rs m0 g F hcR D.ze (cl := []) (d := D.d3 c m0) t10 ze3.1 ze3.2.1 ze3.2.2.1 ze3.2.2.2
-    (atMv (by decide +kernel) hu9) (hv9 hd0 hd1 hd2) (by rw [D.ze_co]; rfl) (by decide) rfl
-    (fun hd3 hk3 u10 hu10 _ => ?_) (fun hd3 hk3 u hu => fail_tail g F htl hu (by dsimp only; exact X10)
-      (by simp [VAd.ok, hd3]) ⟨hk0, fun _ => ⟨hk1, fun _ _ => ⟨f5, f6, f7, hk3, fun h => absurd h (by simp [hd3])⟩⟩⟩)
-  refine prog_run Rs D.ap D.bds m0 g F hcR m4 t11 sx10 hbm4 hpm4 (atMv (by decide +kernel) hu10)
-    (fun _ u11 hu11 _ => ?_) (fun l hl => by rw [t11x] at hl; cases hl)
-  exact zcall_run Rs m0 g F hcR D.ze (cl := []) (d := D.d4 c m0) t12 ze4.1 ze4.2.1 ze4.2.2.1 ze4.2.2.2
-    (atMv (by decide +kernel) hu11) (hv11 hd0 hd1 hd2 hd3) (by rw [D.ze_co]; rfl) (by decide) rfl
-    (fun hd4 hk4 u12 hu12 _ => ok_tail g F htl (atMv (by decide +kernel) hu12) (by rw [addViews_X]; exact X12)
-      (by simp [VAd.ok, hd0, hd1, hd2, hd3, hd4]) ⟨hk0, fun _ => ⟨hk1, fun _ _ => ⟨f5, f6, f7, hk3, fun _ => hk4⟩⟩⟩)
-    (fun hd4 hk4 u hu => fail_tail g F htl hu (by dsimp only; exact X12) (by simp [VAd.ok, hd4])
-      ⟨hk0, fun _ => ⟨hk1, fun _ _ => ⟨f5, f6, f7, hk3, fun _ => hk4⟩⟩⟩)
+    have h := D.dm.ppre_of c _ s7 _ hpr7 hpv7 hin7 (hv7 hd0 hd2); rw [hpx7] at h; exact h
+  refine prog_run Rs D.ap D.bds m0 g F hcR encode t9 sx8 hbEnc hpEnc
+    (atMv (by decide +kernel) hu8) (fun _ u9 hu9 _ => ?_) (fun l hl => by rw [t9x] at hl; cases hl)
+  exact zcall_run Rs m0 g F hcR D.zc (cl := []) (d := D.d3 c m0) t10
+    zcmp.1 zcmp.2.1 zcmp.2.2.1 zcmp.2.2.2 (atMv (by decide +kernel) hu9) (hv9 hd0 hd2)
+    (by rw [D.zc_co]; rfl) (by decide) rfl
+    (fun hd3 hk3 u10 hu10 _ => ok_tail g F htl (atMv (by decide +kernel) hu10) (by rw [addViews_X]; exact X10)
+      (by simp [VAd.ok, hd0, hdR, hd2, hd3]) ⟨hk0, fun _ => ⟨hkR, fun _ _ => ⟨f5, f6, f7, hk3⟩⟩⟩)
+    (fun hd3 hk3 _ hu => fail_tail g F htl hu (by dsimp only; exact X10) (by simp [VAd.ok, hd3])
+      ⟨hk0, fun _ => ⟨hkR, fun _ _ => ⟨f5, f6, f7, hk3⟩⟩⟩)
 
 end run
 
@@ -407,22 +393,23 @@ theorem body_good (D : VAd Rs B BS) (fm : Frm c verifyGeo sp0 n X0)
     (hcode : ∀ y, Has [@codeR B BS _ c.base] y → BelowEntry sp0 n y → AtOrAboveSp sp0 (verifyGeo.fsp c) y ∧ X0 y)
     (hln : linesChk B BS) (hP : D.pubOk c m0) :
     GP sp0 n (BI c verifyGeo sp0 n X0 stE) (D.bodyTr c m0) (SIR sp0 (verifyGeo.fsp c) X0) := by
-  obtain ⟨⟨hb0, -⟩, ⟨hb2, -⟩, ⟨hb3, -⟩, ⟨hbm3, -⟩, ⟨hbm4, -⟩⟩ := hln
-  obtain ⟨t0, t0x, e0, t1, e1, t1r, -, ce, t2, e2, t2r, -, t3, t3x, e3, t4, e4, -, -, hcov, t5, t5x, e5, t6, e6, t7, e7,
-    t8, e8, t9, t9x, e9, t10, e10, t11, t11x, e11, t12, e12⟩ := sites_ty
-  obtain ⟨sx2, sx4, sx8, sx10⟩ := starts_ex
-  obtain ⟨⟨hpp0, hok0⟩, hP1⟩ := hP
+  obtain ⟨⟨hb0, -⟩, ⟨hb2, -⟩, ⟨hb3, -⟩, ⟨hbEnc, -⟩⟩ := hln
+  obtain ⟨t0, t0x, e0, t1, e1, t1r, -, ce, t3, t3x, e3, t4, e4, -, -, hcov, t5, t5x, e5,
+    t6, e6, t7, e7, t8, e8, t9, t9x, e9, t10, e10⟩ := sites_ty
+  obtain ⟨sx2, sx4, sx8⟩ := starts_ex
+  obtain ⟨⟨hpp0, hok0⟩, hP⟩ := hP
   refine prog_good fm D.apE hcode p0 oP0 stE v0 _ _ [] [] t0 rfl e0 hb0 (fun _ => ?_)
     (fun l hl => by rw [t0x] at hl; cases hl)
   refine zcall_gp fm hcode D.zd t1 e1 (by rw [D.zd_co]; exact t1r) (by rw [D.zd_co]; exact ce) hpp0 hok0
     (fun hd0 => ?_) (fun _ => fail_gp fm (by decide +kernel))
-  obtain ⟨⟨hpp1, hok1⟩, hP2⟩ := hP1 hd0
-  refine zcall_gp fm hcode D.zd t2 e2 (by rw [D.zd_co]; exact t2r) (by rw [D.zd_co]; exact ce) hpp1 hok1
-    (fun hd1 => ?_) (fun _ => fail_gp fm (by decide +kernel))
-  refine prog_good fm D.apE hcode p2 oP2 (addViews v2 l1) v3 _ _ [] [] t3 sx2 e3 hb2 (fun _ => ?_)
+  obtain ⟨⟨hppR, hokR⟩, hP'⟩ := hP hd0
+  refine zcall_gp fm hcode D.zr checkR_ty.1 checkR_ty.2
+    (by rw [D.zr_co]; rfl) (by rw [D.zr_co]; rfl) hppR hokR
+    (fun hdR => ?_) (fun _ => fail_gp fm (by decide +kernel))
+  refine prog_good fm D.apE hcode p2 oP2 vR v3 _ _ [] [] t3 sx2 e3 hb2 (fun _ => ?_)
     (fun l hl => by rw [t3x] at hl; cases hl)
   refine zblk_gp fm t4 e4 hcov (fun hd2 => ?_) (fun _ => fail_gp fm (by decide +kernel))
-  obtain ⟨f5, f6, f7, ⟨hpp9, hok9⟩, hP11⟩ := hP2 hd1 hd2
+  obtain ⟨f5, f6, f7, hpp9, hok9⟩ := hP' hdR hd2
   refine prog_good fm D.apE hcode p3 oP3 (addViews v4 l2) v5 _ _ [] [] t5 sx4 e5 hb3 (fun _ => ?_)
     (fun l hl => by rw [t5x] at hl; cases hl)
   refine xcall_gp fm hcode t6 e6 (co := []) (cl := []) rfl rfl (CalleeS.eff_withCo_nil (D.w5.ef c.base _ f5)) ?_
@@ -431,14 +418,9 @@ theorem body_good (D : VAd Rs B BS) (fm : Frm c verifyGeo sp0 n X0)
   rw [withViews_nil]
   refine xcall_gp fm hcode t8 e8 (co := []) (cl := []) rfl rfl (CalleeS.eff_withCo_nil (D.dm.ef c.base _ f7)) ?_
   rw [withViews_nil]
-  refine prog_good fm D.apE hcode m3 oM3 v8 v9 _ _ [] [] t9 sx8 e9 hbm3 (fun _ => ?_)
+  refine prog_good fm D.apE hcode encode oEncode v8 v9 _ _ [] [] t9 sx8 e9 hbEnc (fun _ => ?_)
     (fun l hl => by rw [t9x] at hl; cases hl)
-  refine zcall_gp fm hcode D.ze t10 e10 (by rw [D.ze_co]; rfl) (by rw [D.ze_co]; rfl) hpp9 hok9
-    (fun hd3 => ?_) (fun _ => fail_gp fm (by decide +kernel))
-  obtain ⟨hpp11, hok11⟩ := hP11 hd3
-  refine prog_good fm D.apE hcode m4 oM4 (addViews v10 []) v11 _ _ [] [] t11 sx10 e11 hbm4 (fun _ => ?_)
-    (fun l hl => by rw [t11x] at hl; cases hl)
-  exact zcall_gp fm hcode D.ze t12 e12 (by rw [D.ze_co]; rfl) (by rw [D.ze_co]; rfl) hpp11 hok11
+  exact zcall_gp fm hcode D.zc t10 e10 (by rw [D.zc_co]; rfl) (by rw [D.zc_co]; rfl) hpp9 hok9
     (fun _ => ok_gp fm (by decide +kernel)) (fun _ => fail_gp fm (by decide +kernel))
 
 end good

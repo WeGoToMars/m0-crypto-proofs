@@ -44,8 +44,10 @@ def unitFns : List Fn :=
    ⟨ed25519_pubkey, 308, [ge_compress, ge_mul_base, sha512_final, sha512_init, sha512_update]⟩,
    ⟨ed25519_sign, 508, [ge_compress, ge_mul_base, sc_muladd, sc_reduce, sha512_final, sha512_init,
      sha512_update]⟩,
-   ⟨ed25519_verify, 924, [fe_eq, fe_mul, ge_decompress, ge_dsm, sc_reduce, sc_wnaf, sha512_final,
-     sha512_init, sha512_update]⟩]
+   ⟨ed25519_verify, 924, [ge_decompress, ge_dsm, ge_compress, bytes_diff32, r_encoding_check, sc_reduce, sc_wnaf,
+     sha512_final, sha512_init, sha512_update]⟩,
+   ⟨bytes_diff32, 0, []⟩,
+   ⟨r_encoding_check, 0, []⟩]
 
 def fnAt (o : Nat) : Option Fn := unitFns.find? (·.off == o)
 

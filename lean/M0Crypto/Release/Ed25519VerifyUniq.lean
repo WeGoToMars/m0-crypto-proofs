@@ -29,8 +29,8 @@ theorem VAd.bodyTr_uniq (D : VAd Rs B BS) (c : Ctx) (m0 : Mem) : Tr.Uniq (D.body
     fun h => Prog.tr_uniq _ _ _ h fun _ hx => absurd hx List.not_mem_nil
   have fl : Tr.Uniq (tFail c) := Tr.uniq_cat (Tr.uniq_is _) (Tr.uniq_is _)
   have ok : Tr.Uniq (tOk c) := Tr.uniq_cat (Tr.uniq_is _) (Tr.uniq_cat (Tr.uniq_is _) (Tr.uniq_is _))
-  have m3 : Tr.Uniq (D.tM3 c m0) := pt (xc (ts (pt (xc (ts ok fl))) fl))
-  have p3 : Tr.Uniq (D.tP3 c m0) := pt (xc (xc (xc m3)))
+  have encode : Tr.Uniq (D.tEncode c m0) := pt (xc (ts ok fl))
+  have p3 : Tr.Uniq (D.tP3 c m0) := pt (xc (xc (xc encode)))
   have b2 : Tr.Uniq (D.tB2 c m0) :=
     Prog.tr_uniq (cE := vxS) (bE := vbS) (G := verifyGeo) (T := fun _ _ _ => []) (c := c) (.op b2 .nil) oB2 v3
       (J := []) (ts p3 fl) fun _ hx => absurd hx List.not_mem_nil

@@ -5,6 +5,7 @@ import M0Crypto.Release.Ed25519Decode
 import M0Crypto.Release.Ed25519Comb
 import M0Crypto.Release.Ed25519CombDigits
 import M0Crypto.Release.Ed25519WnafDigits
+import M0Crypto.Release.Ed25519CallProgUnit
 
 /-!
 Executable checks of the internal routines of both Ed25519 builds against the value functions of
@@ -18,7 +19,8 @@ and the value:
 
 | Routine | Value function |
 |---|---|
-| `fe_add`, `fe_sub`, `fe_mul`, `fe_sqr`, `fe_pow` | `+`, `-`, `*`, `x * x`, `x ^ e` in `Fp` |
+| `fe_add`, `fe_sub`, `fe_mul`, `fe_sqr` | `+`, `-`, `*`, `x * x` in `Fp` |
+| `fe_inv`, `fe_pow` | `x ^ (p - 2)`, `x ^ ((p - 5) / 8)` in `Fp` |
 | `fe_canon`, `fe_eq` | `Fp.val`, equality in `Fp` |
 | `mp_mul`, `sc_reduce`, `sc_muladd` | `a * b`, `x % L`, `(k a + r) % L` (`Ed25519Barrett`) |
 | `sha512_block` | `Spec.Sha512.compress` |
@@ -35,7 +37,7 @@ and `xy_eq` carry scalar multiples and affine coordinates to `Spec.Ed25519.scala
 
 Inputs stay in each routine's domain: `sc_recode_comb` and `ge_mul_base` scalars below `2^255`,
 `ge_dsm` digits of scalars below `L` (verify reduces both). Aliases are the generator's: field
-routines and `fe_pow` in place, `mp_mul` with `a = b`, `cmov`/`copy` with `src = dst`,
+routines, including `fe_inv` and `fe_pow`, in place, `mp_mul` with `a = b`, `cmov`/`copy` with `src = dst`,
 `sc_reduce` with `out = in`. Excluded: `mp_mul` with `dst` on an input (written row by row while
 the inputs are read) and `ge_dsm` with `out` on an input (the generator forbids it); the other
 routines' callers never overlap outputs and inputs.
@@ -51,6 +53,7 @@ namespace M0Crypto.Thumb.ReleaseCheck.Ed25519
 
 open M0Crypto.Armv6M (Word State Mem)
 open M0Crypto.Release.Ed25519 (Build)
+open M0Crypto.Release.Ed25519CallProg (stackOf)
 open M0Crypto.Release.Ed25519Field (Fp)
 open M0Crypto.Release.Ed25519Bridge (toF)
 open M0Crypto.Release.Ed25519EdwardsExtended (Ext)
@@ -126,13 +129,13 @@ def eqCases (b : Build) : Cases :=
       fun s => (reg s 0 == 0) == decide (fe m ra = fe m rb))
 
 def powCases (b : Build) : Cases :=
-  ((fieldEdges ++ (List.range 6).map (rndNat 32 ·)).zipIdx.flatMap fun (x, i) =>
-    [(0, p - 2), (1, (p - 5) / 8)].map fun (k, e) => (k, e, x, i)).map fun (k, e, x, i) =>
+  (fieldEdges ++ (List.range 6).map (rndNat 32 ·)).zipIdx.flatMap fun (x, i) =>
     let d := if i % 2 = 0 then ra else rd
-    (s!"fe_pow {k} {x} into {d}", fun _ =>
-      let m := mkMem b [(ra, le 32 x)]
-      once <| routine b m fe_pow 360 [d, ra, k] [(ra, 32)] [(d, 32)]
-        fun s => decide (fe s.mem d = fe m ra ^ e))
+    let m := mkMem b [(ra, le 32 x)]
+    [("fe_inv", fe_inv, p - 2), ("fe_pow", fe_pow, (p - 5) / 8)].map fun (name, off, e) =>
+      (s!"{name} {x} into {d}", fun _ =>
+        once <| routine b m off (stackOf off) [d, ra] [(ra, 32)] [(d, 32)]
+          fun s => decide (fe s.mem d = fe m ra ^ e))
 
 /-! ## Word routines -/
 
@@ -259,7 +262,7 @@ def compressCases (b : Build) : Cases :=
     [scaled 0 1, le 128 0, [B.X, B.Y + p, 1 + p, B.T].flatMap (le 32), rnd 128 1600, rnd 128 1601]).zipIdx.map fun (pt, i) => (s!"ge_compress {pt}", fun _ =>
     let m := mkMem b [(rb, pt)]
     let out := ra + i % 4
-    once <| routine b m ge_compress 468 [out, rb] [(rb, 128)] [(out, 32)]
+    once <| routine b m ge_compress (stackOf ge_compress) [out, rb] [(rb, 128)] [(out, 32)]
       fun s => readM s.mem out 32 ==
         Spec.Ed25519.encodeInt (Release.Ed25519Encode.compressCode (ext m rb)))
 

@@ -192,16 +192,16 @@ end
 
 theorem verify_pieces (b : Build) :
     seqAt b.bytes ed25519_verify (abiEnter verifyGeo.top) = true ∧
-    piecesAt b.bytes (bodyAt verifyGeo ed25519_verify + 436) (abiLeaveP verifyGeo.top) = true := by
+    piecesAt b.bytes (bodyAt verifyGeo ed25519_verify + verifyBodyBytes) (abiLeaveP verifyGeo.top) = true := by
   cases b <;> exact ⟨by rw [seqAt_eq_scan]; decide +kernel, by rw [piecesAt_eq_scan]; decide +kernel⟩
 
-theorem verify_at : bodyAt verifyGeo ed25519_verify = oP0 ∧ bodyAt verifyGeo ed25519_verify + 436 = oLeave := by
+theorem verify_at : bodyAt verifyGeo ed25519_verify = oP0 ∧ bodyAt verifyGeo ed25519_verify + verifyBodyBytes = oLeave := by
   decide +kernel
 
 /-- The trace condition of a call from entry memory `m0`. -/
 noncomputable def verifyTr (b : Build) (c : Ed25519.Verify.Ctx) (m0 : Mem) : TrP :=
   letI := b.codeBytes
-  entryTrP verifyGeo (verifyCtx c) c.sp0 ed25519_verify 436 ((vAd b).bodyTr (verifyCtx c) m0)
+  entryTrP verifyGeo (verifyCtx c) c.sp0 ed25519_verify verifyBodyBytes ((vAd b).bodyTr (verifyCtx c) m0)
 
 section
 variable {b : Build} {c : Ed25519.Verify.Ctx} {s : State}
@@ -247,7 +247,7 @@ theorem verify_reach (hp : Ed25519.Verify.Pre b c s) :
   have hL := lv_enter ⟨hv, he⟩
   obtain ⟨hsig, hmsg, hpk⟩ := bytes_enter ⟨hv, he⟩
   rw [← hS]
-  refine entry_runP vRels (st0 := stE) (oE := ed25519_verify) (bsz := 436)
+  refine entry_runP vRels (st0 := stE) (oE := ed25519_verify) (bsz := verifyBodyBytes)
     (R := fun u => (∀ y, ¬ (verifyGeo.win (verifyCtx c)).Has y → u.mem y = enterMem s c.sp0 y) ∧
       (u.regs 0 = if (vAd b).ok (verifyCtx c) (enterMem s c.sp0) then 0#32 else 0xffffffff#32) ∧
       (vAd b).pubOk (verifyCtx c) (enterMem s c.sp0))
@@ -266,8 +266,8 @@ theorem verify_reach (hp : Ed25519.Verify.Pre b c s) :
     have hpre := body_pre (b := b) hL
     refine ReachT.mono (body_run (vAd b) (verify_geoOk hv) (verify_caller hv)
       (sub_one (by simp [verifyRc, codeR, verifyCtx]) hv.call.codeS.1) (lines_code b) (sites_code b) (lt_code b)
-      (xsites_code b) (tail_code b) trivial (fun _ => trivial) (fun _ _ => hpre.1) (fun _ _ _ => trivial)
-      (fun _ _ _ => trivial) hpre.2 (fun _ _ _ => trivial) (fun _ _ _ _ => trivial) hat)
+      (xsites_code b) (tail_code b) trivial (fun _ => trivial) (fun _ => hpre.1) (fun _ _ => trivial)
+      (fun _ _ => trivial) hpre.2 (fun _ _ => trivial) hat)
       (fun _ _ h => h) (fun u hu => ?_) (fun _ h => h)
     obtain ⟨h1, h2, h3, h4, h5⟩ := hu
     exact ⟨by rw [h1, verify_at.2], h2, (verify_pieces b).2,

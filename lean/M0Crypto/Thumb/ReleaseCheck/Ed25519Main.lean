@@ -18,7 +18,7 @@ def bname : Build → String
 def required (b : Build) : List (String × Nat) :=
   [("non-vacuity", 1), ("pubkey", 9), ("sign", 11), ("verify", 22)] ++
   ["fe_add", "fe_sub", "fe_mul", "fe_sqr"].map (·, 356) ++
-  [("fe_canon", 134), ("fe_eq", 256), ("fe_pow", 40), ("cmov", 60), ("copy", 60), ("zero", 30),
+  [("fe_canon", 134), ("fe_eq", 256), ("fe_inv", 20), ("fe_pow", 20), ("cmov", 60), ("copy", 60), ("zero", 30),
    ("sha512_block", 42), ("sha512", 18), ("mp_mul", 290), ("sc_reduce", 234), ("sc_muladd", 222),
    ("ge_compress", 13), ("ge_decompress", 24), ("sc_recode_comb", 69), ("sbit", 1792),
    ("sc_wnaf", 95), ("ge_lookup", 17 * (b.combs + 1)), ("ge_mul_base", 11), ("ge_dsm", 6)]

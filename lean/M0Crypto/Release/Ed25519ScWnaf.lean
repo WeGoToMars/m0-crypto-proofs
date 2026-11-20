@@ -200,6 +200,7 @@ theorem ok_c : @Ok _ _ Build.compact.codeBytes := by
     (try simp only [Build.bytes, Build.size, segL, List.all_cons, List.all_nil, segAt, siteAt, cjAt, jmpAt, seqAt_eq_scan]) <;>
     decide +kernel
 
+set_option maxHeartbeats 400000 in
 open M0Crypto.Release.Ed25519 (Build) in
 theorem ok_f : @Ok _ _ Build.fast.codeBytes := by
   refine @Ok.mk _ _ (Build.codeBytes _) ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ <;>
