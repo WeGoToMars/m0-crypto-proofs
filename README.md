@@ -4,6 +4,8 @@ Lean 4 proofs that the machine code of [m0-crypto](https://github.com/WeGoToMars
 
 ## Release assets
 
+The [library’s 0.4.0 benchmark report](https://github.com/WeGoToMars/m0-crypto-lib/blob/v0.4.0/bench/curves.md#whole-call-cycle-model) records modeled cycles, flash size, stack and malformed-signature costs for the builds below.
+
 Each primitive of the library is its own independently released asset: one relocation-free object, built by the library's `tools/build_lib.sh`, with its own proofs and checks.
 
 | Asset | Library object | `.text` | Lake workspace |
@@ -23,6 +25,7 @@ From the library checkout (with submodules):
 ```sh
 proofs/tools/check.sh                      # every asset
 proofs/tools/check.sh x25519               # one asset
+proofs/tools/check_bytes.sh                # byte checks and QEMU tests only, without Lean
 ```
 
 Needs Lean v4.35.0 (via `elan`), LLVM/LLD 23.1.4 and QEMU 11.1.3. Set `M0C_LIB` if the library is not the parent directory. For each selected asset, the script:
@@ -49,7 +52,7 @@ Needs Lean v4.35.0 (via `elan`), LLVM/LLD 23.1.4 and QEMU 11.1.3. Set `M0C_LIB` 
 - `lean/M0Crypto/Release`: the proofs about the release code.
 - `lean/M0Crypto/Assets`: one root module per release asset.
 - `assets/`: one Lake workspace per release asset (see above).
-- `docs/`: reviewer guide ([REVIEW.md](docs/REVIEW.md)), build instructions ([BUILD.md](docs/BUILD.md)), naming conventions ([NAMING.md](docs/NAMING.md)), and the routine and call proof tooling ([ROUTINES.md](docs/ROUTINES.md)).
+- `docs/`: reviewer guide ([REVIEW.md](docs/REVIEW.md)), build instructions ([BUILD.md](docs/BUILD.md)), and naming conventions ([NAMING.md](docs/NAMING.md)).
 
 ## Claims
 
@@ -107,6 +110,21 @@ All names are in `M0Crypto.Release`; the stack theorems are the `*_stack` of the
 - **Interrupted calls** (`*_interrupted`). Take a valid call whose `K` bytes below the stack window hold none of its inputs, outputs or code, and handlers that may run before any of its instructions, each restoring every register and flag and preserving the call's buffers and every byte the call may read or write outside the `K` bytes below SP (including caller stack arguments for ChaCha20 and AEAD). The call returns with the events of the uninterrupted call, its registers and flags, and its memory on its buffers and every byte the call may read or write outside the window, and SP stays in the window. On ARMv6-M, hardware exception entry stores up to 36 bytes below the interrupted SP (`r0-r3`, `r12`, `LR`, `PC` and `xPSR`, and 4 bytes if needed to align SP to 8), so `K` is at least 36 bytes for each exception that can be active on the same stack at once (a nested exception stores another frame) plus whatever those handlers push. Clearing covers uninterrupted calls: the exception frame holds the call's registers at the interrupt.
 
 Equal traces are a statement about the model. That equal traces take equal time on the chip is an assumption, tested by cycle measurements on one MSPM0L2228, not proved: the Cortex-M0+ core has no cache or branch prediction, and the MSPM0's flash prefetch and instruction and literal caches respond only to the addresses fetched, which the trace includes. Proofs use kernel-checked abstract interpretation certificates in `Release/ConstantTime/`. For the trusted base and how to review these theorems, see [docs/REVIEW.md](docs/REVIEW.md).
+
+## Research references
+
+### Arithmetic and implementation methods
+
+- **Edwards group arithmetic.** The implementation uses the extended-coordinate formulas of Hisil et al. The proof of completeness follows the argument of Bernstein and Lange. [Bernstein and Lange, *Faster addition and doubling on elliptic curves* (2007), Theorem 3.3](https://cr.yp.to/newelliptic/newelliptic-20070906.pdf) · [Hisil et al., *Twisted Edwards Curves Revisited* (2008)](https://eprint.iacr.org/2008/522)
+- **Scalar and field arithmetic.** Ed25519 verification uses width-w nonadjacent form for scalar recoding. Reduction modulo the subgroup order uses Barrett’s method as stated in Algorithm 14.42 of the Handbook of Applied Cryptography. Multiplication in the Curve25519 field uses the Karatsuba–Ofman decomposition. [Muir and Stinson, *Minimality and Other Properties of the Width-w Nonadjacent Form* (2006)](https://doi.org/10.1090/S0025-5718-05-01769-2) · [Barrett (CRYPTO ’86)](https://doi.org/10.1007/3-540-47721-7_24) · [Menezes et al., *Handbook of Applied Cryptography*, ch. 14](https://cacr.uwaterloo.ca/hac/about/chap14.pdf) · [Karatsuba and Ofman (1962)](https://www.mathnet.ru/eng/dan26729)
+- **Shared field inversion.** Both curve implementations use half-delta divsteps. Bernstein and Yang introduced divsteps for constant-time modular inversion. Wuille developed the half-delta recurrence and convex-hull bounds. The pinned `uncompute` development provides a Lean reference for the recurrence and certificate construction. [Bernstein and Yang, *Fast constant-time gcd computation and modular inversion* (2019), §§8–12](https://gcd.cr.yp.to/safegcd-20190413.pdf) · [Wuille, *Bounds on divsteps iterations in safegcd*](https://github.com/sipa/safegcd-bounds) · [`uncompute` half-delta proof notes](https://github.com/andigu/uncompute/blob/64b5a13aa249f1360846657392e6c66817b26d0f/lean/divsteps/README.md)
+
+### Formal verification
+
+- **Termination of field inversion.** The Lean development proves that 602 half-delta steps suffice for canonical inputs modulo 2²⁵⁵ − 19. [`curve25519_terminates`](lean/SafegcdTermination/Divsteps.lean)
+- **Lean proof automation.** The proofs use Lean’s verified bit-blasting tactic `bv_decide` for fixed-width arithmetic obligations. [*Interactive Bitvector Reasoning using Verified Bit-Blasting* (2025)](https://doi.org/10.1145/3763167)
+- **Verification prior art.** Chen et al. verify hand-optimized Curve25519 assembly kernels. Schoolderman et al. establish the functional correctness of an AVR X25519 implementation in Why3. [Chen et al., *Verifying Curve25519 Software* (2014)](https://cryptojedi.org/papers/verify25519-20140428.pdf) · [Schoolderman et al., *Efficient Verification of Optimized Code: Correct High-speed X25519* (2021)](https://arxiv.org/abs/2012.09919)
+- **Assembly and timing verification prior art.** Bond et al. use Vale to verify cryptographic assembly, including Poly1305. Almeida et al. formulate constant-time policies and verify them for optimized LLVM code. [Bond et al., *Vale: Verifying High-Performance Cryptographic Assembly Code* (2017)](https://www.usenix.org/conference/usenixsecurity17/technical-sessions/presentation/bond) · [Almeida et al., *Verifying Constant-Time Implementations* (2016)](https://www.usenix.org/conference/usenixsecurity16/technical-sessions/presentation/almeida)
 
 ## License
 

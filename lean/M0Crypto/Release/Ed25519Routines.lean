@@ -6,7 +6,7 @@ import M0Crypto.Release.Field25519Congr
 /-!
 # Contracts of the Ed25519 internal routines (not audited)
 
-Each internal routine is a `Routine` (`docs/ROUTINES.md`): entry offset, code, stack, `Pre`, write
+Each internal routine has a `Routine` record with an entry offset, code, stack, `Pre`, write
 and read footprints, `Post`, and the high registers it changes (`clob`; none of them follows the
 AAPCS except `m0c_zero`). The routines are proved generic in their offsets: a contract takes the
 offsets as parameters, and each build instantiates them from its symbol table. A routine's call

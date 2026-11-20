@@ -186,7 +186,7 @@ import M0Crypto.Thumb.ReleaseCheck.Blake2sShard0
 import M0Crypto.Thumb.ReleaseCheck.Blake2sShard1
 import M0Crypto.Thumb.ReleaseCheck.Blake2sShard2
 import M0Crypto.Thumb.ReleaseCheck.Blake2sShard3
--- The generic routine and call tooling (docs/ROUTINES.md). No BLAKE2s proof uses it: this root
+-- The generic routine and call tooling. No BLAKE2s proof uses it: this root
 -- is the lightest that builds it until an asset does.
 import M0Crypto.Release.Footprint
 import M0Crypto.Release.ReachTrace
