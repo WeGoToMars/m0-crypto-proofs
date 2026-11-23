@@ -61,6 +61,8 @@ CASES = os.path.join(ROOT, "lean", "M0Crypto", "Thumb", "ReleaseCheck", "X25519C
 WS = os.path.join("assets", "x25519")
 REL = os.path.join(WS, "artifact", "M0Crypto", "Artifacts", "Release.lean")
 CERT_MODULES = ["M0Crypto.Release.ConstantTime.X25519Entry"]
+# The certificate may reject a mutant in its code-identity import (`entry_at`) first.
+CERT_REJECTS = CERT_MODULES + ["M0Crypto.Release.X25519EntryCode"]
 SYMBOLS = ["m0c_fe_mul", "m0c_fe_sqr", "m0c_fe_mulc_add", "m0c_x25519"]
 
 
@@ -277,7 +279,7 @@ def check_offsets(syms):
 
 def cert_build(pdir, timeout):
     """(PASS | DETECTED | ERROR, detail): the certificate on the copy's current artifact."""
-    return lean_verdict(lean_build(os.path.join(pdir, WS), CERT_MODULES, timeout), CERT_MODULES)
+    return lean_verdict(lean_build(os.path.join(pdir, WS), CERT_MODULES, timeout), CERT_REJECTS)
 
 
 def main():
